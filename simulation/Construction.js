@@ -1,5 +1,5 @@
 import { buildings, footprint, workTicks } from '../data/buildings.js';
-import { nextId } from '../engine/World.js';
+import { nextId } from './Identity.js';
 import { available } from './Economy.js';
 import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
 import { findPath } from './path.js';
@@ -117,8 +117,10 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const local = world.buildings.filter(building => building.settlementId === settlement.id);
   const farms = local.filter(b => b.kind === 'farm').length;
   const housing = local.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
+  const hasCouples = world.citizens.some(c => c.alive && c.settlementId === settlement.id && c.partnerId);
+  const needsHousing = housing < population || (hasCouples && housing === population);
   const kind = farms === 0 || (farms < 2 && available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON) ? 'farm' :
-    housing < population ? 'house' : null;
+    needsHousing ? 'house' : null;
   if (!kind) return null;
   for (let radius = 1; radius <= 6; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {

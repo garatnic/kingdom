@@ -3,6 +3,7 @@ import {
   TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR, TIME_TICKS_PER_MINUTE, SEASONS, SPEEDS
 } from '../data/balance.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
+import { updatePopulation } from '../simulation/Population.js';
 
 export function advanceFrame(world, elapsedMs, hidden = false) {
   if (hidden || !world.gameSpeed) return;
@@ -15,6 +16,7 @@ export function advanceFrame(world, elapsedMs, hidden = false) {
     for (let i = 0; i < world.gameSpeed; i++) {
       world.worldTimeTick += TICKS_PER_STEP_AT_1X;
       updateCitizens(world, TICKS_PER_STEP_AT_1X);
+      updatePopulation(world, TICKS_PER_STEP_AT_1X);
     }
   }
   world.tickRemainder %= REAL_STEP_MS;

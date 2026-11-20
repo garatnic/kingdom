@@ -51,3 +51,7 @@ export const GATHER_TICKS = 60;
 export const NEED_HOUR_TICKS = 60 * TIME_TICKS_PER_MINUTE;
 export const NEEDS = { eat: 80, sleep: 85, fatiguePerHour: 2, restPerHour: 12, starvationDamage: 3 };
 export const NODE_RENEWAL_TICKS = { food: 8 * NEED_HOUR_TICKS, wood: TIME_TICKS_PER_DAY };
+
+export const ADULT_AGE = 16;
+export const LIFESPAN_YEARS = { human: [30, 45], dwarf: [40, 60], elf: [50, 80] };
+export const FAMILY = { relationshipPerDay: 10, marriageThreshold: 60, maxAgeGap: 20, birthSpacingYears: 2 };

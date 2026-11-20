@@ -1,5 +1,5 @@
 import { footprint } from '../data/buildings.js';
-import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, POPULATION, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
+import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
 
 const VERSION = 1;
 const MAX_BYTES = 1024 * 1024;
@@ -34,7 +34,7 @@ function validate(world) {
       !Array.isArray(map.terrain) || map.terrain.length !== SIZE ** 2 ||
       !map.terrain.every(t => Object.hasOwn(TERRAIN_COST, t)) ||
       !world.idCounters || !entityLists.every(key => Array.isArray(world[key])) ||
-      world.settlements.length !== 1 || world.nations.length !== 0 || world.citizens.length !== POPULATION ||
+      world.settlements.length !== 1 || world.nations.length !== 0 ||
       !world.settings || (camera && (!['free', 'manualOverride'].includes(camera.mode) ||
         !inside(camera.x, SIZE + Number.EPSILON * SIZE) || !inside(camera.y, SIZE + Number.EPSILON * SIZE) ||
         !Number.isFinite(camera.zoom) || camera.zoom < MIN_ZOOM || camera.zoom > MAX_ZOOM))) {
@@ -61,10 +61,18 @@ function validate(world) {
         Object.entries(p.total).every(([key, total]) => integer(total, 0) && integer(p.reserved[key], 0, total)))) {
     throw new Error('保存データの集落・資源が無効です。');
   }
+  const people = new Map(world.citizens.map(c => [c.id, c]));
   for (const c of world.citizens) {
     const action = c.action;
     if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || c.settlementId !== settlement.id ||
-        c.nationId !== null || typeof c.alive !== 'boolean' ||
+        c.nationId !== null || typeof c.alive !== 'boolean' || !Object.hasOwn(LIFESPAN_YEARS, c.race) ||
+        !Number.isSafeInteger(c.birthWorldTimeTick) || c.birthWorldTimeTick > world.worldTimeTick ||
+        !Array.isArray(c.parentIds) || !Array.isArray(c.childIds) ||
+        c.parentIds.some(id => !people.get(id)?.childIds?.includes(c.id) ||
+          people.get(id).birthWorldTimeTick >= c.birthWorldTimeTick) ||
+        c.childIds.some(id => id === c.id || !people.get(id)?.parentIds?.includes(c.id)) ||
+        (c.alive && c.partnerId !== null && people.get(c.partnerId)?.partnerId !== c.id) ||
+        (c.nextBirthCheckTick !== undefined && !integer(c.nextBirthCheckTick, 1)) ||
         (c.homeBuildingId !== null && !world.buildings.some(b => b.id === c.homeBuildingId)) ||
         !integer(c.decisionAt, 0) || !(c.alive ? passable(c.lastKnownSafeTile) : validTile(c.lastKnownSafeTile)) ||
         !action || !['plan', 'travel', 'perform'].includes(action.phase) ||

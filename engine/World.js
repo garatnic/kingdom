@@ -4,17 +4,11 @@ import {
 } from '../data/balance.js';
 import { random, seedState } from './random.js';
 import { findPath } from '../simulation/path.js';
+import { lifespan, nextId, professions } from '../simulation/Identity.js';
 
 const races = ['human', 'elf', 'dwarf'];
-const professions = ['farmer', 'farmer', 'woodcutter', 'miner', 'builder', 'adventurer'];
 const names = ['アルディン', 'ミラ', 'ドルン', 'リナ', 'フィア', 'バルド',
   'ノア', 'エリン', 'ガレン', 'セラ', 'イリス', 'トルン'];
-
-export function nextId(world, kind) {
-  const next = world.idCounters[kind] ?? 1;
-  world.idCounters[kind] = next + 1;
-  return `${kind}:${next}`;
-}
 
 function terrainFor(state) {
   const spacing = LAYOUT.noiseSpacing;
@@ -106,6 +100,10 @@ export function createWorld(seed) {
       decisionAt: Math.floor(i * DECISION_TICKS / POPULATION), failedTargets: {},
       lastKnownSafeTile: tile
     });
+  }
+  for (const citizen of world.citizens) {
+    citizen.lifespanYears = lifespan(world, citizen.race);
+    citizen.relationships = {};
   }
   const qualifying = world.citizens.filter(citizen => citizen.traits.magicAffinity >= MAGIC_AFFINITY_THRESHOLD);
   const missing = INITIAL_MAGIC_AFFINITY_MIN_COUNT - qualifying.length;
