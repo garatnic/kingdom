@@ -131,5 +131,7 @@ test('a growing settlement plans food production beyond its first two farms', ()
   assert.ok(first && second);
   world.constructionSites.length = 0;
   world.buildings.push({ ...first, id: 'building:2' }, { ...second, id: 'building:3' });
+  assert.equal(planSettlementConstruction(world, settlement, store, store, 24)?.kind, 'warehouse');
+  store.capacity += 100;
   assert.equal(planSettlementConstruction(world, settlement, store, store, 24)?.kind, 'farm');
 });
