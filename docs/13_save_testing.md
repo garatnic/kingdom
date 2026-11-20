@@ -10,15 +10,16 @@ IndexedDBに世界スナップショットを保存。自動保存は現実60秒
  schemaVersion:1, saveId:"save:123", createdAtIso:"2026-11-21T00:00:00Z",
  checksum:"sha256:...", world:{
    seed:1234, rngState:[], worldTimeTick:123456,
-   speed:1, tickRemainder:0, idCounters:{"citizen":13,"event":42},
-   terrain:[], citizens:[], settlements:[], nations:[],
+   gameSpeed:1, tickRemainder:0, idCounters:{"citizen":13,"event":42},
+   map:{width:64,height:64,terrain:[],navigationVersion:0},
+   citizens:[], settlements:[], nations:[],
    resourceNodes:[], stockpiles:[], constructionSites:[],
    inTransit:[], reservations:[], monsters:[], quests:[],
    researchStates:[], historyEvents:[], eventSequence:42
  }
 }
 ```
-日時は保存メタデータであり、ロード後のゲーム進行には使わない。チェックサムは正規化したworld部分のバイト列に対して計算。インポート時はサイズ・schemaVersion・必須フィールド・数値範囲・ID参照を検証。
+日時は保存メタデータであり、ロード後のゲーム進行には使わない。チェックサムは仕様14に従い、チェックサム欄を除いたペイロード全体を正規化したUTF-8バイト列に対して計算。インポート時はサイズ・schemaVersion・必須フィールド・数値範囲・ID参照を検証。
 
 ## 保存処理
 1. シミュレーション刻みの境界で読み取り一貫性のある状態を取得。
