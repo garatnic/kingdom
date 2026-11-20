@@ -119,3 +119,17 @@ test('a completed building cannot sever the only land connection', () => {
   assert.equal(buildAtSite(world, site, workTicks('farm')), null);
   assert.ok(findPath(world, base, shore));
 });
+
+test('a growing settlement plans food production beyond its first two farms', () => {
+  const world = createWorld('large-farm');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('grass');
+  store.total.food = 30;
+  const first = planSite(world, settlement, 'farm', 35, 35);
+  const second = planSite(world, settlement, 'farm', 37, 35);
+  assert.ok(first && second);
+  world.constructionSites.length = 0;
+  world.buildings.push({ ...first, id: 'building:2' }, { ...second, id: 'building:3' });
+  assert.equal(planSettlementConstruction(world, settlement, store, store, 24)?.kind, 'farm');
+});

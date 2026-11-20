@@ -156,10 +156,11 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const policy = world.nations.find(n => n.id === settlement.nationId)?.policy.primary;
   const facilityOrder = policy === 'defense'
     ? ['warehouse', 'barracks', 'smithy', 'guild'] : ['warehouse', 'smithy', 'guild', 'barracks'];
-  const requiresFarms = farms < TECH.farmEraFarms &&
+  const farmTarget = Math.max(TECH.farmEraFarms, Math.ceil(population / 8));
+  const requiresFarms = farms < farmTarget &&
     (available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON ||
       (policy === 'food' && available(store, 'food') < population * 4) ||
-      (local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
+      (farms < TECH.farmEraFarms && local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
         unlocked(world, settlement.id, 'farming_1')));
   const emergencySpace = population * FOOD_EMERGENCY_PER_PERSON;
   const cramped = freeCapacity(store) + store.total.food < emergencySpace;
