@@ -13,7 +13,7 @@ import {
 } from './Construction.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
-import { claimAdventure, continueAdventure } from './Adventure.js';
+import { assignedAdventure, claimAdventure, continueAdventure } from './Adventure.js';
 import { campaignFor, invasionOrder } from './War.js';
 import { recordDeath } from './Population.js';
 
@@ -68,10 +68,8 @@ function chooseRoute(world, citizen, store, population) {
         !travel(world, citizen, expedition, 'expedition', expedition.id)) expedition.failed = true;
     return;
   }
-  if (citizen.profession === 'adventurer') {
-    const active = world.quests.find(q => q.status === 'claimed' && q.claimedBy === citizen.id);
-    if (active && adventure(world, citizen, active, store)) return;
-  }
+  const active = assignedAdventure(world, citizen);
+  if (active && adventure(world, citizen, active, store)) return;
   const campaign = campaignFor(world, citizen);
   if (campaign?.rations > 0 && citizen.hunger >= NEEDS.eat - 8) {
     campaign.rations--;

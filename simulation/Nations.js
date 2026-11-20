@@ -110,7 +110,7 @@ export function startExpedition(world, nation) {
   const settlement = world.settlements.find(s => s.id === nation.capitalId);
   const people = residents(world, settlement.id);
   const eligible = people.filter(c => c.id !== nation.leaderId && ageYears(world, c) >= ADULT_AGE &&
-    c.hp >= 50 && !world.campaigns?.some(war => war.memberIds.includes(c.id) && ['marching', 'siege'].includes(war.status)) && !world.quests.some(q => q.status === 'claimed' && q.claimedBy === c.id) &&
+    c.hp >= 50 && !world.campaigns?.some(war => war.memberIds.includes(c.id) && ['marching', 'siege'].includes(war.status)) && !world.quests.some(q => q.status === 'claimed' && (q.claimedBy === c.id || q.escortId === c.id)) &&
     !world.inTransit.some(item => item.carrierId === c.id));
   // Select households before singles to avoid separating partners where possible.
   const pairs = eligible.filter(c => eligible.find(p => p.id === c.partnerId) &&

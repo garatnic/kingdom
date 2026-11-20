@@ -103,7 +103,10 @@ function validate(world) {
       !world.monsters.every(m => Object.hasOwn(monsters, m.species) && validTile(m) && validTile(m.homeTile) &&
         typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
       !world.quests.every(q => targets.has(q.targetId) && settlements.has(q.settlementId) &&
-        (q.claimedBy === null || people.has(q.claimedBy)) && Array.isArray(q.lootIds) && q.lootIds.every(id => ids.has(id))) ||
+        (q.claimedBy === null || people.has(q.claimedBy)) &&
+        (q.escortId === undefined || (people.has(q.escortId) && q.escortId !== q.claimedBy)) &&
+        (q.kind !== 'clear_nest' || (validTile(q.nestTile) && Object.hasOwn(monsters, q.species))) &&
+        Array.isArray(q.lootIds) && q.lootIds.every(id => ids.has(id))) ||
       accounts.size !== world.researchStates.length ||
       !world.researchStates.every(state => (settlements.has(state.ownerId) || nations.has(state.ownerId)) &&
         Array.isArray(state.unlockedIds) && state.unlockedIds.every(id => techIds.has(id)) &&

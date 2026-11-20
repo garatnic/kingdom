@@ -17,7 +17,12 @@ test('adventurers depart, defeat monsters, collect drops and return across three
     for (const q of completed) {
       const phases = ['adventureDeparted', 'monsterDefeated', 'adventureReturned'];
       const events = world.events.filter(e => e.questId === q.id && phases.includes(e.type));
-      assert.deepEqual(events.map(e => e.type), ['adventureDeparted', 'monsterDefeated', 'adventureReturned']);
+      assert.equal(events[0].type, 'adventureDeparted');
+      assert.equal(events.at(-1).type, 'adventureReturned');
+      const defeats = events.slice(1, -1);
+      assert.ok(defeats.length >= 1 && defeats.every(e => e.type === 'monsterDefeated'));
+      if (q.kind !== 'clear_nest') assert.equal(defeats.length, 1);
+      else assert.ok(world.events.some(e => e.questId === q.id && e.type === 'monsterNestCleared'));
       assert.ok(q.lootIds.every(id => world.resourceNodes.find(n => n.id === id)?.quantity === 0));
     }
     assert.ok(world.citizens.some(c => c.adventuresCompleted > 0));
@@ -119,4 +124,42 @@ test('combat experience can advance multiple levels and forged gear uses availab
   assert.equal(citizen.gearId, 'iron');
   assert.equal(store.total.iron, 2);
   assert.equal(store.reserved.iron, 1);
+});
+
+test('a nest expedition shares combat, clears all nest members, and restores mid-quest', async () => {
+  const world = createWorld('raid');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('grass');
+  const leader = world.citizens.find(c => c.profession === 'adventurer');
+  const origin = { x: store.x, y: store.y };
+  const first = spawnMonster(world, 'slime', { x: origin.x + 1, y: origin.y });
+  const second = spawnMonster(world, 'slime', { x: origin.x, y: origin.y - 1 });
+  first.hasNest = second.hasNest = true;
+  second.homeTile = { ...first.homeTile };
+  for (const person of world.citizens) person.lastKnownSafeTile = { ...origin };
+  world.citizens.find(c => c !== leader).profession = 'adventurer';
+  const quest = issueQuest(world, home, first);
+  assert.equal(quest.kind, 'clear_nest');
+  assert.equal(issueQuest(world, home, second), null);
+  const travel = () => true;
+  assert.ok(claimAdventure(world, leader, store, travel));
+  const escort = world.citizens.find(c => c.id === quest.escortId);
+  assert.ok(escort);
+  assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
+
+  const move = citizen => tile => {
+    citizen.lastKnownSafeTile = { x: tile.x, y: tile.y };
+    return true;
+  };
+  for (let i = 0; i < 50 && quest.status === 'claimed'; i++) {
+    world.worldTimeTick += 20;
+    continueAdventure(world, escort, quest, store, origin, move(escort));
+    continueAdventure(world, leader, quest, store, origin, move(leader));
+  }
+  assert.equal(quest.status, 'completed');
+  assert.equal(first.alive, false);
+  assert.equal(second.alive, false);
+  assert.equal(escort.adventuresCompleted, 1);
+  assert.equal(world.events.filter(e => e.type === 'monsterNestCleared').length, 1);
 });

@@ -118,7 +118,7 @@ function checkBirth(world, parent, people) {
 function fillVacancies(world) {
   const occupied = new Set([
     ...world.inTransit.map(shipment => shipment.carrierId),
-    ...world.quests.filter(quest => quest.status === 'claimed').map(quest => quest.claimedBy),
+    ...world.quests.filter(quest => quest.status === 'claimed').flatMap(quest => [quest.claimedBy, quest.escortId]),
     ...(world.campaigns ?? []).filter(c => c.status === 'marching' || c.status === 'siege').flatMap(c => c.memberIds)
   ]);
   for (const settlement of world.settlements) {

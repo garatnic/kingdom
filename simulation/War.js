@@ -40,7 +40,7 @@ function startCampaign(world, attacker, defender) {
     c.id !== attacker.leaderId && !c.expeditionId && c.hp >= 60 && c.hunger < 65 &&
     ageYears(world, c) >= ADULT_AGE &&
     !world.inTransit.some(s => s.carrierId === c.id) &&
-    !world.quests.some(q => q.claimedBy === c.id && q.status === 'claimed'));
+    !world.quests.some(q => (q.claimedBy === c.id || q.escortId === c.id) && q.status === 'claimed'));
   eligible.sort((a, b) => (b.skills.combat + b.traits.bravery) - (a.skills.combat + a.traits.bravery));
   const team = eligible.filter(c => findPath(world, c.lastKnownSafeTile, goal) !== null).slice(0, WAR.unitCount);
   if (team.length !== WAR.unitCount) return;
@@ -76,7 +76,7 @@ function occupy(world, campaign, attacker, defender) {
 function fightFieldBattle(world, campaign, attackers, defender) {
   const militia = world.citizens.filter(c => c.alive && c.nationId === defender.id &&
     c.settlementId === campaign.settlementId && ageYears(world, c) >= ADULT_AGE && c.hp >= 50 &&
-    !c.expeditionId && !world.quests.some(q => q.claimedBy === c.id && q.status === 'claimed') &&
+    !c.expeditionId && !world.quests.some(q => (q.claimedBy === c.id || q.escortId === c.id) && q.status === 'claimed') &&
     Math.abs(c.lastKnownSafeTile.x - campaign.x) + Math.abs(c.lastKnownSafeTile.y - campaign.y) <= 8);
   if (militia.length < 2) return true;
   const strength = group => group.reduce((sum, c) => {
