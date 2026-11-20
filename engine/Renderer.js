@@ -77,6 +77,16 @@ export class Renderer {
       ctx.fillRect(x - 3, y - 3, 6, 6);
     }
 
+    for (const monster of world.monsters.filter(m => m.alive && visible(m))) {
+      const x = monster.x * TILE + 16;
+      const y = monster.y * TILE + 16;
+      ctx.fillStyle = monster.species === 'slime' ? '#9da75d' : '#b66d54';
+      ctx.fillRect(x - 6, y - 4, 12, 9);
+      ctx.fillRect(x - 3, y - 7, 6, 3);
+      ctx.fillStyle = '#233a32';
+      ctx.fillRect(x - 3, y - 3, 2, 2);
+      ctx.fillRect(x + 2, y - 3, 2, 2);
+    }
     const citizens = world.citizens.filter(c => c.alive && visible(c)).sort((a, b) => a.y - b.y);
     for (const c of citizens) this.citizen(c, world.worldTimeTick);
   }

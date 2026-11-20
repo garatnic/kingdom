@@ -8,6 +8,7 @@ import {
   buildAtSite, deliverMaterials, materialsDelivered, pickUpMaterials, planSettlementConstruction,
   reserveMaterials, workTile
 } from './Construction.js';
+import { claimAdventure, continueAdventure } from './Adventure.js';
 import { recordDeath } from './Population.js';
 
 const tileOf = citizen => ({ x: Math.floor(citizen.x), y: Math.floor(citizen.y) });
@@ -55,7 +56,16 @@ function constructionRoute(world, citizen, store, population) {
   return reservation && travel(world, citizen, origin, 'pickUpMaterials', reservation.id);
 }
 
+function adventure(world, citizen, quest, store) {
+  return store && continueAdventure(world, citizen, quest, store, storeTile(world, store),
+    (goal, kind, targetId) => travel(world, citizen, goal, kind, targetId));
+}
+
 function chooseRoute(world, citizen, store, population) {
+  if (citizen.profession === 'adventurer') {
+    const active = world.quests.find(q => q.status === 'claimed' && q.claimedBy === citizen.id);
+    if (active && adventure(world, citizen, active, store)) return;
+  }
   if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0 &&
       travel(world, citizen, storeTile(world, store), 'eat', store.id)) return;
   if (citizen.fatigue >= NEEDS.sleep) {
@@ -85,6 +95,8 @@ function chooseRoute(world, citizen, store, population) {
       }
     }
   }
+  if (store && claimAdventure(world, citizen, store, (goal, kind, targetId) =>
+    travel(world, citizen, goal, kind, targetId))) return;
   if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
   const { x, y } = world.settlements.find(s => s.id === citizen.settlementId) ?? world.settlements[0];
   const offset = () => Math.floor(random(world.rngState) * (2 * WANDER_RADIUS + 1)) - WANDER_RADIUS;
@@ -93,6 +105,10 @@ function chooseRoute(world, citizen, store, population) {
 
 function perform(world, citizen, store, ticks) {
   const action = citizen.action;
+  if (action.kind === 'adventure') {
+    const quest = world.quests.find(q => q.id === action.targetId);
+    if (adventure(world, citizen, quest, store)) return;
+  }
   if (action.kind === 'sleep' && citizen.fatigue > 20) return;
   if (action.kind === 'gather') {
     action.progress += ticks;

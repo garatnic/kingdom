@@ -2,6 +2,7 @@ import {
   REAL_STEP_MS, TICKS_PER_STEP_AT_1X, MAX_FRAME_MS, MAX_FRAME_STEPS,
   TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR, TIME_TICKS_PER_MINUTE, SEASONS, SPEEDS
 } from '../data/balance.js';
+import { updateAdventureWorld } from '../simulation/Adventure.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
 import { updatePopulation } from '../simulation/Population.js';
 
@@ -15,6 +16,7 @@ export function advanceFrame(world, elapsedMs, hidden = false) {
     // Faster playback executes the same ordered logical updates.
     for (let i = 0; i < world.gameSpeed; i++) {
       world.worldTimeTick += TICKS_PER_STEP_AT_1X;
+      updateAdventureWorld(world, TICKS_PER_STEP_AT_1X);
       updateCitizens(world, TICKS_PER_STEP_AT_1X);
       updatePopulation(world, TICKS_PER_STEP_AT_1X);
     }
