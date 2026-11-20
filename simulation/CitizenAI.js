@@ -157,7 +157,8 @@ function perform(world, citizen, store, ticks, population) {
     const farm = world.buildings.find(b => b.id === action.targetId);
     if (farm && (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick) {
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      const multiplier = unlocked(world, citizen.settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
+      let multiplier = unlocked(world, citizen.settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
+      if (unlocked(world, citizen.settlementId, 'irrigation_1')) multiplier += TECH.irrigationBonus;
       citizen.inventory.food += Math.floor(FARM_YIELD * multiplier);
       if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     }

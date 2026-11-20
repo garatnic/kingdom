@@ -1,3 +1,4 @@
+import { civilizationNames } from '../data/technologies.js';
 import { calendar } from '../engine/GameLoop.js';
 import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor } from '../systems/History.js';
@@ -7,7 +8,7 @@ const events = {
   constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
-  frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '農耕社会に発展'
+  frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const races = { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' };
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
@@ -99,14 +100,16 @@ export function observation(getWorld, getCamera, focus) {
       const priorities = { food: '農業', housing: '住宅', defense: '防衛', research: '研究', exploration: '探索' };
       add(body, 'p', `主要方針 ${priorities[nation.policy.primary] ?? '選択中'}`);
       const state = world.researchStates.find(item => item.ownerId === nation.id);
-      const tech = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法' };
+      const tech = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法', steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅' };
+      if (state) add(body, 'p', civilizationNames[state.civilization] ?? state.civilization);
       if (state) add(body, 'p', `解禁研究 ${state.unlockedIds.map(id => tech[id]).join('・') || 'なし'}`);
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);
     } else add(body, 'p', '対象がまだありません。');
   }
 
   function showEvent(world, event) {
-    const label = `${events[event.type] ?? event.type} · ${calendar(event.worldTimeTick)}`;
+    const title = event.type === 'civilizationAdvanced' ? civilizationNames[event.civilization] + 'へ進展' : events[event.type] ?? event.type;
+    const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);
     if (!target) { add(body, 'p', label); return; }
     const button = add(body, 'button', label);

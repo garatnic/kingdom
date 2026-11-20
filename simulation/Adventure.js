@@ -240,7 +240,9 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
           citizen.spellReadyAt = world.worldTimeTick + TECH.spellCooldownTicks;
         }
         const weapon = unlocked(world, citizen.settlementId, 'weapons_1') ? TECH.weaponBonus : 0;
-        const attack = quest.casting ? TECH.spellAttack : COMBAT.attack + citizen.skills.combat + weapon;
+        const steel = !quest.casting && unlocked(world, citizen.settlementId, 'steel_1') ? TECH.steelWeaponBonus : 0;
+        const arcane = quest.casting && unlocked(world, citizen.settlementId, 'magic_2') ? TECH.arcaneSpellBonus : 0;
+        const attack = quest.casting ? TECH.spellAttack + arcane : COMBAT.attack + citizen.skills.combat + weapon + steel;
         if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
           monster.hp = Math.max(0, monster.hp - damage(world, attack, config.defense));
         }

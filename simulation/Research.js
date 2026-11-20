@@ -1,9 +1,10 @@
 import { emitOnce } from '../systems/History.js';
-import { technologies, TECH } from '../data/technologies.js';
+import { technologies, TECH, civilizationNames, civilizationTransitions } from '../data/technologies.js';
 import { ADULT_AGE, MAGIC_AFFINITY_THRESHOLD, NEED_HOUR_TICKS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { available } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 
+const civilizationOrder = Object.keys(civilizationNames);
 const crosses = (now, ticks, duration) => Math.floor(now / duration) > Math.floor((now - ticks) / duration);
 
 export function researchOwner(world, settlement) {
@@ -40,17 +41,48 @@ function localContext(world, owner) {
     stores: world.stockpiles.filter(s => ids.has(s.settlementId)) };
 }
 
-function eligible(technology, context) {
-  return context.citizens.length >= (technology.population ?? 0) &&
+function hasResources(context, requirements) {
+  return Object.entries(requirements ?? {}).every(([resource, amount]) =>
+    context.stores.reduce((total, store) => total + available(store, resource), 0) >= amount);
+}
+
+function eligible(technology, context, state) {
+  return (!technology.era || civilizationOrder.indexOf(technology.era) <= civilizationOrder.indexOf(state.civilization)) &&
+    (!technology.requires || state.unlockedIds.includes(technology.requires)) &&
+    context.citizens.length >= (technology.population ?? 0) &&
     (!technology.building || context.buildings.some(b => b.kind === technology.building)) &&
     (!technology.requiresAffinity || context.affinity.length > 0) &&
-    Object.entries(technology.resources ?? {}).every(([resource, amount]) =>
-      context.stores.reduce((total, store) => total + available(store, resource), 0) >= amount);
+    hasResources(context, technology.resources);
+}
+
+function advanceCivilization(world, owner, state, context) {
+  const rule = civilizationTransitions[state.civilization];
+  if (!rule) return;
+  const requirements = { ...rule.resources };
+  if (rule.foodPerResident) requirements.food = context.citizens.length * rule.foodPerResident;
+  const qualifies = state.unlockedIds.includes(rule.technology) &&
+    context.citizens.length >= rule.population &&
+    (!rule.requiresNation || world.nations.some(nation => nation.id === owner.id)) &&
+    Object.entries(rule.buildings).every(([kind, count]) =>
+      context.buildings.filter(building => building.kind === kind).length >= count) &&
+    hasResources(context, requirements);
+  const days = state.civilization === 'primitive' || state.civilizationTarget === rule.to ? state.civilizationDays : 0;
+  state.civilizationTarget = rule.to;
+  state.civilizationDays = qualifies ? days + 1 : 0;
+  if (state.civilizationDays < rule.days) return;
+
+  const previous = state.civilization;
+  state.civilization = rule.to;
+  state.civilizationDays = 0;
+  delete state.civilizationTarget;
+  emitOnce(world, state.id + '/' + rule.to, 'civilizationAdvanced', {
+    ownerId: owner.id, researchId: state.id, previous, civilization: rule.to
+  });
 }
 
 function updateOwner(world, owner, state, context, daily) {
-  const tech = technologies.find(t => t.id === state.activeTechId && eligible(t, context)) ??
-    technologies.find(t => !state.unlockedIds.includes(t.id) && eligible(t, context));
+  const tech = technologies.find(t => t.id === state.activeTechId && eligible(t, context, state)) ??
+    technologies.find(t => !state.unlockedIds.includes(t.id) && eligible(t, context, state));
   state.activeTechId = tech?.id ?? null;
   const scholarBonus = tech?.requiresAffinity && context.affinity.length ? 1 : 0;
   const policyBonus = owner.policy?.primary === 'research' ? 1 : 0;
@@ -75,17 +107,7 @@ function updateOwner(world, owner, state, context, daily) {
       citizen.mp = Math.min(TECH.maxMp, (citizen.mp ?? TECH.maxMp) + TECH.mpRecovery);
     }
   }
-  if (!daily || state.civilization !== 'primitive') return;
-  const qualifies = state.unlockedIds.includes('farming_1') &&
-    context.citizens.length >= TECH.farmEraPopulation &&
-    context.buildings.filter(b => b.kind === 'farm').length >= TECH.farmEraFarms;
-  state.civilizationDays = qualifies ? state.civilizationDays + 1 : 0;
-  if (state.civilizationDays >= TECH.farmEraDays) {
-    state.civilization = 'agrarian';
-    emitOnce(world, state.id, 'civilizationAdvanced', {
-      ownerId: owner.id, researchId: state.id, civilization: state.civilization
-    });
-  }
+  if (daily) advanceCivilization(world, owner, state, context);
 }
 
 export function updateResearch(world, ticks) {
