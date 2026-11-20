@@ -4,7 +4,7 @@ const importance = {
   terrainCorrection: 1, adventureDeparted: 1, adventureReturned: 1,
   constructionCompleted: 2, monsterDefeated: 2, borderFriction: 2,
   marriage: 3, birth: 3, independentExpedition: 3, settlementFounded: 3, god_intervention: 3,
-  frontierDiscovered: 3, founding: 4, research_unlocked: 4, death: 5, civilizationAdvanced: 5
+  warDeclared: 4, siegeStarted: 3, territoryOccupied: 4, siegeRepelled: 3, nationFallen: 5, frontierDiscovered: 3, founding: 4, research_unlocked: 4, death: 5, civilizationAdvanced: 5
 };
 
 export const eventImportance = event => event.importance ?? importance[event.type] ?? 0;

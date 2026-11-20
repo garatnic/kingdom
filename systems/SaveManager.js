@@ -16,7 +16,7 @@ const idOrder = (a, b) => Number(a.id.split(':')[1]) - Number(b.id.split(':')[1]
 const coreEntityLists = ['citizens', 'settlements', 'nations', 'buildings', 'resourceNodes', 'stockpiles',
   'constructionSites', 'events', 'reservations', 'inTransit', 'monsters', 'quests', 'researchStates'];
 
-const entityLists = world => world.expeditions === undefined ? coreEntityLists : [...coreEntityLists, 'expeditions'];
+const entityLists = world => [...coreEntityLists, ...['expeditions', 'campaigns'].filter(key => world[key] !== undefined)];
 
 function canonical(value) {
   if (value === null || ['string', 'boolean'].includes(typeof value) || Number.isFinite(value)) {
@@ -66,8 +66,10 @@ function validate(world) {
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&
     !world.buildings.some(building => footprint(building, tile));
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId))) ||
-      !world.nations.every(n => settlements.get(n.capitalId)?.nationId === n.id &&
-        n.settlementIds.every(id => settlements.get(id)?.nationId === n.id)) ||
+      !world.nations.every(n => n.fallenAt !== undefined
+        ? integer(n.fallenAt, 0, world.worldTimeTick) && n.capitalId === null && n.settlementIds.length === 0
+        : settlements.get(n.capitalId)?.nationId === n.id &&
+          n.settlementIds.every(id => settlements.get(id)?.nationId === n.id)) ||
       !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId)) ||
       !world.resourceNodes.every(n => passable(n) && resources.includes(n.resource) && integer(n.quantity, 0)) ||
       world.stockpiles.length !== settlements.size ||
@@ -79,6 +81,12 @@ function validate(world) {
     throw new Error('保存データの集落・資源が無効です。');
   }
   const people = new Map(world.citizens.map(c => [c.id, c]));
+  if (world.campaigns?.some(c => !['marching', 'siege', 'occupied', 'repelled'].includes(c.status) ||
+      !nations.has(c.attackerId) || !nations.has(c.defenderId) || !settlements.has(c.settlementId) ||
+      !validTile(c) || !integer(c.rations, 0) || !Array.isArray(c.memberIds) || !c.memberIds.every(id => people.has(id)) ||
+      !Array.isArray(c.arrivedIds) || !c.arrivedIds.every(id => c.memberIds.includes(id)))) {
+    throw new Error('保存データの遠征が無効です。');
+  }
   const sites = new Set(world.constructionSites.map(site => site.id));
   const stores = new Set(world.stockpiles.map(store => store.id));
   const targets = new Set(world.monsters.map(monster => monster.id));

@@ -2,6 +2,7 @@ import { TILE } from './data/balance.js';
 import { applyGodCommand } from './systems/GodPowers.js';
 import { openSaveStorage, readLatestGeneration, writeGeneration } from './systems/SaveStorage.js';
 import { observation } from './ui/Observation.js';
+import { activeNations } from './simulation/War.js';
 import { relationLabel } from './simulation/Nations.js';
 import { createWorld } from './engine/World.js';
 import { advanceFrame, calendar, setSpeed } from './engine/GameLoop.js';
@@ -44,10 +45,13 @@ function showReadouts() {
   if (get('population').textContent !== population) get('population').textContent = population;
   const food = `食料 ${world.stockpiles.reduce((sum, store) => sum + store.total.food - store.reserved.food, 0)}`;
   if (get('food').textContent !== food) get('food').textContent = food;
-  const [first, second] = world.nations;
+  const active = activeNations(world);
+  const [first, second] = active;
   const labels = { friendly: '友好', neutral: '中立', hostile: '敵対' };
   const relations = second ? ` · 国間関係 ${labels[relationLabel(first.relations[second.id])]}` : '';
-  const nations = `国家 ${world.nations.length}${relations}`;
+  const war = world.campaigns?.find(c => c.status === 'marching' || c.status === 'siege');
+  const conflict = war ? (war.status === 'marching' ? ' · 進軍中' : ' · 包囲中') : '';
+  const nations = `国家 ${active.length}${relations}${conflict}`;
   if (get('nations').textContent !== nations) get('nations').textContent = nations;
 }
 

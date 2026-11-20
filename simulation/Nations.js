@@ -1,3 +1,4 @@
+import { activeNations, updateWar } from './War.js';
 import { emitOnce } from '../systems/History.js';
 import { ADULT_AGE, FOOD_EMERGENCY_PER_PERSON, LAYOUT, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { buildings, footprint } from '../data/buildings.js';
@@ -109,7 +110,7 @@ export function startExpedition(world, nation) {
   const settlement = world.settlements.find(s => s.id === nation.capitalId);
   const people = residents(world, settlement.id);
   const eligible = people.filter(c => c.id !== nation.leaderId && ageYears(world, c) >= ADULT_AGE &&
-    c.hp >= 50 && !world.quests.some(q => q.status === 'claimed' && q.claimedBy === c.id) &&
+    c.hp >= 50 && !world.campaigns?.some(war => war.memberIds.includes(c.id) && ['marching', 'siege'].includes(war.status)) && !world.quests.some(q => q.status === 'claimed' && q.claimedBy === c.id) &&
     !world.inTransit.some(item => item.carrierId === c.id));
   // Select households before singles to avoid separating partners where possible.
   const pairs = eligible.filter(c => eligible.find(p => p.id === c.partnerId) &&
@@ -181,7 +182,7 @@ function finishExpedition(world, expedition, failed) {
 }
 
 function updateRelations(world) {
-  const [first, second] = world.nations;
+  const [first, second] = activeNations(world);
   if (!second) return;
   const crossings = world.citizens.filter(c => c.alive && c.nationId &&
     [first.id, second.id].includes(c.nationId) && territoryAt(world, c.lastKnownSafeTile) ===
@@ -203,8 +204,9 @@ export function updateNations(world, ticks) {
   const now = world.worldTimeTick;
   if (Math.floor(now / TIME_TICKS_PER_DAY) === Math.floor((now - ticks) / TIME_TICKS_PER_DAY)) return;
   for (const settlement of world.settlements) checkFounding(world, settlement);
-  for (const nation of world.nations) choosePolicy(world, nation);
+  for (const nation of activeNations(world)) choosePolicy(world, nation);
   updateRelations(world);
-  const first = world.nations[0];
+  updateWar(world);
+  const [first] = activeNations(world);
   if (first && now - first.createdAt >= NATIONS.expeditionAgeDays * TIME_TICKS_PER_DAY) startExpedition(world, first);
 }

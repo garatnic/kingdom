@@ -1,4 +1,4 @@
-import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, NEEDS, GATHER_TICKS } from '../data/balance.js';
+import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
@@ -14,6 +14,7 @@ import {
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { claimAdventure, continueAdventure } from './Adventure.js';
+import { campaignFor, invasionOrder } from './War.js';
 import { recordDeath } from './Population.js';
 
 const tileOf = citizen => ({ x: Math.floor(citizen.x), y: Math.floor(citizen.y) });
@@ -77,12 +78,20 @@ function chooseRoute(world, citizen, store, population) {
     const active = world.quests.find(q => q.status === 'claimed' && q.claimedBy === citizen.id);
     if (active && adventure(world, citizen, active, store)) return;
   }
+  const campaign = campaignFor(world, citizen);
+  if (campaign?.rations > 0 && citizen.hunger >= NEEDS.eat - 8) {
+    campaign.rations--;
+    citizen.hunger = Math.max(0, citizen.hunger - FOOD_HUNGER_RESTORED);
+  }
   if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0 &&
       travel(world, citizen, storeTile(world, store), 'eat', store.id)) return;
   if (citizen.fatigue >= NEEDS.sleep || (citizen.hp <= COMBAT.retreatHp && citizen.hunger < NEEDS.eat)) {
     citizen.action = { ...idle(world.worldTimeTick), kind: 'sleep', phase: 'perform' };
     return;
   }
+  const invasion = invasionOrder(world, citizen);
+  if (invasion && travel(world, citizen, invasion, 'warMarch', invasion.id)) return;
+  if (campaign?.arrivedIds.includes(citizen.id)) return;
   const foodTarget = population * FOOD_TARGET_PER_PERSON;
   if (store && freeCapacity(store) > 0) {
     if (resources.some(key => citizen.inventory[key] > 0 && storageRoom(store, key, foodTarget) > 0) &&
@@ -131,6 +140,10 @@ function chooseRoute(world, citizen, store, population) {
 function perform(world, citizen, store, ticks, population) {
   const action = citizen.action;
   if (action.kind === 'survey') discoverFrontier(world, citizen.lastKnownSafeTile, action.direction, citizen.id);
+  if (action.kind === 'warMarch') {
+    const invasion = invasionOrder(world, citizen);
+    if (invasion?.id === action.targetId) invasion.arrivedIds.push(citizen.id);
+  }
   if (action.kind === 'expedition') {
     const expedition = world.expeditions.find(item => item.id === action.targetId);
     if (!expedition.arrivedIds.includes(citizen.id)) expedition.arrivedIds.push(citizen.id);

@@ -8,12 +8,13 @@ const events = {
   constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
+  warDeclared: '開戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const races = { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' };
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
-  idle: '待機', explore: '探索', survey: '境界を調査', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
+  idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
   farm: '収穫', build: '建築', pickUpMaterials: '資材引取', deliverMaterials: '資材搬入',
   recoverMaterials: '資材回収', adventure: '冒険', expedition: '開拓'
 };
@@ -93,7 +94,7 @@ export function observation(getWorld, getCamera, focus) {
         for (const event of historyFor(world, 'citizen', person.id).slice(-10).reverse()) showEvent(world, event);
       }
     } else if (nation) {
-      add(body, 'h3', nation.name);
+      add(body, 'h3', nation.name + (nation.fallenAt === undefined ? '' : '（滅亡）'));
       add(body, 'p', `人口 ${world.citizens.filter(c => c.alive && c.nationId === nation.id).length}人`);
       const leader = world.citizens.find(c => c.id === nation.leaderId);
       if (leader) add(body, 'p', `指導者 ${leader.name}`);
