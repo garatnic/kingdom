@@ -222,6 +222,7 @@ get('file').addEventListener('change', async event => {
 });
 
 const godOptions = {
+  disaster: { drought: '干ばつ（周囲5タイル）' },
   blessing: { recovery: '回復（周囲3タイル）' },
   life: Object.fromEntries(Object.entries(citizenRaces).map(([id, race]) => [id, race.label])),
   resource: { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' },

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
+import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { applyGodCommand } from '../systems/GodPowers.js';
 import { emitOnce, historyFor, trimHistory } from '../systems/History.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
@@ -107,4 +108,22 @@ test('divine blessing heals living residents in range and remains idempotent acr
   assert.equal(applyGodCommand(restored, blessing), 'DUPLICATE');
   assert.equal(restored.citizens[0].hp, 85);
   assert.equal(applyGodCommand(restored, command('empty', 'blessing', { x: 0, y: 0 }, 'recovery')), 'NO_TARGET');
+});
+
+test('drought delays local harvests and remains idempotent after restoration', async () => {
+  const world = createWorld('drought');
+  const settlementId = world.settlements[0].id;
+  world.map.terrain.fill('grass');
+  const farm = { id: 'building:2', kind: 'farm', settlementId, x: 35, y: 35,
+    width: 2, height: 2, capacity: 0, completedAt: 0 };
+  const distant = { ...farm, id: 'building:3', x: 48 };
+  world.buildings.push(farm, distant);
+  world.idCounters.building = 4;
+  const drought = command('first-drought', 'disaster', farm, 'drought');
+  assert.equal(applyGodCommand(world, drought), null);
+  assert.equal(farm.harvestAt, TIME_TICKS_PER_DAY);
+  assert.equal(distant.harvestAt, undefined);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(restored.buildings[1].harvestAt, TIME_TICKS_PER_DAY);
+  assert.equal(applyGodCommand(restored, drought), 'DUPLICATE');
 });

@@ -1,6 +1,6 @@
 import { LIFE_CREATION_LIMIT } from '../simulation/DetailLevel.js';
-import { citizenRaces, TERRAIN_COST } from '../data/balance.js';
-import { footprint } from '../data/buildings.js';
+import { citizenRaces, TERRAIN_COST, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { FARM_HARVEST_TICKS, footprint } from '../data/buildings.js';
 import { monsters } from '../data/combat.js';
 import { createAdult } from '../simulation/CreateAdult.js';
 import { spawnMonster } from '../simulation/Adventure.js';
@@ -71,7 +71,15 @@ export function applyGodCommand(world, command) {
   if (!inBounds(world, tile)) return 'OUT_OF_BOUNDS';
   const { value, quantity } = payload;
   let affectedCitizenIds;
-  if (kind === 'blessing') {
+  let affectedFarms;
+  if (kind === 'disaster') {
+    if (value !== 'drought') return 'INVALID_KIND';
+    const until = world.worldTimeTick + TIME_TICKS_PER_DAY;
+    affectedFarms = world.buildings.filter(b => b.kind === 'farm' && sumDistance(b, tile) <= 5 &&
+      (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) < until);
+    if (!affectedFarms.length) return 'NO_TARGET';
+    for (const farm of affectedFarms) farm.harvestAt = until;
+  } else if (kind === 'blessing') {
     if (value !== 'recovery') return 'INVALID_KIND';
     const affected = world.citizens.filter(c => c.alive && sumDistance(cell(c), tile) <= 3 &&
       (c.hp < 100 || c.fear > 0));
@@ -113,8 +121,13 @@ export function applyGodCommand(world, command) {
     }
   }
   emitOnce(world, commandId, 'god_intervention', {
-    ...tile, kind, value, quantity: affectedCitizenIds?.length ?? (kind === 'terrain' ? 0 : quantity),
-    ...(affectedCitizenIds && { affectedCitizenIds })
+    ...tile, kind, value, quantity: affectedCitizenIds?.length ?? affectedFarms?.length ?? (kind === 'terrain' ? 0 : quantity),
+    ...(affectedCitizenIds && { affectedCitizenIds }),
+    ...(affectedFarms && {
+      affectedBuildingIds: affectedFarms.map(b => b.id),
+      nationIds: [...new Set(world.settlements.filter(s =>
+        s.nationId && affectedFarms.some(b => b.settlementId === s.id)).map(s => s.nationId))]
+    })
   });
   return null;
 }
