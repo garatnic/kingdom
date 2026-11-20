@@ -3,7 +3,7 @@ import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
 import { findPath } from './path.js';
-import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom } from './Economy.js';
+import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom, storeTile } from './Economy.js';
 import { eat, updateNeeds } from './Needs.js';
 import { COMBAT } from '../data/combat.js';
 import { FARM_HARVEST_TICKS, FARM_YIELD } from '../data/buildings.js';
@@ -19,12 +19,6 @@ import { recordDeath } from './Population.js';
 
 const tileOf = citizen => ({ x: Math.floor(citizen.x), y: Math.floor(citizen.y) });
 const idle = tick => ({ kind: 'idle', phase: 'plan', targetId: null, startedAt: tick, progress: 0 });
-
-function storeTile(world, store) {
-  if (store.x !== undefined) return store;
-  const settlement = world.settlements.find(s => s.id === store.settlementId);
-  return { x: settlement.x + 1, y: settlement.y };
-}
 
 const jobs = { farmer: ['food'], woodcutter: ['wood'], miner: ['stone', 'iron', 'manaStone'] };
 

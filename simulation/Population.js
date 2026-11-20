@@ -1,6 +1,9 @@
+import { createAdult } from './CreateAdult.js';
+import { reachableTiles } from './path.js';
+import { LIFE_CREATION_LIMIT } from './DetailLevel.js';
 import { emitOnce } from '../systems/History.js';
 import { ageYears, lifespan, nextId, professions } from './Identity.js';
-import { available, resources } from './Economy.js';
+import { available, resources, storeTile } from './Economy.js';
 import { random } from '../engine/random.js';
 import {
   ADULT_AGE, BIRTH_CHECK_INTERVAL_TICKS, BIRTH_PROBABILITY_PER_YEAR, FAMILY, FOOD_BIRTH_PER_PERSON,
@@ -118,6 +121,34 @@ function fillVacancies(world) {
   }
 }
 
+function admitMigrant(world) {
+  const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
+  if (day < 30 || day % 15 !== 0) return;
+  const latestFrontier = world.events.findLast(e => e.type === 'frontierDiscovered');
+  if (!latestFrontier) return;
+  const living = world.citizens.filter(c => c.alive);
+  if (living.length >= LIFE_CREATION_LIMIT) return;
+  const race = ['orc', 'halfling', 'fairy'][(day / 15 - 2) % 3];
+  for (const settlement of world.settlements) {
+    const residents = living.filter(c => c.settlementId === settlement.id);
+    const store = world.stockpiles.find(s => s.settlementId === settlement.id);
+    if (!residents.length || !store || available(store, 'food') < (residents.length + 1) * FOOD_BIRTH_PER_PERSON) continue;
+    const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === settlement.id &&
+      residents.filter(c => c.homeBuildingId === b.id).length < b.capacity);
+    if (!home) continue;
+    const reception = storeTile(world, store);
+    const reachable = reachableTiles(world, reception);
+    if (!reachable[latestFrontier.y * world.map.width + latestFrontier.x]) continue;
+    const migrant = createAdult(world, race, reception, settlement);
+    migrant.homeBuildingId = home.id;
+    world.citizens.push(migrant);
+    emitOnce(world, migrant.id + '/arrival', 'migrantArrived', {
+      citizenId: migrant.id, settlementId: settlement.id, nationId: settlement.nationId, race, ...reception
+    });
+    return;
+  }
+}
+
 export function updatePopulation(world, ticks) {
   const daily = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) >
     Math.floor((world.worldTimeTick - ticks) / TIME_TICKS_PER_DAY);
@@ -138,6 +169,7 @@ export function updatePopulation(world, ticks) {
   if (daily) {
     fillVacancies(world);
     dailyRelationships(world, world.citizens);
+    admitMigrant(world);
   }
   if (!birthDue) return;
   const people = new Map(world.citizens.map(c => [c.id, c]));

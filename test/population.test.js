@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
+import { discoverFrontier } from '../engine/Expansion.js';
 import { updatePopulation } from '../simulation/Population.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR } from '../data/balance.js';
@@ -66,4 +67,31 @@ test('food shortage advances the birth deadline without consuming randomness', (
   assert.deepEqual(world.rngState, randomBefore);
   assert.ok(world.citizens.filter(c => c.nextBirthCheckTick)
     .every(c => c.nextBirthCheckTick === world.worldTimeTick + TIME_TICKS_PER_YEAR));
+});
+
+test('an expanded and connected world admits migrants only with food and spare housing', async () => {
+  const world = createWorld('migration');
+  const store = world.stockpiles[0];
+  const home = world.buildings.find(b => b.kind === 'house');
+  const y = store.y;
+  for (let x = store.x; x < 64; x++) world.map.terrain[y * 64 + x] = 'grass';
+  store.total.food = 0;
+  world.worldTimeTick = 30 * TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  assert.equal(world.citizens.length, 12);
+  assert.ok(discoverFrontier(world, { x: 63, y }, 'east', world.citizens[0].id));
+  world.worldTimeTick = 45 * TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  assert.equal(world.citizens.length, 12);
+  store.total.food = 45;
+  home.capacity++;
+  world.worldTimeTick = 60 * TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  const migrant = world.citizens.at(-1);
+  assert.equal(world.citizens.length, 13);
+  assert.equal(migrant.race, 'fairy');
+  assert.equal(migrant.homeBuildingId, home.id);
+  assert.equal(migrant.settlementId, store.settlementId);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.deepEqual(restored.citizens.at(-1), migrant);
 });

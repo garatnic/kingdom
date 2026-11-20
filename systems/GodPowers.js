@@ -1,11 +1,11 @@
 import { LIFE_CREATION_LIMIT } from '../simulation/DetailLevel.js';
-import { LAYOUT, citizenRaces, TERRAIN_COST, TIME_TICKS_PER_YEAR } from '../data/balance.js';
+import { citizenRaces, TERRAIN_COST } from '../data/balance.js';
 import { footprint } from '../data/buildings.js';
 import { monsters } from '../data/combat.js';
-import { random } from '../engine/random.js';
+import { createAdult } from '../simulation/CreateAdult.js';
 import { spawnMonster } from '../simulation/Adventure.js';
 import { resources } from '../simulation/Economy.js';
-import { lifespan, nextId, professions } from '../simulation/Identity.js';
+import { nextId } from '../simulation/Identity.js';
 import { findPath } from '../simulation/path.js';
 import { emitOnce } from './History.js';
 
@@ -38,29 +38,6 @@ function placement(world, tile, quantity) {
       { x: point.x, y: point.y - 1 }, { x: point.x, y: point.y + 1 });
   }
   return [];
-}
-
-function makeCitizen(world, race, tile) {
-  const id = nextId(world, 'citizen');
-  const number = Number(id.split(':')[1]);
-  const [min, max] = LAYOUT.age;
-  const age = min + Math.floor(random(world.rngState) * (max - min + 1));
-  const near = world.settlements.filter(s => sumDistance(s, tile) <= scope)
-    .sort((a, b) => sumDistance(a, tile) - sumDistance(b, tile))[0];
-  const stats = ['diligence', 'bravery', 'curiosity', 'magicAffinity'];
-  const traits = Object.fromEntries(stats.map(stat => [stat, random(world.rngState)]));
-  traits.magicAffinity = Math.max(traits.magicAffinity, citizenRaces[race].minMagicAffinity ?? 0);
-  const skills = Object.fromEntries(['farming', 'woodcutting', 'mining', 'building', 'combat', 'magic'].map(key => [key, 0]));
-  return {
-    id, name: `住民 ${number}`, race, birthWorldTimeTick: world.worldTimeTick - age * TIME_TICKS_PER_YEAR,
-    lifespanYears: lifespan(world, race), alive: true, sex: 'unspecified', settlementId: near?.id ?? null,
-    nationId: near?.nationId ?? null, homeBuildingId: null, familyId: null, parentIds: [], childIds: [],
-    partnerId: null, relationships: {}, x: tile.x + 0.5, y: tile.y + 0.5, hp: 100, hunger: 20,
-    fatigue: 10, fear: 0, traits, skills, profession: professions[(number - 1) % professions.length],
-    inventory: Object.fromEntries(resources.map(key => [key, 0])), lastKnownSafeTile: tile,
-    action: { kind: 'idle', phase: 'plan', targetId: null, startedAt: world.worldTimeTick, progress: 0 },
-    decisionAt: world.worldTimeTick, failedTargets: {}
-  };
 }
 
 function editTerrain(world, tile, terrain) {
@@ -125,8 +102,13 @@ export function applyGodCommand(world, command) {
       const positions = placement(world, tile, quantity);
       if (!positions.length) return 'OCCUPIED';
       for (const point of positions) {
-        if (kind === 'life') world.citizens.push(makeCitizen(world, value, point));
-        else spawnMonster(world, value, point);
+        if (kind === 'life') {
+          const near = world.settlements.filter(s => sumDistance(s, point) <= scope)
+            .sort((a, b) => sumDistance(a, point) - sumDistance(b, point))[0];
+          world.citizens.push(createAdult(world, value, point, near));
+        } else {
+          spawnMonster(world, value, point);
+        }
       }
     }
   }

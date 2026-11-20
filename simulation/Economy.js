@@ -4,6 +4,12 @@ export const resources = Object.keys(LAYOUT.provisions);
 export const available = (store, resource) => store.total[resource] - store.reserved[resource];
 export const freeCapacity = store => store.capacity - resources.reduce((sum, key) => sum + store.total[key], 0);
 
+export function storeTile(world, store) {
+  if (store.x !== undefined) return store;
+  const settlement = world.settlements.find(s => s.id === store.settlementId);
+  return { x: settlement.x + 1, y: settlement.y };
+}
+
 export function storageRoom(store, resource, foodTarget = 0) {
   const room = freeCapacity(store);
   const foodRoom = resource === 'food' ? 0 : Math.max(0, foodTarget - store.total.food);
