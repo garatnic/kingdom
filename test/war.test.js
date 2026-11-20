@@ -76,3 +76,23 @@ test('a failed campaign establishes a bilateral truce that expires after ten day
   updateWar(restored);
   assert.equal(restored.campaigns.length, 2);
 });
+
+test('two defeats between the same nations lead to peace and neutral relations', async () => {
+  const { world, invader, defender } = twoNations();
+  updateWar(world);
+  world.worldTimeTick = 3 * TIME_TICKS_PER_DAY;
+  updateWar(world);
+  world.worldTimeTick = 13 * TIME_TICKS_PER_DAY;
+  updateWar(world);
+  assert.equal(world.campaigns.length, 2);
+  world.worldTimeTick = 16 * TIME_TICKS_PER_DAY;
+  updateWar(world);
+  assert.equal(invader.relations[defender.id], 0);
+  assert.equal(defender.relations[invader.id], 0);
+  assert.equal(truceBetween(world, invader, defender), undefined);
+  assert.ok(world.events.some(event => event.type === 'peaceAgreed'));
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick = 40 * TIME_TICKS_PER_DAY;
+  updateWar(restored);
+  assert.equal(restored.campaigns.length, 2);
+});
