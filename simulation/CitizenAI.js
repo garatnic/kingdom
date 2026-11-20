@@ -68,7 +68,7 @@ function chooseRoute(world, citizen, store, population) {
         !travel(world, citizen, expedition, 'expedition', expedition.id)) expedition.failed = true;
     return;
   }
-  const active = assignedAdventure(world, citizen);
+  const active = citizen.profession === 'adventurer' && assignedAdventure(world, citizen);
   if (active && adventure(world, citizen, active, store)) return;
   const campaign = campaignFor(world, citizen);
   if (campaign?.rations > 0 && citizen.hunger >= NEEDS.eat - 8) {
@@ -159,7 +159,7 @@ function updateDistantSettlements(world, camera, population) {
       const connected = reachableTiles(world, origin);
       for (const citizen of hungry) {
         const { x, y } = citizen.lastKnownSafeTile;
-        if (connected[y * world.map.width + x]) eat(citizen, store);
+        if (connected[y * world.map.width + x] === 1) eat(citizen, store);
       }
     }
     const workers = locals.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&

@@ -188,7 +188,7 @@ function admitMigrants(world) {
     const { x, y } = storeTile(world, store);
     const reception = { x, y };
     const reachable = reachableTiles(world, reception);
-    if (!reachable[latestFrontier.y * world.map.width + latestFrontier.x]) continue;
+    if (reachable[latestFrontier.y * world.map.width + latestFrontier.x] !== 1) continue;
     for (const home of world.buildings) {
       if (home.kind !== 'house' || home.settlementId !== settlement.id) continue;
       const freeBeds = home.capacity - residents.filter(c => c.homeBuildingId === home.id).length;

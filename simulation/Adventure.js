@@ -9,7 +9,7 @@ import { ageYears, nextId } from './Identity.js';
 import { available, deposit } from './Economy.js';
 import { recordDeath } from './Population.js';
 import { campaignFor } from './War.js';
-import { findPath } from './path.js';
+import { findPath, reachableTiles } from './path.js';
 
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const tileOf = citizen => citizen.lastKnownSafeTile;
@@ -244,12 +244,13 @@ export function updateAdventureWorld(world, ticks) {
   if (day) huntPrey(world);
   if (!first && !day) return;
   for (const settlement of world.settlements) {
+    let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length;
+    if (slots <= 0) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
-    const enemies = world.monsters.filter(m => m.alive && findPath(world, origin, m) !== null)
+    const connected = reachableTiles(world, origin);
+    const enemies = world.monsters.filter(m => m.alive && connected[m.y * world.map.width + m.x] === 1)
       .sort((a, b) => distance(a, settlement) - distance(b, settlement));
-    let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id &&
-      ['open', 'claimed'].includes(q.status)).length;
     const raidsAvailable = world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) &&
       world.citizens.filter(c => c.alive && c.settlementId === settlement.id).length >= 16;
     for (const enemy of enemies) {
