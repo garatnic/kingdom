@@ -47,3 +47,30 @@ test('one quest cannot be claimed twice and windup/cooldown apply one hit', () =
   continueAdventure(world, citizen, quest, store, tile, travel);
   assert.equal(monster.hp, after);
 });
+
+test('magic requires research, resolves after casting and consumes MP once', async () => {
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const world = createWorld('magic');
+  const [store] = world.stockpiles;
+  const citizen = world.citizens.find(c => c.profession === 'adventurer');
+  const tile = { x: store.x, y: store.y };
+  citizen.lastKnownSafeTile = tile;
+  citizen.skills.magic = 1;
+  citizen.mp = 30;
+  const monster = spawnMonster(world, 'slime', { x: store.x - 1, y: store.y });
+  const quest = issueQuest(world, world.settlements[0], monster);
+  const travel = () => true;
+  claimAdventure(world, citizen, store, travel);
+  continueAdventure(world, citizen, quest, store, tile, travel);
+  assert.equal(quest.casting, false);
+  assert.equal(citizen.mp, 30);
+  ensureResearch(world, world.settlements[0]).unlockedIds.push('magic_1');
+  quest.strikeAt = null;
+  continueAdventure(world, citizen, quest, store, tile, travel);
+  assert.equal(quest.casting, true);
+  world.worldTimeTick = quest.strikeAt;
+  continueAdventure(world, citizen, quest, store, tile, travel);
+  assert.equal(citizen.mp, 20);
+  continueAdventure(world, citizen, quest, store, tile, travel);
+  assert.equal(citizen.mp, 20);
+});

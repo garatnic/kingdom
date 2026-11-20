@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { createServer } from 'node:net';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,11 +21,15 @@ const realtimeMinutes = Number(process.env.KINGDOM_REALTIME_MINUTES ?? 0);
 
 test('Chromium renders the map and runs pause, speed, camera and JSON controls', { timeout: 90_000 + realtimeMinutes * 60_000 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), 'kingdom-chromium-'));
+  const probe = createServer().listen(0, '127.0.0.1');
+  await once(probe, 'listening');
+  const { port } = probe.address();
+  await new Promise(resolve => probe.close(resolve));
   const server = spawn(process.execPath, ['serve.js'], { env: { ...process.env, PORT: '0' } });
   const browser = spawn(process.env.CHROMIUM ?? 'chromium', [
     '--headless', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-gpu',
     ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []),
-    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'
+    `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1', `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   let browserError = '';
   browser.stderr.on('data', data => { browserError = (browserError + data.toString()).slice(-4000); });
@@ -35,14 +40,15 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       new Promise((resolve, reject) => { browser.once('spawn', resolve); browser.once('error', reject); })
     ]);
     const url = address.toString().match(/http:\/\/127\.0\.0\.1:\d+/)[0];
-    const port = await poll(async () => {
-      try { return (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]; }
-      catch {
-        if (browser.exitCode !== null || browser.signalCode !== null) throw new Error(browserError || 'Chromium exited');
+    const page = await poll(async () => {
+      if (browser.exitCode !== null || browser.signalCode !== null) throw new Error(browserError || 'Chromium exited');
+      try {
+        const tabs = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+        return tabs.find(tab => tab.type === 'page');
+      } catch {
         return null;
       }
-    }, 600).catch(error => { throw new Error(browserError || error.message); });
-    const [page] = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+    }, 1000).catch(error => { throw new Error(browserError || error.message); });
     socket = new WebSocket(page.webSocketDebuggerUrl);
     await once(socket, 'open');
     let id = 0;
@@ -172,6 +178,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [button] });
     await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await poll(() => evaluate(`document.querySelector('[data-speed="5"]').getAttribute('aria-pressed') === 'true'`));
+    assert.deepEqual(errors, []);
     if (realtimeMinutes) {
       await send('Emulation.clearDeviceMetricsOverride');
       await evaluate("document.querySelector('#seed').value = 'world-tree'; document.querySelector('form').requestSubmit()");
@@ -181,8 +188,20 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
         const match = /第([0-9]+)日 ([0-9]+):([0-9]+)/.exec(label);
         return (Number(match[1]) - 1) * 1440 + Number(match[2]) * 60 + Number(match[3]);
       };
+      const measureFps = () => evaluate(`new Promise(resolve => {
+        let frames = 0;
+        const start = performance.now();
+        function sample(now) {
+          frames++;
+          if (now - start >= 2000) resolve(Math.round(frames * 1000 / (now - start)));
+          else requestAnimationFrame(sample);
+        }
+        requestAnimationFrame(sample);
+      })`);
+      const initialFps = await measureFps();
       const started = gameMinutes(await clock());
       const begin = performance.now();
+      console.log(`Starting ${realtimeMinutes}-minute foreground stability check`);
       await delay(realtimeMinutes * 60_000);
       const elapsed = performance.now() - begin;
       const minutes = gameMinutes(await clock()) - started;
@@ -198,7 +217,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
         return saved.seed === 'world-tree' && saved.worldTimeTick > 0;
       })()`), true);
       console.log(JSON.stringify({ seed: 'world-tree', realtimeElapsedMs: Math.round(elapsed), approximateGameMinutes: minutes,
-        javascriptExceptions: errors.length, speed: 1 }));
+        javascriptExceptions: errors.length, speed: 1, initialFps, finalFps: await measureFps() }));
     }
     assert.deepEqual(errors, []);
   } finally {

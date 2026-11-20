@@ -21,8 +21,8 @@
       },
       "expectedWorldTimeTick": 216000,
       "measuredWorldTimeTick": 216000,
-      "averageSimulationStepMs": 0.049,
-      "largestStepMs": 30.913,
+      "averageSimulationStepMs": 0.095,
+      "largestStepMs": 321.942,
       "population": 12,
       "nations": 1,
       "worldEvents": {
@@ -55,13 +55,13 @@
       },
       "expectedWorldTimeTick": 864000,
       "measuredWorldTimeTick": 864000,
-      "averageSimulationStepMs": 1.075,
-      "largestStepMs": 42.376,
-      "population": 13,
+      "averageSimulationStepMs": 1.515,
+      "largestStepMs": 178.884,
+      "population": 12,
       "nations": 1,
       "worldEvents": {
         "founding": 1,
-        "birth": 1,
+        "birth": 0,
         "death": 0,
         "research_unlocked": 4,
         "adventureReturned": 7
@@ -89,16 +89,16 @@
       },
       "expectedWorldTimeTick": 864000,
       "measuredWorldTimeTick": 864000,
-      "averageSimulationStepMs": 1.024,
-      "largestStepMs": 43.096,
-      "population": 15,
+      "averageSimulationStepMs": 1.266,
+      "largestStepMs": 100.637,
+      "population": 13,
       "nations": 1,
       "worldEvents": {
         "founding": 1,
-        "birth": 3,
+        "birth": 1,
         "death": 0,
         "research_unlocked": 4,
-        "adventureReturned": 8
+        "adventureReturned": 6
       },
       "invariantViolations": 0,
       "result": "pass"
@@ -123,13 +123,13 @@
       },
       "expectedWorldTimeTick": 864000,
       "measuredWorldTimeTick": 864000,
-      "averageSimulationStepMs": 1.157,
-      "largestStepMs": 28.729,
-      "population": 14,
+      "averageSimulationStepMs": 1.316,
+      "largestStepMs": 30.777,
+      "population": 13,
       "nations": 1,
       "worldEvents": {
         "founding": 1,
-        "birth": 2,
+        "birth": 1,
         "death": 0,
         "research_unlocked": 4,
         "adventureReturned": 6

@@ -112,7 +112,18 @@ export function updateAdventureWorld(world, ticks) {
 
   for (const quest of world.quests) {
     if (quest.status === 'open' && now >= quest.expiresAt) quest.status = 'expired';
-    if (quest.status === 'claimed' && !world.citizens.some(c => c.alive && c.id === quest.claimedBy)) {
+    if (quest.status !== 'claimed') continue;
+    const citizen = world.citizens.find(c => c.alive && c.id === quest.claimedBy);
+    if (!citizen) {
+      quest.status = 'failed';
+    } else if (now >= quest.expiresAt && quest.stage !== 'return') {
+      quest.stage = 'return';
+      quest.retreated = true;
+      citizen.action = { kind: 'idle', phase: 'plan', targetId: null, startedAt: now, progress: 0 };
+      citizen.x = citizen.lastKnownSafeTile.x + 0.5;
+      citizen.y = citizen.lastKnownSafeTile.y + 0.5;
+      citizen.decisionAt = now;
+    } else if (now >= quest.expiresAt + TIME_TICKS_PER_DAY) {
       quest.status = 'failed';
     }
   }
@@ -189,7 +200,7 @@ function defeat(world, citizen, quest, monster) {
   }
   for (const [resource, chance] of config.loot) {
     if (random(world.rngState) >= chance) continue;
-    const node = { id: nextId(world, 'node'), resource, quantity: 1, x: monster.x, y: monster.y, dropped: true };
+    const node = { id: nextId(world, 'node'), resource, quantity: 1, x: monster.x, y: monster.y, dropped: true, questId: quest.id };
     world.resourceNodes.push(node);
     quest.lootIds.push(node.id);
   }

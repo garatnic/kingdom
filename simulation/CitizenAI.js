@@ -84,7 +84,8 @@ function chooseRoute(world, citizen, store, population) {
     if (resources.some(key => citizen.inventory[key] > 0) &&
         travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     if (citizen.profession === 'builder') {
-      const dropped = world.resourceNodes.find(node => node.dropped && node.quantity > 0);
+      const dropped = world.resourceNodes.find(node => node.dropped && node.quantity > 0 &&
+        !world.quests.some(q => q.id === node.questId && q.status === 'claimed'));
       if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
     }
     if (citizen.profession === 'farmer' && available(store, 'food') < population * FOOD_TARGET_PER_PERSON) {
@@ -124,7 +125,12 @@ function perform(world, citizen, store, ticks) {
     const quest = world.quests.find(q => q.id === action.targetId);
     if (adventure(world, citizen, quest, store)) return;
   }
-  if (action.kind === 'sleep' && citizen.fatigue > 20) return;
+  if (action.kind === 'sleep' && citizen.fatigue > 20) {
+    if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0) {
+      travel(world, citizen, storeTile(world, store), 'eat', store.id);
+    }
+    return;
+  }
   if (action.kind === 'gather') {
     action.progress += ticks;
     if (action.progress < GATHER_TICKS) return;
