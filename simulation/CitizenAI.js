@@ -2,7 +2,7 @@ import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PE
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
-import { findPath } from './path.js';
+import { findPath, reachableTiles } from './path.js';
 import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom, storeTile } from './Economy.js';
 import { eat, updateNeeds } from './Needs.js';
 import { COMBAT } from '../data/combat.js';
@@ -140,9 +140,8 @@ function farmYield(world, settlementId) {
   return Math.floor(FARM_YIELD * multiplier);
 }
 
-function harvestDistantFarms(world, ticks, camera, population) {
-  if (!camera || Math.floor(world.worldTimeTick / NEED_HOUR_TICKS) ===
-      Math.floor((world.worldTimeTick - ticks) / NEED_HOUR_TICKS)) return;
+function updateDistantSettlements(world, camera, population) {
+  if (!camera) return;
   const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
   const claimedFarms = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
     .map(c => c.action.targetId));
@@ -150,12 +149,21 @@ function harvestDistantFarms(world, ticks, camera, population) {
     const residents = population.get(settlement.id) ?? 0;
     if (residents < 16 || distance(settlement, camera) <= FAR_DISTANCE + 12) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
-    if (!store || available(store, 'food') >= residents * FOOD_TARGET_PER_PERSON) continue;
+    if (!store) continue;
     const origin = storeTile(world, store);
-    const workers = world.citizens.filter(c => c.alive && c.settlementId === settlement.id &&
-      c.profession === 'farmer' && c.action.kind === 'idle' && c.hp > COMBAT.retreatHp &&
-      c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && distance(c.lastKnownSafeTile, origin) <= 8 &&
+    const locals = world.citizens.filter(c => c.alive && c.hp > 0 && c.settlementId === settlement.id &&
+      c.action.kind === 'idle' && distance(c.lastKnownSafeTile, origin) <= 8 &&
       !c.expeditionId && !campaignFor(world, c) && !assignedAdventure(world, c));
+    const hungry = locals.filter(c => c.hunger >= NEEDS.eat);
+    if (hungry.length && available(store, 'food') > 0) {
+      const connected = reachableTiles(world, origin);
+      for (const citizen of hungry) {
+        const { x, y } = citizen.lastKnownSafeTile;
+        if (connected[y * world.map.width + x]) eat(citizen, store);
+      }
+    }
+    const workers = locals.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&
+      c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep);
     const yieldPerFarm = farmYield(world, settlement.id);
     if (!workers.length || freeCapacity(store) < yieldPerFarm) continue;
     for (const farm of world.buildings) {
@@ -242,10 +250,15 @@ export function updateCitizens(world, ticks, camera) {
   for (const c of world.citizens) {
     if (c.alive) population.set(c.settlementId, (population.get(c.settlementId) ?? 0) + 1);
   }
-  harvestDistantFarms(world, ticks, camera, population);
+  if (Math.floor(world.worldTimeTick / NEED_HOUR_TICKS) >
+      Math.floor((world.worldTimeTick - ticks) / NEED_HOUR_TICKS)) {
+    for (const citizen of world.citizens) {
+      if (citizen.alive) updateNeeds(world, citizen, ticks);
+    }
+    updateDistantSettlements(world, camera, population);
+  }
   for (const citizen of world.citizens) {
     if (!citizen.alive) continue;
-    updateNeeds(world, citizen, ticks);
     if (citizen.hp <= 0) {
       recordDeath(world, citizen, 'starvation');
       continue;

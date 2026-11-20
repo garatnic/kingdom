@@ -89,3 +89,32 @@ test('far settlements move a ripe harvest to the shared store once across camera
   updateCitizens(restored, 12, distant);
   assert.equal(restored.stockpiles[0].total.food, foodBefore + FARM_YIELD);
 });
+
+test('distant meals use only available food and leave isolated residents to individual AI', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const { NEED_HOUR_TICKS, NEEDS } = await import('../data/balance.js');
+  const world = createWorld('far-meals');
+  world.map.terrain.fill('grass');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const origin = { x: store.x, y: store.y };
+  const blocked = { x: origin.x + 5, y: origin.y };
+  const diners = [blocked, origin, origin].map(tile => {
+    const person = createAdult(world, 'human', tile, settlement);
+    person.hunger = NEEDS.eat;
+    world.citizens.push(person);
+    return person;
+  });
+  world.citizens.push(createAdult(world, 'human', origin, settlement));
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    world.map.terrain[(blocked.y + dy) * world.map.width + blocked.x + dx] = 'water';
+  }
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  store.reserved.food = store.total.food - 1;
+  for (const citizen of world.citizens) citizen.decisionAt = world.worldTimeTick + NEED_HOUR_TICKS;
+  updateCitizens(world, 12, { x: 110, y: 110 });
+  assert.equal(store.total.food, store.reserved.food);
+  assert.ok(diners[0].hunger >= NEEDS.eat);
+  assert.ok(diners[1].hunger < NEEDS.eat);
+  assert.ok(diners[2].hunger >= NEEDS.eat);
+});
