@@ -1,6 +1,6 @@
-import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, GATHER_TICKS } from '../data/balance.js';
+import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
-import { movementBudget } from './DetailLevel.js';
+import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
 import { findPath } from './path.js';
 import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom, storeTile } from './Economy.js';
@@ -133,6 +133,47 @@ function chooseRoute(world, citizen, store, population) {
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
 }
 
+function farmYield(world, settlementId) {
+  let multiplier = unlocked(world, settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
+  if (unlocked(world, settlementId, 'irrigation_1')) multiplier += TECH.irrigationBonus;
+  if (unlocked(world, settlementId, 'verdant_1')) multiplier += TECH.verdantBonus;
+  return Math.floor(FARM_YIELD * multiplier);
+}
+
+function harvestDistantFarms(world, ticks, camera, population) {
+  if (!camera || Math.floor(world.worldTimeTick / NEED_HOUR_TICKS) ===
+      Math.floor((world.worldTimeTick - ticks) / NEED_HOUR_TICKS)) return;
+  const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  const claimedFarms = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
+    .map(c => c.action.targetId));
+  for (const settlement of world.settlements) {
+    const residents = population.get(settlement.id) ?? 0;
+    if (residents < 16 || distance(settlement, camera) <= FAR_DISTANCE + 12) continue;
+    const store = world.stockpiles.find(s => s.settlementId === settlement.id);
+    if (!store || available(store, 'food') >= residents * FOOD_TARGET_PER_PERSON) continue;
+    const origin = storeTile(world, store);
+    const workers = world.citizens.filter(c => c.alive && c.settlementId === settlement.id &&
+      c.profession === 'farmer' && c.action.kind === 'idle' && c.hp > COMBAT.retreatHp &&
+      c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && distance(c.lastKnownSafeTile, origin) <= 8 &&
+      !c.expeditionId && !campaignFor(world, c) && !assignedAdventure(world, c));
+    const yieldPerFarm = farmYield(world, settlement.id);
+    if (!workers.length || freeCapacity(store) < yieldPerFarm) continue;
+    for (const farm of world.buildings) {
+      if (available(store, 'food') >= residents * FOOD_TARGET_PER_PERSON || freeCapacity(store) < yieldPerFarm) break;
+      if (farm.kind !== 'farm' || farm.settlementId !== settlement.id || claimedFarms.has(farm.id) ||
+          (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) > world.worldTimeTick) continue;
+      const field = workTile(world, origin, farm);
+      if (!field) continue;
+      const worker = workers.findIndex(c => findPath(world, c.lastKnownSafeTile, field) !== null);
+      if (worker === -1) continue;
+      workers.splice(worker, 1);
+      farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
+      store.total.food += yieldPerFarm;
+      if (!workers.length) break;
+    }
+  }
+}
+
 function perform(world, citizen, store, ticks, population) {
   const action = citizen.action;
   if (action.kind === 'survey') discoverFrontier(world, citizen.lastKnownSafeTile, action.direction, citizen.id);
@@ -166,10 +207,7 @@ function perform(world, citizen, store, ticks, population) {
     const farm = world.buildings.find(b => b.id === action.targetId);
     if (farm && (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick) {
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      let multiplier = unlocked(world, citizen.settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
-      if (unlocked(world, citizen.settlementId, 'irrigation_1')) multiplier += TECH.irrigationBonus;
-      if (unlocked(world, citizen.settlementId, 'verdant_1')) multiplier += TECH.verdantBonus;
-      citizen.inventory.food += Math.floor(FARM_YIELD * multiplier);
+      citizen.inventory.food += farmYield(world, citizen.settlementId);
       if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     }
   }
@@ -204,6 +242,7 @@ export function updateCitizens(world, ticks, camera) {
   for (const c of world.citizens) {
     if (c.alive) population.set(c.settlementId, (population.get(c.settlementId) ?? 0) + 1);
   }
+  harvestDistantFarms(world, ticks, camera, population);
   for (const citizen of world.citizens) {
     if (!citizen.alive) continue;
     updateNeeds(world, citizen, ticks);

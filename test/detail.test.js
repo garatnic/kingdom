@@ -61,3 +61,31 @@ test('distant logistics preserve carried cargo and deliver it once after restora
   assert.equal(restored.stockpiles[0].total.food, store.total.food + 2);
   assert.equal(restored.citizens[0].inventory.food, 0);
 });
+
+test('far settlements move a ripe harvest to the shared store once across camera changes and reload', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const { nextId } = await import('../simulation/Identity.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const { FARM_YIELD, FARM_HARVEST_TICKS } = await import('../data/buildings.js');
+  const world = createWorld('far-harvest');
+  world.map.terrain.fill('grass');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const origin = { x: store.x, y: store.y };
+  for (let i = 0; i < 4; i++) world.citizens.push(createAdult(world, 'human', origin, settlement));
+  const farm = { id: nextId(world, 'building'), kind: 'farm', settlementId: settlement.id,
+    x: origin.x + 3, y: origin.y, width: 2, height: 2, completedAt: 0, harvestAt: NEED_HOUR_TICKS };
+  world.buildings.push(farm);
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  for (const citizen of world.citizens) citizen.decisionAt = world.worldTimeTick + NEED_HOUR_TICKS;
+  const foodBefore = store.total.food;
+  updateCitizens(world, 12, origin);
+  assert.equal(store.total.food, foodBefore);
+  const distant = { x: 110, y: 110 };
+  updateCitizens(world, 12, distant);
+  assert.equal(store.total.food, foodBefore + FARM_YIELD);
+  assert.equal(farm.harvestAt, world.worldTimeTick + FARM_HARVEST_TICKS);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  updateCitizens(restored, 12, distant);
+  assert.equal(restored.stockpiles[0].total.food, foodBefore + FARM_YIELD);
+});
