@@ -88,7 +88,7 @@ export class Renderer {
       ctx.fillRect(x + 2, y - 3, 2, 2);
     }
     const citizens = world.citizens.filter(c => c.alive && visible(c)).sort((a, b) => a.y - b.y);
-    for (const c of citizens) this.citizen(c, world.worldTimeTick);
+    for (const c of citizens) this.citizen(c, world.worldTimeTick, world.quests.find(q => q.id === c.action.targetId));
   }
 
   tile(x, y, terrain) {
@@ -118,7 +118,7 @@ export class Renderer {
     }
   }
 
-  citizen(citizen, tick) {
+  citizen(citizen, tick, quest) {
     const { ctx } = this;
     const x = Math.round(citizen.x * TILE);
     const y = Math.round(citizen.y * TILE);
@@ -134,5 +134,14 @@ export class Renderer {
     ctx.fillStyle = '#2c3736';
     ctx.fillRect(x - 4, y - 2, 3, 4 + (foot === 1 ? 2 : 0));
     ctx.fillRect(x + 1, y - 2, 3, 4 + (foot === 3 ? 2 : 0));
+    if (citizen.action.phase === 'perform') {
+      const effect = { gather: '#e9d28e', farm: '#b4d881', build: '#d9b37d',
+        adventure: quest?.casting ? '#c6a7e8' : '#e8c1a1' }[citizen.action.kind];
+      if (effect) {
+        ctx.fillStyle = effect;
+        const shift = Math.floor(tick / 12) % 4;
+        ctx.fillRect(x + 7 + shift, y - 8 - shift, 3, 7);
+      }
+    }
   }
 }

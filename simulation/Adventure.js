@@ -1,3 +1,4 @@
+import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { COMBAT, monsters } from '../data/combat.js';
@@ -13,8 +14,8 @@ const tileOf = citizen => citizen.lastKnownSafeTile;
 const tileKey = ({ x, y }) => x + ',' + y;
 
 function emit(world, type, quest, tile, extra = {}) {
-  world.events.push({ id: nextId(world, 'event'), type, questId: quest.id,
-    worldTimeTick: world.worldTimeTick, x: tile.x, y: tile.y, ...extra });
+  emitOnce(world, quest.id, type, { questId: quest.id, settlementId: quest.settlementId,
+    x: tile.x, y: tile.y, ...extra });
 }
 
 export function spawnMonster(world, species, tile) {

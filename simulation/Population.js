@@ -1,3 +1,4 @@
+import { emitOnce } from '../systems/History.js';
 import { ageYears, lifespan, nextId, professions } from './Identity.js';
 import { available, resources } from './Economy.js';
 import { random } from '../engine/random.js';
@@ -29,10 +30,8 @@ export function recordDeath(world, citizen, cause) {
     });
     citizen.inventory[resource] = 0;
   }
-  world.events.push({
-    id: nextId(world, 'event'), type: 'death', cause,
-    citizenId: citizen.id, worldTimeTick: world.worldTimeTick, ...citizen.lastKnownSafeTile
-  });
+  emitOnce(world, citizen.id, 'death', { cause, citizenId: citizen.id, nationId: citizen.nationId,
+    settlementId: citizen.settlementId, ...citizen.lastKnownSafeTile });
 }
 
 function marry(world, first, second) {
@@ -41,8 +40,9 @@ function marry(world, first, second) {
   first.partnerId = second.id;
   second.partnerId = first.id;
   first.nextBirthCheckTick = world.worldTimeTick + BIRTH_CHECK_INTERVAL_TICKS;
-  world.events.push({ id: nextId(world, 'event'), type: 'marriage',
-    citizenIds: [first.id, second.id], familyId, worldTimeTick: world.worldTimeTick, ...first.lastKnownSafeTile });
+  const transaction = first.id + '/' + second.id + '/' + world.worldTimeTick;
+  emitOnce(world, transaction, 'marriage', { citizenIds: [first.id, second.id], familyId,
+    nationId: first.nationId, settlementId: first.settlementId, ...first.lastKnownSafeTile });
 }
 
 function dailyRelationships(world, citizens) {
@@ -96,8 +96,8 @@ function checkBirth(world, parent, people) {
   parent.childIds.push(id);
   partner.childIds.push(id);
   world.citizens.push(child);
-  world.events.push({ id: nextId(world, 'event'), type: 'birth', citizenId: id,
-    parentIds: [...child.parentIds], worldTimeTick: world.worldTimeTick, ...tile });
+  emitOnce(world, id, 'birth', { citizenId: id, parentIds: [...child.parentIds],
+    nationId: child.nationId, settlementId: child.settlementId, ...tile });
 }
 
 export function updatePopulation(world, ticks) {

@@ -32,3 +32,21 @@ footer { gap: 6px 18px; justify-content: space-between; padding: 10px 0; }
   .viewport { height: max(320px, 61svh); }
   header { padding-top: 13px; }
 }
+
+.game-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 266px); gap: 12px; }
+#observation { border: 1px solid var(--line); border-radius: 10px; min-width: 0; padding: 10px; overflow: auto; max-height: 73svh; }
+select { min-height: 44px; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #172d28; color: inherit; font: inherit; }
+.camera-option { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0; min-height: 36px; }
+.camera-option input { width: auto; min-height: initial; }
+#history-body { font-size: .84rem; overflow-wrap: anywhere; }
+#history-body button { display: block; margin: 4px 0; min-width: 100%; text-align: left; }
+#history-body h3, #history-body h4 { margin: 8px 0 4px; }
+details { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+summary { min-height: 40px; cursor: pointer; }
+#god-form { display: grid; gap: 6px; }
+#god-form input { width: 62px; }
+#god-status { font-size: .85rem; color: #e0c694; }
+@media (max-width: 760px) {
+  .game-layout { grid-template-columns: minmax(0, 1fr); }
+  #observation { max-height: initial; }
+}

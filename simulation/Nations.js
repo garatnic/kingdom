@@ -1,3 +1,4 @@
+import { emitOnce } from '../systems/History.js';
 import { ADULT_AGE, FOOD_EMERGENCY_PER_PERSON, LAYOUT, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { buildings, footprint } from '../data/buildings.js';
 import { NATIONS } from '../data/nations.js';
@@ -26,8 +27,8 @@ function settleNation(world, settlement, leader) {
   settlement.nationId = settlement.researchOwnerId = nation.id;
   state.ownerId = nation.id;
   for (const citizen of world.citizens.filter(c => c.settlementId === settlement.id)) citizen.nationId = nation.id;
-  world.events.push({ id: nextId(world, 'event'), type: 'founding', nationId: nation.id,
-    settlementId: settlement.id, leaderId: leader.id, worldTimeTick: world.worldTimeTick, x: settlement.x, y: settlement.y });
+  emitOnce(world, nation.id, 'founding', { nationId: nation.id, settlementId: settlement.id,
+    leaderId: leader.id, x: settlement.x, y: settlement.y });
   return nation;
 }
 
@@ -133,8 +134,8 @@ export function startExpedition(world, nation) {
     Object.assign(citizen, { x: citizen.lastKnownSafeTile.x + 0.5, y: citizen.lastKnownSafeTile.y + 0.5 });
   }
   world.expeditions.push(expedition);
-  world.events.push({ id: nextId(world, 'event'), type: 'independentExpedition', expeditionId: id,
-    worldTimeTick: world.worldTimeTick, x: settlement.x, y: settlement.y });
+  emitOnce(world, id, 'independentExpedition', { expeditionId: id, nationId: nation.id,
+    settlementId: settlement.id, x: settlement.x, y: settlement.y });
   return expedition;
 }
 
@@ -174,8 +175,8 @@ function finishExpedition(world, expedition, failed) {
   expedition.status = failed ? 'failed' : 'settled';
   if (!failed) {
     expedition.destinationId = target.id;
-    world.events.push({ id: nextId(world, 'event'), type: 'settlementFounded', settlementId: target.id,
-      expeditionId: expedition.id, worldTimeTick: world.worldTimeTick, x: target.x, y: target.y });
+    emitOnce(world, expedition.id, 'settlementFounded', { settlementId: target.id,
+      expeditionId: expedition.id, x: target.x, y: target.y });
   }
 }
 
@@ -189,8 +190,8 @@ function updateRelations(world) {
   const value = Math.max(-100, first.relations[second.id] - crossings.length * 2);
   if (value === first.relations[second.id]) return;
   first.relations[second.id] = second.relations[first.id] = value;
-  world.events.push({ id: nextId(world, 'event'), type: 'borderFriction',
-    nationIds: [first.id, second.id], value, worldTimeTick: world.worldTimeTick, ...crossings[0].lastKnownSafeTile });
+  emitOnce(world, 'border/' + world.worldTimeTick, 'borderFriction', {
+    nationIds: [first.id, second.id], value, ...crossings[0].lastKnownSafeTile });
 }
 
 export function updateNations(world, ticks) {

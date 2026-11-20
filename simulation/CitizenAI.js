@@ -109,7 +109,7 @@ function chooseRoute(world, citizen, store, population) {
   if (store && claimAdventure(world, citizen, store, (goal, kind, targetId) =>
     travel(world, citizen, goal, kind, targetId))) return;
   if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
-  const { x, y } = world.settlements.find(s => s.id === citizen.settlementId) ?? world.settlements[0];
+  const { x, y } = world.settlements.find(s => s.id === citizen.settlementId) ?? citizen.lastKnownSafeTile;
   const offset = () => Math.floor(random(world.rngState) * (2 * WANDER_RADIUS + 1)) - WANDER_RADIUS;
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
 }
@@ -176,6 +176,14 @@ export function updateCitizens(world, ticks) {
     if (citizen.hp <= 0) {
       recordDeath(world, citizen, 'starvation');
       continue;
+    }
+    if (!citizen.settlementId && !citizen.expeditionId) {
+      const tile = citizen.lastKnownSafeTile;
+      const near = world.settlements.find(s => Math.abs(s.x - tile.x) + Math.abs(s.y - tile.y) <= 8);
+      if (near) {
+        citizen.settlementId = near.id;
+        citizen.nationId = near.nationId;
+      }
     }
     const store = world.stockpiles.find(s => s.settlementId === citizen.settlementId);
     if (citizen.action.phase === 'travel' &&

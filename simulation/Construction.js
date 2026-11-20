@@ -2,6 +2,7 @@ import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { nextId } from './Identity.js';
 import { available } from './Economy.js';
 import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
+import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { findPath } from './path.js';
@@ -101,8 +102,8 @@ export function buildAtSite(world, site, ticks) {
   world.map.navigationVersion++;
   world.reservations = world.reservations.filter(r => r.siteId !== site.id);
   world.constructionSites.splice(world.constructionSites.indexOf(site), 1);
-  world.events.push({ id: nextId(world, 'event'), type: 'constructionCompleted', buildingId: building.id,
-    worldTimeTick: world.worldTimeTick, x, y, consumed: { ...site.delivered } });
+  emitOnce(world, site.id, 'constructionCompleted', { buildingId: building.id,
+    settlementId, x, y, consumed: { ...site.delivered } });
   return building;
 }
 

@@ -3,7 +3,7 @@ import { footprint } from '../data/buildings.js';
 import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
 
 const VERSION = 1;
-const MAX_BYTES = 1024 * 1024;
+const MAX_BYTES = 8 * 1024 * 1024;
 const integer = (value, min, max = Number.MAX_SAFE_INTEGER) =>
   Number.isSafeInteger(value) && value >= min && value <= max;
 const inside = (value, limit) => Number.isFinite(value) && value >= 0 && value < limit;
@@ -38,7 +38,7 @@ function validate(world) {
       !map.terrain.every(t => Object.hasOwn(TERRAIN_COST, t)) ||
       !world.idCounters || !entityLists(world).every(key => Array.isArray(world[key])) ||
       world.settlements.length < 1 || world.settlements.length > NATIONS.limit || world.nations.length > NATIONS.limit ||
-      !world.settings || (camera && (!['free', 'manualOverride'].includes(camera.mode) ||
+      !world.settings || (camera && (!['free', 'manualOverride', 'autoEvent', 'followCitizen', 'followNation'].includes(camera.mode) ||
         !inside(camera.x, SIZE + Number.EPSILON * SIZE) || !inside(camera.y, SIZE + Number.EPSILON * SIZE) ||
         !Number.isFinite(camera.zoom) || camera.zoom < MIN_ZOOM || camera.zoom > MAX_ZOOM))) {
     throw new Error('保存データの世界設定が無効です。');
@@ -72,7 +72,7 @@ function validate(world) {
   for (const c of world.citizens) {
     const action = c.action;
     if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || (c.settlementId === null
-          ? c.nationId !== null || (c.alive && !expeditions.get(c.expeditionId)?.memberIds.includes(c.id))
+          ? c.nationId !== null || (c.alive && c.expeditionId && !expeditions.get(c.expeditionId)?.memberIds.includes(c.id))
           : !settlements.has(c.settlementId) || settlements.get(c.settlementId).nationId !== c.nationId) || typeof c.alive !== 'boolean' || !Object.hasOwn(LIFESPAN_YEARS, c.race) ||
         !Number.isSafeInteger(c.birthWorldTimeTick) || c.birthWorldTimeTick > world.worldTimeTick ||
         !Array.isArray(c.parentIds) || !Array.isArray(c.childIds) ||

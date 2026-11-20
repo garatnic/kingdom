@@ -37,6 +37,7 @@
         <input type="file" id="file" accept=".json,application/json" hidden>
       </div>
     </div>
+    <div class="game-layout">
     <div class="viewport">
       <canvas id="map" aria-label="世界地図。ドラッグで移動、ホイールまたはピンチで拡大縮小"></canvas>
       <div class="zoom group" role="group" aria-label="カメラ">
@@ -44,6 +45,36 @@
         <button type="button" id="center" aria-label="集落に戻る">集落</button>
         <button type="button" id="zoom-in" aria-label="拡大">＋</button>
       </div>
+    </div>
+    <aside id="observation" aria-label="歴史と観察">
+      <div class="group">
+        <select id="history-tab" aria-label="観察の種類">
+          <option value="world">世界史</option><option value="citizen">人物伝</option>
+          <option value="family">家系図</option><option value="nation">国家史</option>
+        </select>
+        <select id="history-subject" aria-label="観察対象" hidden></select>
+        <button type="button" id="follow" hidden>追跡</button>
+      </div>
+      <label class="camera-option"><input type="checkbox" id="auto-camera"> 事件を自動追跡</label>
+      <div id="history-body"></div>
+      <details>
+        <summary>神の介入</summary>
+        <form id="god-form">
+          <label>操作 <select id="god-kind">
+            <option value="life">生命創造</option><option value="resource">資源生成</option>
+            <option value="terrain">地形編集</option><option value="monster">魔物召喚</option>
+          </select></label>
+          <label>種類 <select id="god-value"></select></label>
+          <label id="god-amount">数量 <input type="number" id="god-quantity" min="1" max="10" value="1" required></label>
+          <div class="group">
+            <label>X <input type="number" id="god-x" min="0" max="63" value="32" required></label>
+            <label>Y <input type="number" id="god-y" min="0" max="63" value="32" required></label>
+          </div>
+          <button type="submit">確定</button>
+          <output id="god-status" aria-live="polite"></output>
+        </form>
+      </details>
+    </aside>
     </div>
     <footer>
       <span>ドラッグで移動 · ホイール／ピンチで拡大縮小 · Spaceで停止／再開</span>

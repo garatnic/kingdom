@@ -7,7 +7,7 @@ const port = Number(process.env.PORT ?? 8080);
 createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost');
   const path = url.pathname === '/' ? '/index.html' : url.pathname;
-  const allowed = /^\/(?:index\.html|style\.css|main\.js|(?:data|engine|simulation|systems)\/[a-zA-Z]+\.js)$/;
+  const allowed = /^\/(?:index\.html|style\.css|main\.js|(?:data|engine|simulation|systems|ui)\/[a-zA-Z]+\.js)$/;
   if (!allowed.test(path)) {
     response.writeHead(404).end();
     return;

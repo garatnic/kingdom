@@ -110,6 +110,35 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await poll(() => evaluate("document.querySelector('#status').textContent === 'セーブを読み込みました'"));
     assert.equal(await evaluate("document.querySelector('#clock').textContent"), paused);
     assert.equal(await evaluate("document.querySelector('#seed').value"), 'world-tree');
+
+    const generations = await evaluate(`(async () => {
+      const { createSnapshot } = await import('/systems/SaveManager.js');
+      const { openSaveStorage, readLatestGeneration, writeGeneration } = await import('/systems/SaveStorage.js');
+      const { createWorld } = await import('/engine/World.js');
+      const database = await openSaveStorage();
+      for (const seed of ['one', 'two', 'three', 'four']) {
+        await writeGeneration(database, await createSnapshot(createWorld(seed)));
+      }
+      await writeGeneration(database, { corrupt: true });
+      const count = await new Promise((resolve, reject) => {
+        const request = database.transaction('snapshots').objectStore('snapshots').count();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const latest = await readLatestGeneration(database);
+      database.close();
+      return [count, latest.seed];
+    })()`);
+    assert.deepEqual(generations, [3, 'four']);
+    await evaluate(`(() => {
+      document.querySelector('#god-kind').value = 'resource';
+      document.querySelector('#god-kind').dispatchEvent(new Event('change'));
+      document.querySelector('#god-x').value = '31';
+      document.querySelector('#god-y').value = '32';
+      document.querySelector('#god-form').requestSubmit();
+    })()`);
+    await poll(() => evaluate("document.querySelector('#god-status').textContent === '介入を適用しました'"));
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('神の介入')"));
     await send('Emulation.setDeviceMetricsOverride', {
       width: 390, height: 844, deviceScaleFactor: 2, mobile: true
     });

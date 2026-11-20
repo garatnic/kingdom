@@ -1,3 +1,7 @@
+import { TILE } from './data/balance.js';
+import { applyGodCommand } from './systems/GodPowers.js';
+import { openSaveStorage, readLatestGeneration, writeGeneration } from './systems/SaveStorage.js';
+import { observation } from './ui/Observation.js';
 import { relationLabel } from './simulation/Nations.js';
 import { createWorld } from './engine/World.js';
 import { advanceFrame, calendar, setSpeed } from './engine/GameLoop.js';
@@ -12,6 +16,25 @@ let world = createWorld(get('seed').value);
 let camera = createCamera(world);
 let lastTime = null;
 let lastSpeed = 1;
+let loadRequest = 0;
+let lastBackup = 0;
+let saveQueue = Promise.resolve();
+let godQueue = [];
+const storage = openSaveStorage().then(database => ({ database }), error => ({ error }));
+const viewer = observation(() => world, () => camera, (target, mode) => {
+  camera.x = target.x;
+  camera.y = target.y;
+  camera.mode = mode;
+});
+
+function keepGeneration(snapshot) {
+  const writing = Promise.all([saveQueue, storage, snapshot]).then(async ([, { database, error }, record]) => {
+    if (error) throw error;
+    await writeGeneration(database, record);
+  });
+  saveQueue = writing.catch(() => {});
+  return writing;
+}
 
 function showReadouts() {
   const time = calendar(world.worldTimeTick);
@@ -35,9 +58,25 @@ function showState() {
 }
 
 function frame(now) {
-  advanceFrame(world, lastTime === null ? 0 : now - lastTime, document.hidden);
+  const elapsed = lastTime === null ? 0 : now - lastTime;
+  if (!document.hidden && godQueue.length) {
+    for (const command of godQueue) {
+      const error = applyGodCommand(world, command);
+      get('god-status').textContent = error ? `実行できません（${error}）` : '介入を適用しました';
+    }
+    godQueue = [];
+  }
+  advanceFrame(world, elapsed, document.hidden);
   lastTime = now;
   showReadouts();
+  viewer.render();
+  viewer.updateCamera(now, elapsed);
+  if (!document.hidden && now - lastBackup >= 60000) {
+    lastBackup = now;
+    keepGeneration(createSnapshot(world, camera)).catch(error => {
+      get('status').textContent = `自動保存失敗：${error.message}。手動でJSONを保存できます。`;
+    });
+  }
   renderer.draw(world, camera);
   requestAnimationFrame(frame);
 }
@@ -51,6 +90,8 @@ function selectSpeed(speed) {
 
 function replaceWorld(next) {
   world = next;
+  godQueue = [];
+  viewer.reset();
   camera = next.settings.camera ? { ...next.settings.camera } : createCamera(next);
   lastSpeed = next.gameSpeed || 1;
   lastTime = null;
@@ -64,6 +105,7 @@ get('speeds').addEventListener('click', event => {
 });
 get('new-world').addEventListener('submit', event => {
   event.preventDefault();
+  loadRequest++;
   replaceWorld(createWorld(get('seed').value));
   get('status').textContent = '新しい世界を生成しました';
 });
@@ -92,11 +134,13 @@ canvas.addEventListener('wheel', event => {
 }, { passive: false });
 
 const pointers = new Map();
+let tapStart = null;
 const midpoint = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 canvas.addEventListener('pointerdown', event => {
   if (event.button !== 0 || pointers.size >= 2) return;
   canvas.setPointerCapture(event.pointerId);
+  tapStart = pointers.size === 0 ? { x: event.clientX, y: event.clientY } : null;
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 });
 canvas.addEventListener('pointermove', event => {
@@ -114,6 +158,19 @@ canvas.addEventListener('pointermove', event => {
     zoom(Math.max(1, distance(next, other)) / Math.max(1, distance(previous, other)), newMid.x, newMid.y);
   }
 });
+canvas.addEventListener('pointerup', event => {
+  if (tapStart && pointers.size === 1 && distance(tapStart, { x: event.clientX, y: event.clientY }) < 5) {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor(camera.x + (event.clientX - rect.left - rect.width / 2) / (TILE * camera.zoom));
+    const y = Math.floor(camera.y + (event.clientY - rect.top - rect.height / 2) / (TILE * camera.zoom));
+    if (x >= 0 && y >= 0 && x < world.map.width && y < world.map.height) {
+      get('god-x').value = x;
+      get('god-y').value = y;
+      viewer.inspectTile(x, y);
+    }
+  }
+  tapStart = null;
+});
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
   canvas.addEventListener(type, event => pointers.delete(event.pointerId));
 }
@@ -127,13 +184,14 @@ get('save').addEventListener('click', async () => {
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(href), 1000);
     get('status').textContent = 'セーブをダウンロードしました';
+    keepGeneration(snapshot).catch(error => {
+      get('status').textContent = `JSONを保存しました。ブラウザ内保存失敗：${error.message}`;
+    });
   } catch (error) {
     get('status').textContent = `保存失敗：${error.message}`;
   }
 });
 get('open').onclick = () => get('file').click();
-let loadRequest = 0;
-get('new-world').addEventListener('submit', () => { loadRequest++; });
 get('file').addEventListener('change', async event => {
   const [file] = event.target.files;
   event.target.value = '';
@@ -149,5 +207,37 @@ get('file').addEventListener('change', async event => {
   }
 });
 
+const godOptions = {
+  life: { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' },
+  resource: { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' },
+  terrain: { grass: '草原', forest: '森', mountain: '山', water: '水' },
+  monster: { slime: 'スライム', goblin: 'ゴブリン' }
+};
+function showGodOptions() {
+  const kind = get('god-kind').value;
+  get('god-value').replaceChildren(...Object.entries(godOptions[kind]).map(([id, name]) => new Option(name, id)));
+  get('god-amount').hidden = kind === 'terrain';
+  get('god-quantity').disabled = kind === 'terrain';
+  get('god-quantity').max = { life: 10, resource: 100, monster: 5, terrain: 1 }[kind];
+}
+get('god-kind').onchange = showGodOptions;
+get('god-form').onsubmit = event => {
+  event.preventDefault();
+  const kind = get('god-kind').value;
+  godQueue.push({ commandId: crypto.randomUUID(), kind, issuedAtRealTime: Date.now(),
+    payload: { value: get('god-value').value, quantity: get('god-quantity').valueAsNumber,
+      x: get('god-x').valueAsNumber, y: get('god-y').valueAsNumber } });
+};
+const startupLoad = loadRequest;
+storage.then(async ({ database }) => {
+  if (!database) return;
+  const saved = await readLatestGeneration(database);
+  if (saved && startupLoad === loadRequest) {
+    replaceWorld(saved);
+    get('status').textContent = 'ブラウザのセーブを復元しました';
+  }
+}).catch(error => { get('status').textContent = `ブラウザ内の読込失敗：${error.message}`; });
+
+showGodOptions();
 showState();
 requestAnimationFrame(frame);

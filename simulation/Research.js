@@ -1,3 +1,4 @@
+import { emitOnce } from '../systems/History.js';
 import { technologies, TECH } from '../data/technologies.js';
 import { ADULT_AGE, MAGIC_AFFINITY_THRESHOLD, NEED_HOUR_TICKS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { available } from './Economy.js';
@@ -63,8 +64,9 @@ function updateOwner(world, owner, state, context, daily) {
     if (state.progressById[tech.id] === tech.cost) {
       state.unlockedIds.push(tech.id);
       state.activeTechId = null;
-      world.events.push({ id: nextId(world, 'event'), type: 'research_unlocked',
-        ownerId: owner.id, technologyId: tech.id, worldTimeTick: world.worldTimeTick });
+      emitOnce(world, state.id + '/' + tech.id, 'research_unlocked', {
+        ownerId: owner.id, researchId: state.id, technologyId: tech.id
+      });
     }
   }
   if (state.unlockedIds.includes('magic_1')) {
@@ -80,8 +82,9 @@ function updateOwner(world, owner, state, context, daily) {
   state.civilizationDays = qualifies ? state.civilizationDays + 1 : 0;
   if (state.civilizationDays >= TECH.farmEraDays) {
     state.civilization = 'agrarian';
-    world.events.push({ id: nextId(world, 'event'), type: 'civilizationAdvanced',
-      ownerId: owner.id, civilization: state.civilization, worldTimeTick: world.worldTimeTick });
+    emitOnce(world, state.id, 'civilizationAdvanced', {
+      ownerId: owner.id, researchId: state.id, civilization: state.civilization
+    });
   }
 }
 

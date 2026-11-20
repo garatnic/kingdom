@@ -25,7 +25,7 @@ jobs:
       - run: |
           mkdir _site
           cp index.html style.css main.js _site/
-          cp -R data engine simulation systems _site/
+          cp -R data engine simulation systems ui _site/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
