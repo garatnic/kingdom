@@ -1,6 +1,8 @@
 import { resources } from '../simulation/Economy.js';
 import { NATIONS } from '../data/nations.js';
-import { footprint } from '../data/buildings.js';
+import { monsters } from '../data/combat.js';
+import { technologies } from '../data/technologies.js';
+import { buildings, footprint } from '../data/buildings.js';
 import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
 
 const VERSION = 1;
@@ -74,6 +76,31 @@ function validate(world) {
     throw new Error('保存データの集落・資源が無効です。');
   }
   const people = new Map(world.citizens.map(c => [c.id, c]));
+  const sites = new Set(world.constructionSites.map(site => site.id));
+  const stores = new Set(world.stockpiles.map(store => store.id));
+  const targets = new Set(world.monsters.map(monster => monster.id));
+  const techIds = new Set(technologies.map(technology => technology.id));
+  const accounts = new Set(world.researchStates.map(state => state.ownerId));
+  if (!world.constructionSites.every(site => Object.hasOwn(buildings, site.kind) && validTile(site) &&
+        settlements.has(site.settlementId) && integer(site.progress, 0) && site.delivered) ||
+      !world.reservations.every(r => sites.has(r.siteId) && stores.has(r.sourceId) && resources.includes(r.resource) &&
+        integer(r.quantity, 1) && ['reserved', 'inTransit', 'delivered'].includes(r.state)) ||
+      !world.inTransit.every(item => sites.has(item.destinationId) && stores.has(item.sourceId) &&
+        world.reservations.some(r => r.id === item.reservationId && r.state === 'inTransit' &&
+          r.quantity === item.quantity && r.resource === item.resource) &&
+        (item.carrierId === null ? validTile(item) : people.get(item.carrierId)?.alive)) ||
+      !world.monsters.every(m => Object.hasOwn(monsters, m.species) && validTile(m) && validTile(m.homeTile) &&
+        typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
+      !world.quests.every(q => targets.has(q.targetId) && settlements.has(q.settlementId) &&
+        (q.claimedBy === null || people.has(q.claimedBy)) && Array.isArray(q.lootIds) && q.lootIds.every(id => ids.has(id))) ||
+      accounts.size !== world.researchStates.length ||
+      !world.researchStates.every(state => (settlements.has(state.ownerId) || nations.has(state.ownerId)) &&
+        Array.isArray(state.unlockedIds) && state.unlockedIds.every(id => techIds.has(id)) &&
+        new Set(state.unlockedIds).size === state.unlockedIds.length && state.progressById &&
+        integer(state.knowledgePoints, 0))) {
+    throw new Error('保存データの行動・建築・研究が無効です。');
+  }
+
   for (const c of world.citizens) {
     const action = c.action;
     if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || (c.settlementId === null

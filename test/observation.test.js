@@ -66,3 +66,11 @@ test('history ignores duplicate transaction types and retains important events d
   assert.equal(world.events.filter(e => e.type === 'adventureDeparted').length, 500);
   assert.deepEqual(historyFor(world, 'citizen', id).map(e => e.type), ['death']);
 });
+
+test('invalid domain references cannot be committed to a snapshot', async () => {
+  const world = createWorld('invalid-domain');
+  world.quests.push({ id: 'quest:1', settlementId: world.settlements[0].id, targetId: 'monster:9999',
+    claimedBy: null, lootIds: [] });
+  world.idCounters.quest = 2;
+  await assert.rejects(createSnapshot(world), /行動・建築・研究/);
+});

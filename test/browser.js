@@ -127,6 +127,13 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       for (const seed of ['one', 'two', 'three', 'four']) {
         await writeGeneration(database, await createSnapshot(createWorld(seed)));
       }
+      const aborted = await new Promise(resolve => {
+        const tx = database.transaction('snapshots', 'readwrite');
+        tx.onabort = () => resolve(true);
+        tx.oncomplete = () => resolve(false);
+        tx.objectStore('snapshots').add({ incomplete: true });
+        tx.abort();
+      });
       await writeGeneration(database, { corrupt: true });
       const count = await new Promise((resolve, reject) => {
         const request = database.transaction('snapshots').objectStore('snapshots').count();
@@ -135,9 +142,9 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       });
       const latest = await readLatestGeneration(database);
       database.close();
-      return [count, latest.seed];
+      return [count, latest.seed, aborted];
     })()`);
-    assert.deepEqual(generations, [3, 'four']);
+    assert.deepEqual(generations, [3, 'four', true]);
     await evaluate(`(() => {
       document.querySelector('#god-kind').value = 'resource';
       document.querySelector('#god-kind').dispatchEvent(new Event('change'));
