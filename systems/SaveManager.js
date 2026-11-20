@@ -1,4 +1,4 @@
-import { FAR_MOVEMENT_STEPS } from '../simulation/DetailLevel.js';
+import { FAR_MOVEMENT_STEPS, batchesMovement } from '../simulation/DetailLevel.js';
 import { resources } from '../simulation/Economy.js';
 import { NATIONS } from '../data/nations.js';
 import { gear, monsters } from '../data/combat.js';
@@ -143,7 +143,7 @@ function validate(world) {
 function validRoute(citizen, passable, terrainAt, navigationVersion) {
   const { action } = citizen;
   if (action.deferredMovement !== undefined &&
-      (action.kind !== 'explore' || !integer(action.deferredMovement, 0, FAR_MOVEMENT_STEPS * TICKS_PER_STEP_AT_1X - 1))) return false;
+      (!batchesMovement(action.kind) || !integer(action.deferredMovement, 0, FAR_MOVEMENT_STEPS * TICKS_PER_STEP_AT_1X - 1))) return false;
   if (Number.isInteger(action.navigationVersion) && action.navigationVersion < navigationVersion) {
     // The next simulation step replans from the saved safe tile before advancing.
     return Number.isInteger(action.goal?.x) && Number.isInteger(action.goal?.y);

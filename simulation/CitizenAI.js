@@ -223,8 +223,8 @@ export function updateCitizens(world, ticks, camera) {
       citizen.x = safe.x + 0.5;
       citizen.y = safe.y + 0.5;
       const path = findPath(world, safe, citizen.action.goal);
+      delete citizen.action.deferredMovement;
       if (path?.length) {
-        delete citizen.action.deferredMovement;
         Object.assign(citizen.action, { path, progress: 0, navigationVersion: world.map.navigationVersion });
       } else {
         citizen.action = path ? { ...citizen.action, phase: 'perform', progress: 0 } : idle(world.worldTimeTick);

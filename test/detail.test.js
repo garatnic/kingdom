@@ -40,3 +40,24 @@ test('the world creates, updates and restores three hundred individual residents
   assert.equal(new Set(world.citizens.map(c => c.id)).size, 300);
   assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
 });
+
+test('distant logistics preserve carried cargo and deliver it once after restoration', async () => {
+  const world = createWorld('distant-cargo');
+  const citizen = world.citizens[0];
+  const store = world.stockpiles[0];
+  world.citizens = [citizen];
+  world.map.terrain.fill('grass');
+  const start = { x: store.x + 2, y: store.y };
+  Object.assign(citizen, { x: start.x + 0.5, y: start.y + 0.5, lastKnownSafeTile: start });
+  citizen.inventory.food = 2;
+  citizen.action = { kind: 'haul', phase: 'travel', goal: { x: store.x, y: store.y },
+    targetId: store.id, path: [{ x: start.x - 1, y: start.y }, { x: store.x, y: store.y }],
+    progress: 0, navigationVersion: world.map.navigationVersion };
+  const distant = { x: 100, y: 100 };
+  updateCitizens(world, 12, distant);
+  assert.equal(citizen.action.deferredMovement, 12);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  for (let i = 0; i < 8; i++) updateCitizens(restored, 12, distant);
+  assert.equal(restored.stockpiles[0].total.food, store.total.food + 2);
+  assert.equal(restored.citizens[0].inventory.food, 0);
+});
