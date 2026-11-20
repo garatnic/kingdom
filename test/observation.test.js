@@ -74,3 +74,18 @@ test('invalid domain references cannot be committed to a snapshot', async () => 
   world.idCounters.quest = 2;
   await assert.rejects(createSnapshot(world), /行動・建築・研究/);
 });
+
+test('three additional races can be created and restored without changing the starting population', async () => {
+  const world = createWorld('intervention');
+  assert.deepEqual([...new Set(world.citizens.map(c => c.race))].sort(), ['dwarf', 'elf', 'human']);
+  const taken = new Set(world.citizens.map(c => c.lastKnownSafeTile.y * world.map.width + c.lastKnownSafeTile.x));
+  const tiles = world.map.terrain.flatMap((terrain, i) =>
+    terrain === 'grass' && !taken.has(i) ? [{ x: i % world.map.width, y: Math.floor(i / world.map.width) }] : []);
+  const newRaces = ['orc', 'halfling', 'fairy'];
+  newRaces.forEach((race, index) => {
+    assert.equal(applyGodCommand(world, command(race, 'life', tiles[index], race, 1)), null);
+  });
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.deepEqual(restored.citizens.slice(-3).map(c => c.race), newRaces);
+  assert.ok(restored.citizens.at(-1).traits.magicAffinity >= 0.75);
+});

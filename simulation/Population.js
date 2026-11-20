@@ -4,7 +4,7 @@ import { available, resources } from './Economy.js';
 import { random } from '../engine/random.js';
 import {
   ADULT_AGE, BIRTH_CHECK_INTERVAL_TICKS, BIRTH_PROBABILITY_PER_YEAR, FAMILY, FOOD_BIRTH_PER_PERSON,
-  LIFESPAN_YEARS, TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR
+  citizenRaces, LIFESPAN_YEARS, TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR
 } from '../data/balance.js';
 
 export function recordDeath(world, citizen, cause) {
@@ -93,6 +93,9 @@ function checkBirth(world, parent, people) {
     action: { kind: 'idle', phase: 'plan', targetId: null, startedAt: world.worldTimeTick, progress: 0 },
     decisionAt: world.worldTimeTick, failedTargets: {}, lastKnownSafeTile: tile
   };
+  if (citizenRaces[child.race].minMagicAffinity !== undefined) {
+    child.traits.magicAffinity = Math.max(child.traits.magicAffinity, citizenRaces[child.race].minMagicAffinity);
+  }
   parent.childIds.push(id);
   partner.childIds.push(id);
   world.citizens.push(child);

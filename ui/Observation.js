@@ -1,3 +1,4 @@
+import { citizenRaces } from '../data/balance.js';
 import { adventurerRanks, gear } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
 import { civilizationNames } from '../data/technologies.js';
@@ -14,7 +15,6 @@ const events = {
   warDeclared: '開戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
-const races = { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' };
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
   idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
@@ -76,7 +76,7 @@ export function observation(getWorld, getCamera, focus) {
     const nation = world.nations.find(n => n.id === subjects.value);
     if (person) {
       add(body, 'h3', person.name);
-      add(body, 'p', `${races[person.race]} · ${ageYears(world, person)}歳 · ${person.alive ? jobs[person.profession] ?? '未成年' : '死亡'}`);
+      add(body, 'p', `${citizenRaces[person.race]?.label} · ${ageYears(world, person)}歳 · ${person.alive ? jobs[person.profession] ?? '未成年' : '死亡'}`);
       const settlement = world.settlements.find(s => s.id === person.settlementId);
       if (settlement) add(body, 'p', `集落 ${settlement.id} / ${world.nations.find(n => n.id === person.nationId)?.name ?? '国家未所属'}`);
       add(body, 'p', `HP ${person.hp} / 空腹 ${person.hunger} / 疲労 ${person.fatigue} · ${actions[person.action.kind] ?? '待機'}`);

@@ -1,5 +1,5 @@
 import { monsters } from './data/combat.js';
-import { TILE } from './data/balance.js';
+import { TILE, citizenRaces } from './data/balance.js';
 import { applyGodCommand } from './systems/GodPowers.js';
 import { openSaveStorage, readLatestGeneration, writeGeneration } from './systems/SaveStorage.js';
 import { observation } from './ui/Observation.js';
@@ -222,7 +222,7 @@ get('file').addEventListener('change', async event => {
 });
 
 const godOptions = {
-  life: { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' },
+  life: Object.fromEntries(Object.entries(citizenRaces).map(([id, race]) => [id, race.label])),
   resource: { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' },
   terrain: { grass: '草原', forest: '森', mountain: '山', water: '水' },
   monster: Object.fromEntries(Object.entries(monsters).map(([id, config]) => [id, config.label]))

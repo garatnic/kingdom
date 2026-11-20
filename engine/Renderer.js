@@ -1,8 +1,7 @@
 import { monsters } from '../data/combat.js';
-import { TILE } from '../data/balance.js';
+import { TILE, citizenRaces } from '../data/balance.js';
 
 const colors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
-const clothes = { human: '#e2b56b', elf: '#a9d592', dwarf: '#dd9979' };
 const resourceColors = { food: '#d88479', wood: '#99bb72', stone: '#bbc5c1', iron: '#db926b', manaStone: '#c6a7e8' };
 
 export class Renderer {
@@ -91,7 +90,7 @@ export class Renderer {
     const citizens = world.citizens.filter(c => c.alive && visible(c)).sort((a, b) => a.y - b.y);
     for (const c of citizens) {
       if (camera.zoom <= 0.65) {
-        ctx.fillStyle = clothes[c.race];
+        ctx.fillStyle = citizenRaces[c.race]?.color;
         ctx.fillRect(c.x * TILE - 3, c.y * TILE - 3, 6, 6);
       } else {
         const quest = c.action.kind === 'adventure' ? world.quests.find(q => q.id === c.action.targetId) : undefined;
@@ -136,7 +135,7 @@ export class Renderer {
     ctx.fillRect(x - 7, y + 1, 14, 4);
     ctx.fillRect(x - 6, y - 14, 12, 15);
     ctx.fillRect(x - 4, y - 19, 8, 6);
-    ctx.fillStyle = clothes[citizen.race];
+    ctx.fillStyle = citizenRaces[citizen.race]?.color;
     ctx.fillRect(x - 5, y - 11, 10, 9);
     ctx.fillStyle = '#ebc7a5';
     ctx.fillRect(x - 3, y - 17, 6, 6);

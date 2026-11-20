@@ -54,7 +54,17 @@ export const NEEDS = { eat: 80, sleep: 85, fatiguePerHour: 2, restPerHour: 12, s
 export const NODE_RENEWAL_TICKS = { food: 8 * NEED_HOUR_TICKS, wood: TIME_TICKS_PER_DAY };
 
 export const ADULT_AGE = 16;
-export const LIFESPAN_YEARS = { human: [30, 45], dwarf: [40, 60], elf: [50, 80] };
+export const citizenRaces = {
+  human: { label: '人間', color: '#e2b56b', lifespan: [30, 45] },
+  elf: { label: 'エルフ', color: '#a9d592', lifespan: [50, 80] },
+  dwarf: { label: 'ドワーフ', color: '#dd9979', lifespan: [40, 60] },
+  orc: { label: 'オーク', color: '#9ccc70', lifespan: [35, 55] },
+  halfling: { label: 'ハーフリング', color: '#edc68f', lifespan: [45, 65] },
+  fairy: { label: '妖精', color: '#ed9cde', lifespan: [60, 95], minMagicAffinity: 0.75 }
+};
+export const LIFESPAN_YEARS = Object.fromEntries(
+  Object.entries(citizenRaces).map(([id, race]) => [id, race.lifespan])
+);
 export const FAMILY = { relationshipPerDay: 10, marriageThreshold: 60, maxAgeGap: 20, birthSpacingYears: 2 };
 
 export const FRONTIER = { dx: -14, dy: 0, clearingRadius: 3,

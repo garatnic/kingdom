@@ -1,5 +1,5 @@
 import { LIFE_CREATION_LIMIT } from '../simulation/DetailLevel.js';
-import { LAYOUT, TERRAIN_COST, TIME_TICKS_PER_YEAR } from '../data/balance.js';
+import { LAYOUT, citizenRaces, TERRAIN_COST, TIME_TICKS_PER_YEAR } from '../data/balance.js';
 import { footprint } from '../data/buildings.js';
 import { monsters } from '../data/combat.js';
 import { random } from '../engine/random.js';
@@ -9,7 +9,6 @@ import { lifespan, nextId, professions } from '../simulation/Identity.js';
 import { findPath } from '../simulation/path.js';
 import { emitOnce } from './History.js';
 
-const races = ['human', 'elf', 'dwarf'];
 const scope = 8;
 const sumDistance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const cell = person => person.lastKnownSafeTile ?? person;
@@ -50,6 +49,7 @@ function makeCitizen(world, race, tile) {
     .sort((a, b) => sumDistance(a, tile) - sumDistance(b, tile))[0];
   const stats = ['diligence', 'bravery', 'curiosity', 'magicAffinity'];
   const traits = Object.fromEntries(stats.map(stat => [stat, random(world.rngState)]));
+  traits.magicAffinity = Math.max(traits.magicAffinity, citizenRaces[race].minMagicAffinity ?? 0);
   const skills = Object.fromEntries(['farming', 'woodcutting', 'mining', 'building', 'combat', 'magic'].map(key => [key, 0]));
   return {
     id, name: `住民 ${number}`, race, birthWorldTimeTick: world.worldTimeTick - age * TIME_TICKS_PER_YEAR,
@@ -106,7 +106,7 @@ export function applyGodCommand(world, command) {
       if (isStructure(world, tile)) return 'OCCUPIED';
       world.resourceNodes.push({ id: nextId(world, 'node'), resource: value, quantity, ...tile, dropped: true });
     } else {
-      if (kind === 'life' && !races.includes(value) || kind === 'monster' && !Object.hasOwn(monsters, value)) return 'INVALID_KIND';
+      if (kind === 'life' && !Object.hasOwn(citizenRaces, value) || kind === 'monster' && !Object.hasOwn(monsters, value)) return 'INVALID_KIND';
       const limit = kind === 'life' ? LIFE_CREATION_LIMIT : monsters[value].cap;
       const count = kind === 'life' ? world.citizens.filter(c => c.alive).length :
         world.monsters.filter(m => m.alive && m.species === value).length;
