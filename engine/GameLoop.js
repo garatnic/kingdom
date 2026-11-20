@@ -4,6 +4,8 @@ import {
 } from '../data/balance.js';
 import { updateAdventureWorld } from '../simulation/Adventure.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
+import { updateNations } from '../simulation/Nations.js';
+import { updateResearch } from '../simulation/Research.js';
 import { updatePopulation } from '../simulation/Population.js';
 
 export function advanceFrame(world, elapsedMs, hidden = false) {
@@ -19,6 +21,8 @@ export function advanceFrame(world, elapsedMs, hidden = false) {
       updateAdventureWorld(world, TICKS_PER_STEP_AT_1X);
       updateCitizens(world, TICKS_PER_STEP_AT_1X);
       updatePopulation(world, TICKS_PER_STEP_AT_1X);
+      updateNations(world, TICKS_PER_STEP_AT_1X);
+      updateResearch(world, TICKS_PER_STEP_AT_1X);
     }
   }
   world.tickRemainder %= REAL_STEP_MS;

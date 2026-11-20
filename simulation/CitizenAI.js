@@ -8,6 +8,8 @@ import {
   buildAtSite, deliverMaterials, materialsDelivered, pickUpMaterials, planSettlementConstruction,
   reserveMaterials, workTile
 } from './Construction.js';
+import { TECH } from '../data/technologies.js';
+import { unlocked } from './Research.js';
 import { claimAdventure, continueAdventure } from './Adventure.js';
 import { recordDeath } from './Population.js';
 
@@ -62,6 +64,12 @@ function adventure(world, citizen, quest, store) {
 }
 
 function chooseRoute(world, citizen, store, population) {
+  if (citizen.expeditionId) {
+    const expedition = world.expeditions.find(item => item.id === citizen.expeditionId);
+    if (!expedition.arrivedIds.includes(citizen.id) &&
+        !travel(world, citizen, expedition, 'expedition', expedition.id)) expedition.failed = true;
+    return;
+  }
   if (citizen.profession === 'adventurer') {
     const active = world.quests.find(q => q.status === 'claimed' && q.claimedBy === citizen.id);
     if (active && adventure(world, citizen, active, store)) return;
@@ -89,7 +97,10 @@ function chooseRoute(world, citizen, store, population) {
       available(store, key) < (key === 'food' ? population * FOOD_TARGET_PER_PERSON : key === 'wood' ? 24 : 12));
     candidates.sort((a, b) => available(store, a) - available(store, b));
     for (const resource of candidates) {
-      for (const node of world.resourceNodes) {
+      const current = tileOf(citizen);
+      const distance = node => Math.abs(node.x - current.x) + Math.abs(node.y - current.y);
+      const nodes = world.resourceNodes.filter(node => node.resource === resource).sort((a, b) => distance(a) - distance(b));
+      for (const node of nodes) {
         if (node.resource === resource && node.quantity > 0 &&
             travel(world, citizen, node, 'gather', node.id)) return;
       }
@@ -105,6 +116,10 @@ function chooseRoute(world, citizen, store, population) {
 
 function perform(world, citizen, store, ticks) {
   const action = citizen.action;
+  if (action.kind === 'expedition') {
+    const expedition = world.expeditions.find(item => item.id === action.targetId);
+    if (!expedition.arrivedIds.includes(citizen.id)) expedition.arrivedIds.push(citizen.id);
+  }
   if (action.kind === 'adventure') {
     const quest = world.quests.find(q => q.id === action.targetId);
     if (adventure(world, citizen, quest, store)) return;
@@ -121,7 +136,8 @@ function perform(world, citizen, store, ticks) {
     const farm = world.buildings.find(b => b.id === action.targetId);
     if (farm && (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick) {
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      citizen.inventory.food += FARM_YIELD;
+      const multiplier = unlocked(world, citizen.settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
+      citizen.inventory.food += Math.floor(FARM_YIELD * multiplier);
       if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     }
   }
@@ -150,7 +166,10 @@ function perform(world, citizen, store, ticks) {
 
 export function updateCitizens(world, ticks) {
   renewNodes(world);
-  const population = world.citizens.filter(c => c.alive).length;
+  const population = new Map();
+  for (const c of world.citizens) {
+    if (c.alive) population.set(c.settlementId, (population.get(c.settlementId) ?? 0) + 1);
+  }
   for (const citizen of world.citizens) {
     if (!citizen.alive) continue;
     updateNeeds(world, citizen, ticks);
@@ -175,7 +194,7 @@ export function updateCitizens(world, ticks) {
     if (world.worldTimeTick >= citizen.decisionAt && citizen.action.phase === 'plan') {
       citizen.decisionAt = world.worldTimeTick + (citizen.decisionAt - world.worldTimeTick) % DECISION_TICKS;
       citizen.decisionAt += DECISION_TICKS;
-      chooseRoute(world, citizen, store, population);
+      chooseRoute(world, citizen, store, population.get(citizen.settlementId));
     }
 
     if (citizen.action.phase === 'perform') {

@@ -1,3 +1,5 @@
+import { TECH } from '../data/technologies.js';
+import { unlocked } from './Research.js';
 import { COMBAT, monsters } from '../data/combat.js';
 import { ADULT_AGE, FOOD_HUNGER_RESTORED, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
@@ -198,25 +200,43 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
   if (quest?.status !== 'claimed' || quest.claimedBy !== citizen.id || !store) return false;
   const monster = world.monsters.find(m => m.id === quest.targetId);
   const position = tileOf(citizen);
+  const canCast = citizen.skills.magic > 0 && (citizen.mp ?? 0) >= TECH.spellMp &&
+    world.worldTimeTick >= (citizen.spellReadyAt ?? 0) && unlocked(world, citizen.settlementId, 'magic_1');
+  const spell = quest.casting === true || canCast;
+  const range = spell ? TECH.spellRange : COMBAT.rangedDistance;
   if (quest.stage === 'fight') {
     const cutoff = COMBAT.retreatHp - (COMBAT.retreatHp - COMBAT.braveRetreatHp) * citizen.traits.bravery;
     if (citizen.hp <= cutoff || citizen.fear >= COMBAT.fearRetreat || !monster?.alive) {
       quest.stage = 'return';
       quest.retreated = true;
-    } else if (distance(position, monster) > COMBAT.rangedDistance) {
+    } else if (distance(position, monster) > range) {
+      quest.casting = false;
+      quest.strikeAt = null;
       const goal = approach(world, citizen, monster);
       if (goal && travel(goal, 'adventure', quest.id)) return true;
       quest.stage = 'return';
       quest.retreated = true;
     } else {
       const config = monsters[monster.species];
-      quest.strikeAt ??= world.worldTimeTick + COMBAT.strikeDelay;
+      if (quest.strikeAt === null) {
+        quest.casting = spell;
+        quest.strikeAt = world.worldTimeTick + (spell ? TECH.spellCastTicks : COMBAT.strikeDelay);
+      }
       if (world.worldTimeTick >= quest.strikeAt) {
-        monster.hp = Math.max(0, monster.hp - damage(world, COMBAT.attack + citizen.skills.combat, config.defense));
+        if (quest.casting) {
+          citizen.mp -= TECH.spellMp;
+          citizen.spellReadyAt = world.worldTimeTick + TECH.spellCooldownTicks;
+        }
+        const weapon = unlocked(world, citizen.settlementId, 'weapons_1') ? TECH.weaponBonus : 0;
+        const attack = quest.casting ? TECH.spellAttack : COMBAT.attack + citizen.skills.combat + weapon;
+        if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
+          monster.hp = Math.max(0, monster.hp - damage(world, attack, config.defense));
+        }
+        quest.casting = false;
         quest.strikeAt = world.worldTimeTick + COMBAT.interval;
         if (monster.hp === 0) defeat(world, citizen, quest, monster);
       }
-      if (monster.alive && world.worldTimeTick >= monster.attackAt) {
+      if (monster.alive && distance(position, monster) <= COMBAT.rangedDistance && world.worldTimeTick >= monster.attackAt) {
         citizen.hp = Math.max(0, citizen.hp - damage(world, config.attack, COMBAT.defense));
         monster.attackAt = world.worldTimeTick + COMBAT.interval;
         if (!citizen.hp) {

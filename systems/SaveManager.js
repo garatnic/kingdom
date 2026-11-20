@@ -1,3 +1,4 @@
+import { NATIONS } from '../data/nations.js';
 import { footprint } from '../data/buildings.js';
 import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
 
@@ -7,8 +8,10 @@ const integer = (value, min, max = Number.MAX_SAFE_INTEGER) =>
   Number.isSafeInteger(value) && value >= min && value <= max;
 const inside = (value, limit) => Number.isFinite(value) && value >= 0 && value < limit;
 const idOrder = (a, b) => Number(a.id.split(':')[1]) - Number(b.id.split(':')[1]);
-const entityLists = ['citizens', 'settlements', 'nations', 'buildings', 'resourceNodes', 'stockpiles',
+const coreEntityLists = ['citizens', 'settlements', 'nations', 'buildings', 'resourceNodes', 'stockpiles',
   'constructionSites', 'events', 'reservations', 'inTransit', 'monsters', 'quests', 'researchStates'];
+
+const entityLists = world => world.expeditions === undefined ? coreEntityLists : [...coreEntityLists, 'expeditions'];
 
 function canonical(value) {
   if (value === null || ['string', 'boolean'].includes(typeof value) || Number.isFinite(value)) {
@@ -33,15 +36,15 @@ function validate(world) {
       map?.width !== SIZE || map.height !== SIZE || !integer(map.navigationVersion, 0) ||
       !Array.isArray(map.terrain) || map.terrain.length !== SIZE ** 2 ||
       !map.terrain.every(t => Object.hasOwn(TERRAIN_COST, t)) ||
-      !world.idCounters || !entityLists.every(key => Array.isArray(world[key])) ||
-      world.settlements.length !== 1 || world.nations.length !== 0 ||
+      !world.idCounters || !entityLists(world).every(key => Array.isArray(world[key])) ||
+      world.settlements.length < 1 || world.settlements.length > NATIONS.limit || world.nations.length > NATIONS.limit ||
       !world.settings || (camera && (!['free', 'manualOverride'].includes(camera.mode) ||
         !inside(camera.x, SIZE + Number.EPSILON * SIZE) || !inside(camera.y, SIZE + Number.EPSILON * SIZE) ||
         !Number.isFinite(camera.zoom) || camera.zoom < MIN_ZOOM || camera.zoom > MAX_ZOOM))) {
     throw new Error('保存データの世界設定が無効です。');
   }
   const ids = new Set();
-  for (const key of entityLists) {
+  for (const key of entityLists(world)) {
     for (const entity of world[key]) {
       const id = entity?.id;
       const match = typeof id === 'string' && /^([a-zA-Z]+):([1-9][0-9]*)$/.exec(id);
@@ -51,21 +54,26 @@ function validate(world) {
       ids.add(id);
     }
   }
-  const [settlement] = world.settlements;
+  const settlements = new Map(world.settlements.map(s => [s.id, s]));
+  const nations = new Map(world.nations.map(n => [n.id, n]));
+  const expeditions = new Map((world.expeditions ?? []).map(e => [e.id, e]));
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&
     !world.buildings.some(building => footprint(building, tile));
-  if (!validTile(settlement) || settlement.nationId !== null ||
-      !world.buildings.every(b => validTile(b) && b.settlementId === settlement.id) ||
+  if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId))) ||
+      !world.nations.every(n => settlements.get(n.capitalId)?.nationId === n.id &&
+        n.settlementIds.every(id => settlements.get(id)?.nationId === n.id)) ||
+      !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId)) ||
       !world.resourceNodes.every(n => passable(n) && integer(n.quantity, 0)) ||
-      !world.stockpiles.every(p => p.settlementId === settlement.id && p.total && p.reserved &&
+      !world.stockpiles.every(p => settlements.has(p.settlementId) && p.total && p.reserved &&
         Object.entries(p.total).every(([key, total]) => integer(total, 0) && integer(p.reserved[key], 0, total)))) {
     throw new Error('保存データの集落・資源が無効です。');
   }
   const people = new Map(world.citizens.map(c => [c.id, c]));
   for (const c of world.citizens) {
     const action = c.action;
-    if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || c.settlementId !== settlement.id ||
-        c.nationId !== null || typeof c.alive !== 'boolean' || !Object.hasOwn(LIFESPAN_YEARS, c.race) ||
+    if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || (c.settlementId === null
+          ? c.nationId !== null || (c.alive && !expeditions.get(c.expeditionId)?.memberIds.includes(c.id))
+          : !settlements.has(c.settlementId) || settlements.get(c.settlementId).nationId !== c.nationId) || typeof c.alive !== 'boolean' || !Object.hasOwn(LIFESPAN_YEARS, c.race) ||
         !Number.isSafeInteger(c.birthWorldTimeTick) || c.birthWorldTimeTick > world.worldTimeTick ||
         !Array.isArray(c.parentIds) || !Array.isArray(c.childIds) ||
         c.parentIds.some(id => !people.get(id)?.childIds?.includes(c.id) ||
@@ -111,7 +119,7 @@ export async function createSnapshot(world, camera) {
   const copy = structuredClone(world);
   if (camera) copy.settings.camera = structuredClone(camera);
   validate(copy);
-  for (const key of entityLists.filter(key => key !== 'events')) copy[key].sort(idOrder);
+  for (const key of entityLists(copy).filter(key => key !== 'events')) copy[key].sort(idOrder);
   const payload = {
     schemaVersion: VERSION, saveId: 'save:' + crypto.randomUUID(),
     createdAtIso: new Date().toISOString(), world: copy
@@ -126,6 +134,6 @@ export async function readSnapshot(json) {
   if (typeof payload.saveId !== 'string' || !Number.isFinite(Date.parse(payload.createdAtIso)) ||
       expected !== await checksum(payload)) throw new Error('保存ファイルの整合性を確認できません。');
   validate(payload.world);
-  for (const key of entityLists.filter(key => key !== 'events')) payload.world[key].sort(idOrder);
+  for (const key of entityLists(payload.world).filter(key => key !== 'events')) payload.world[key].sort(idOrder);
   return payload.world;
 }

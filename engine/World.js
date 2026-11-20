@@ -1,5 +1,5 @@
 import {
-  SIZE, LAYOUT, POPULATION, TIME_TICKS_PER_YEAR, DECISION_TICKS,
+  SIZE, LAYOUT, FRONTIER, POPULATION, TIME_TICKS_PER_YEAR, DECISION_TICKS,
   MAGIC_AFFINITY_THRESHOLD, INITIAL_MAGIC_AFFINITY_MIN_COUNT
 } from '../data/balance.js';
 import { random, seedState } from './random.js';
@@ -75,6 +75,23 @@ export function createWorld(seed) {
         worldTimeTick: 0, x: node.x, y: node.y, nodeId: node.id });
     }
   }
+  const frontier = { x: center + FRONTIER.dx, y: center + FRONTIER.dy };
+  for (let dy = -FRONTIER.clearingRadius; dy <= FRONTIER.clearingRadius; dy++) {
+    for (let dx = -FRONTIER.clearingRadius; dx <= FRONTIER.clearingRadius; dx++) {
+      set(frontier.x + dx, frontier.y + dy, 'grass');
+    }
+  }
+  if (findPath(world, origin, frontier) === null) {
+    for (let x = frontier.x; x < center; x++) set(x, center, 'grass');
+    world.events.push({ id: nextId(world, 'event'), type: 'terrainCorrection',
+      worldTimeTick: 0, ...frontier });
+  }
+  for (const [resource, terrain, quantity, dx, dy] of FRONTIER.resources) {
+    const node = { id: nextId(world, 'node'), resource, quantity, x: frontier.x + dx, y: frontier.y + dy };
+    set(node.x, node.y, terrain);
+    world.resourceNodes.push(node);
+  }
+  map.frontier = frontier;
   const inventory = Object.fromEntries(Object.keys(LAYOUT.provisions).map(resource => [resource, 0]));
   world.stockpiles.push({ id: nextId(world, 'stockpile'), settlementId, ...origin, capacity: LAYOUT.stockpileCapacity,
     total: { ...LAYOUT.provisions }, reserved: { ...inventory } });

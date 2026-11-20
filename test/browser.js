@@ -20,7 +20,9 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
   const profile = await mkdtemp(join(tmpdir(), 'kingdom-chromium-'));
   const server = spawn(process.execPath, ['serve.js'], { env: { ...process.env, PORT: '0' } });
   const browser = spawn(process.env.CHROMIUM ?? 'chromium', [
-    '--headless', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'
+    '--headless', '--disable-dev-shm-usage',
+    ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []),
+    '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   let browserError = '';
   browser.stderr.on('data', data => { browserError = (browserError + data.toString()).slice(-4000); });
@@ -37,7 +39,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
         if (browser.exitCode !== null || browser.signalCode !== null) throw new Error(browserError || 'Chromium exited');
         return null;
       }
-    });
+    }).catch(error => { throw new Error(browserError || error.message); });
     const [page] = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
     socket = new WebSocket(page.webSocketDebuggerUrl);
     await once(socket, 'open');

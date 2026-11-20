@@ -56,3 +56,6 @@ export const NODE_RENEWAL_TICKS = { food: 8 * NEED_HOUR_TICKS, wood: TIME_TICKS_
 export const ADULT_AGE = 16;
 export const LIFESPAN_YEARS = { human: [30, 45], dwarf: [40, 60], elf: [50, 80] };
 export const FAMILY = { relationshipPerDay: 10, marriageThreshold: 60, maxAgeGap: 20, birthSpacingYears: 2 };
+
+export const FRONTIER = { dx: -14, dy: 0, clearingRadius: 3,
+  resources: [['food', 'grass', 12, -2, 0], ['wood', 'forest', 20, -2, -2], ['stone', 'mountain', 30, -2, 2]] };

@@ -2,6 +2,8 @@ import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { nextId } from './Identity.js';
 import { available } from './Economy.js';
 import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
+import { TECH } from '../data/technologies.js';
+import { unlocked } from './Research.js';
 import { findPath } from './path.js';
 
 function availableSite(world, kind, x, y) {
@@ -78,7 +80,10 @@ export function materialsDelivered(site) {
 export function buildAtSite(world, site, ticks) {
   if (!world.constructionSites.includes(site) || !materialsDelivered(site) ||
       !Number.isSafeInteger(ticks) || ticks <= 0) return null;
-  site.progress = Math.min(site.progress + ticks, workTicks(site.kind));
+  const percent = unlocked(world, site.settlementId, 'building_1') ? TECH.buildingWorkPercent : 100;
+  const preciseTicks = ticks * percent + (site.workRemainder ?? 0);
+  site.workRemainder = preciseTicks % 100;
+  site.progress = Math.min(site.progress + Math.floor(preciseTicks / 100), workTicks(site.kind));
   if (site.progress < workTicks(site.kind) || world.citizens.some(c => c.alive &&
       (footprint(site, c.lastKnownSafeTile) || footprint(site, { x: Math.floor(c.x), y: Math.floor(c.y) })))) return null;
   const { x, y, width, height, kind, settlementId } = site;
@@ -129,8 +134,16 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const housing = local.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
   const hasCouples = world.citizens.some(c => c.alive && c.settlementId === settlement.id && c.partnerId);
   const needsHousing = housing < population || (hasCouples && housing === population);
-  const kind = farms === 0 || (farms < 2 && available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON) ? 'farm' :
-    needsHousing ? 'house' : ['warehouse', 'smithy', 'guild', 'barracks'].find(type =>
+  const policy = world.nations.find(n => n.id === settlement.nationId)?.policy.primary;
+  const facilityOrder = policy === 'defense'
+    ? ['warehouse', 'barracks', 'smithy', 'guild'] : ['warehouse', 'smithy', 'guild', 'barracks'];
+  const requiresFarms = farms < TECH.farmEraFarms &&
+    (available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON ||
+      (policy === 'food' && available(store, 'food') < population * 4) ||
+      (local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
+        unlocked(world, settlement.id, 'farming_1')));
+  const kind = farms === 0 || requiresFarms ? 'farm' :
+    needsHousing ? 'house' : facilityOrder.find(type =>
       !local.some(b => b.kind === type));
   if (!kind) return null;
   for (let radius = 1; radius <= 12; radius++) {

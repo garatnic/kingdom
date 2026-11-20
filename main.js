@@ -1,3 +1,4 @@
+import { relationLabel } from './simulation/Nations.js';
 import { createWorld } from './engine/World.js';
 import { advanceFrame, calendar, setSpeed } from './engine/GameLoop.js';
 import { createCamera, pan, zoomAt } from './engine/Camera.js';
@@ -19,11 +20,15 @@ function showReadouts() {
   if (get('population').textContent !== population) get('population').textContent = population;
   const food = `食料 ${world.stockpiles.reduce((sum, store) => sum + store.total.food - store.reserved.food, 0)}`;
   if (get('food').textContent !== food) get('food').textContent = food;
+  const [first, second] = world.nations;
+  const labels = { friendly: '友好', neutral: '中立', hostile: '敵対' };
+  const relations = second ? ` · 国間関係 ${labels[relationLabel(first.relations[second.id])]}` : '';
+  const nations = `国家 ${world.nations.length}${relations}`;
+  if (get('nations').textContent !== nations) get('nations').textContent = nations;
 }
 
 function showState() {
   showReadouts();
-  get('nations').textContent = `国家 ${world.nations.length}`;
   for (const button of get('speeds').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(Number(button.dataset.speed) === world.gameSpeed));
   }
