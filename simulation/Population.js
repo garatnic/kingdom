@@ -136,7 +136,8 @@ function admitMigrant(world) {
     const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === settlement.id &&
       residents.filter(c => c.homeBuildingId === b.id).length < b.capacity);
     if (!home) continue;
-    const reception = storeTile(world, store);
+    const { x, y } = storeTile(world, store);
+    const reception = { x, y };
     const reachable = reachableTiles(world, reception);
     if (!reachable[latestFrontier.y * world.map.width + latestFrontier.x]) continue;
     const migrant = createAdult(world, race, reception, settlement);

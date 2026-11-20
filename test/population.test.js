@@ -92,6 +92,8 @@ test('an expanded and connected world admits migrants only with food and spare h
   assert.equal(migrant.race, 'fairy');
   assert.equal(migrant.homeBuildingId, home.id);
   assert.equal(migrant.settlementId, store.settlementId);
+  assert.deepEqual(migrant.lastKnownSafeTile, { x: store.x, y: store.y });
+  assert.equal(world.events.find(e => e.type === 'migrantArrived').total, undefined);
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   assert.deepEqual(restored.citizens.at(-1), migrant);
 });
