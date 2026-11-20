@@ -94,7 +94,7 @@ function chooseRoute(world, citizen, store, population) {
         !world.quests.some(q => q.id === node.questId && q.status === 'claimed'));
       if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
     }
-    if (citizen.profession === 'farmer' && available(store, 'food') < population * FOOD_TARGET_PER_PERSON) {
+    if (citizen.profession === 'farmer' && available(store, 'food') < foodTarget && storageRoom(store, 'food', foodTarget) > 0) {
       const assigned = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
         .map(c => c.action.targetId));
       for (const farm of world.buildings) {
@@ -165,9 +165,10 @@ function updateDistantSettlements(world, camera, population) {
     const workers = locals.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&
       c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep);
     const yieldPerFarm = farmYield(world, settlement.id);
-    if (!workers.length || freeCapacity(store) < yieldPerFarm) continue;
+    const foodTarget = residents * FOOD_TARGET_PER_PERSON;
+    if (!workers.length || storageRoom(store, 'food', foodTarget) < yieldPerFarm) continue;
     for (const farm of world.buildings) {
-      if (available(store, 'food') >= residents * FOOD_TARGET_PER_PERSON || freeCapacity(store) < yieldPerFarm) break;
+      if (available(store, 'food') >= foodTarget || storageRoom(store, 'food', foodTarget) < yieldPerFarm) break;
       if (farm.kind !== 'farm' || farm.settlementId !== settlement.id || claimedFarms.has(farm.id) ||
           (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) > world.worldTimeTick) continue;
       const field = workTile(world, origin, farm);

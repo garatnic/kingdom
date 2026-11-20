@@ -146,3 +146,23 @@ test('a large settlement below the family food reserve plans an additional farm'
   world.buildings.push({ ...world.buildings[0], kind: 'farm', x: settlement.x + 3, y: settlement.y + 2 });
   assert.equal(planSettlementConstruction(world, settlement, store, store, 32).kind, 'farm');
 });
+
+test('growing towns keep room for warehouse materials before the food target fills the depot', async () => {
+  const { deposit } = await import('../simulation/Economy.js');
+  const world = createWorld('growth-storage');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('grass');
+  store.capacity = 200;
+  store.total.food = 140;
+  store.total.wood = 0;
+  store.total.stone = 0;
+  const [citizen] = world.citizens;
+  citizen.inventory.food = 60;
+  citizen.inventory.wood = 10;
+  citizen.inventory.stone = 5;
+  assert.equal(deposit(citizen, store, 48 * 4), true);
+  assert.deepEqual([store.total.food, store.total.wood, store.total.stone], [185, 10, 5]);
+  assert.equal(citizen.inventory.food, 15);
+  assert.equal(planSettlementConstruction(world, settlement, store, store, 48).kind, 'warehouse');
+});

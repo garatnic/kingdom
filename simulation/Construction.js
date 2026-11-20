@@ -1,7 +1,10 @@
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { nextId } from './Identity.js';
 import { available, freeCapacity } from './Economy.js';
-import { FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
+import {
+  CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON,
+  FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION
+} from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
@@ -158,14 +161,16 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const facilityOrder = policy === 'defense'
     ? ['warehouse', 'barracks', 'smithy', 'guild'] : ['warehouse', 'smithy', 'guild', 'barracks'];
   const farmTarget = Math.max(TECH.farmEraFarms, Math.ceil(population / 8));
-  const farmReserve = population >= 32 ? FOOD_BIRTH_PER_PERSON : FOOD_EMERGENCY_PER_PERSON;
+  const farmReserve = population >= LARGE_SETTLEMENT_POPULATION ? FOOD_BIRTH_PER_PERSON : FOOD_EMERGENCY_PER_PERSON;
   const requiresFarms = farms < farmTarget &&
     (available(store, 'food') < population * farmReserve ||
       (policy === 'food' && available(store, 'food') < population * 4) ||
       (farms < TECH.farmEraFarms && local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
         unlocked(world, settlement.id, 'farming_1')));
   const emergencySpace = population * (population >= 24 ? FOOD_BIRTH_PER_PERSON : FOOD_EMERGENCY_PER_PERSON);
-  const cramped = freeCapacity(store) + store.total.food < emergencySpace;
+  const needsGrowthStorage = population >= LARGE_SETTLEMENT_POPULATION &&
+    store.capacity < population * FOOD_TARGET_PER_PERSON + CONSTRUCTION_STORAGE_RESERVE;
+  const cramped = needsGrowthStorage || freeCapacity(store) + store.total.food < emergencySpace;
   const urgent = cramped ? 'warehouse' : farms === 0 || requiresFarms ? 'farm' : needsHousing ? 'house' : null;
   if (existing) {
     const committed = world.reservations.some(r => r.siteId === existing.id);

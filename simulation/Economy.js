@@ -1,4 +1,7 @@
-import { GATHER_BATCH, LAYOUT, NODE_RENEWAL_TICKS } from '../data/balance.js';
+import {
+  CONSTRUCTION_STORAGE_RESERVE, FOOD_TARGET_PER_PERSON, GATHER_BATCH, LARGE_SETTLEMENT_POPULATION,
+  LAYOUT, NODE_RENEWAL_TICKS
+} from '../data/balance.js';
 
 export const resources = Object.keys(LAYOUT.provisions);
 export const available = (store, resource) => store.total[resource] - store.reserved[resource];
@@ -12,8 +15,10 @@ export function storeTile(world, store) {
 
 export function storageRoom(store, resource, foodTarget = 0) {
   const room = freeCapacity(store);
-  const foodRoom = resource === 'food' ? 0 : Math.max(0, foodTarget - store.total.food);
-  return Math.max(0, room - foodRoom);
+  const largeSettlement = foodTarget >= LARGE_SETTLEMENT_POPULATION * FOOD_TARGET_PER_PERSON;
+  const reserve = largeSettlement ? Math.min(foodTarget, store.capacity - CONSTRUCTION_STORAGE_RESERVE) : foodTarget;
+  if (resource === 'food') return Math.max(0, largeSettlement ? Math.min(room, reserve - store.total.food) : room);
+  return Math.max(0, room - Math.max(0, reserve - store.total.food));
 }
 
 export function harvest(world, worker, node) {
