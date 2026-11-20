@@ -4,6 +4,12 @@ export const resources = Object.keys(LAYOUT.provisions);
 export const available = (store, resource) => store.total[resource] - store.reserved[resource];
 export const freeCapacity = store => store.capacity - resources.reduce((sum, key) => sum + store.total[key], 0);
 
+export function storageRoom(store, resource, foodTarget = 0) {
+  const room = freeCapacity(store);
+  const foodRoom = resource === 'food' ? 0 : Math.max(0, foodTarget - store.total.food);
+  return Math.max(0, room - foodRoom);
+}
+
 export function harvest(world, worker, node) {
   if (!worker.alive || !node || worker.settlementId == null ||
       worker.inventory[node.resource] !== 0 || node.quantity <= 0 ||
@@ -17,15 +23,13 @@ export function harvest(world, worker, node) {
   return true;
 }
 
-export function deposit(worker, store) {
+export function deposit(worker, store, foodTarget = 0) {
   if (!worker.alive || store.settlementId !== worker.settlementId) return false;
-  let room = freeCapacity(store);
   let moved = 0;
   for (const resource of resources) {
-    const quantity = Math.min(worker.inventory[resource], room);
+    const quantity = Math.min(worker.inventory[resource], storageRoom(store, resource, foodTarget));
     worker.inventory[resource] -= quantity;
     store.total[resource] += quantity;
-    room -= quantity;
     moved += quantity;
   }
   return moved > 0;

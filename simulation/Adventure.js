@@ -2,7 +2,7 @@ import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { COMBAT, monsters } from '../data/combat.js';
-import { ADULT_AGE, FOOD_HUNGER_RESTORED, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { ADULT_AGE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
 import { available, deposit } from './Economy.js';
@@ -278,7 +278,8 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
     citizen.hunger = Math.max(0, citizen.hunger - FOOD_HUNGER_RESTORED);
     quest.provision = 0;
   }
-  deposit(citizen, store);
+  const population = world.citizens.filter(c => c.alive && c.settlementId === citizen.settlementId).length;
+  deposit(citizen, store, population * FOOD_TARGET_PER_PERSON);
   if (!quest.retreated && available(store, 'food') >= quest.rewardFood) {
     store.total.food -= quest.rewardFood;
     citizen.inventory.food += quest.rewardFood;

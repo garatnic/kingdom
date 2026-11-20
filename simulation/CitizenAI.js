@@ -1,7 +1,7 @@
 import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, NEEDS, GATHER_TICKS } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { findPath } from './path.js';
-import { available, deposit, freeCapacity, harvest, renewNodes, resources } from './Economy.js';
+import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom } from './Economy.js';
 import { eat, updateNeeds } from './Needs.js';
 import { COMBAT } from '../data/combat.js';
 import { FARM_HARVEST_TICKS, FARM_YIELD } from '../data/buildings.js';
@@ -81,11 +81,13 @@ function chooseRoute(world, citizen, store, population) {
     citizen.action = { ...idle(world.worldTimeTick), kind: 'sleep', phase: 'perform' };
     return;
   }
+  const foodTarget = population * FOOD_TARGET_PER_PERSON;
   if (store && freeCapacity(store) > 0) {
-    if (resources.some(key => citizen.inventory[key] > 0) &&
+    if (resources.some(key => citizen.inventory[key] > 0 && storageRoom(store, key, foodTarget) > 0) &&
         travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     if (citizen.profession === 'builder') {
       const dropped = world.resourceNodes.find(node => node.dropped && node.quantity > 0 &&
+        storageRoom(store, node.resource, foodTarget) > 0 &&
         !world.quests.some(q => q.id === node.questId && q.status === 'claimed'));
       if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
     }
@@ -96,7 +98,7 @@ function chooseRoute(world, citizen, store, population) {
       if (goal && travel(world, citizen, goal, 'farm', farm.id)) return;
     }
     const candidates = (jobs[citizen.profession] ?? []).filter(key =>
-      available(store, key) < (key === 'food' ? population * FOOD_TARGET_PER_PERSON : key === 'wood' ? 24 : 12));
+      storageRoom(store, key, foodTarget) > 0 && available(store, key) < (key === 'food' ? population * FOOD_TARGET_PER_PERSON : key === 'wood' ? 24 : 12));
     candidates.sort((a, b) => available(store, a) - available(store, b));
     for (const resource of candidates) {
       const current = tileOf(citizen);
@@ -116,7 +118,7 @@ function chooseRoute(world, citizen, store, population) {
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
 }
 
-function perform(world, citizen, store, ticks) {
+function perform(world, citizen, store, ticks, population) {
   const action = citizen.action;
   if (action.kind === 'expedition') {
     const expedition = world.expeditions.find(item => item.id === action.targetId);
@@ -167,7 +169,9 @@ function perform(world, citizen, store, ticks) {
   if (action.kind === 'deliverMaterials') {
     deliverMaterials(world, world.inTransit.find(item => item.id === action.targetId), citizen);
   }
-  if (action.kind === 'haul' && store?.id === action.targetId) deposit(citizen, store);
+  if (action.kind === 'haul' && store?.id === action.targetId) {
+    deposit(citizen, store, population * FOOD_TARGET_PER_PERSON);
+  }
   if (action.kind === 'eat' && store?.id === action.targetId) eat(citizen, store);
   citizen.action = idle(world.worldTimeTick);
 }
@@ -215,7 +219,7 @@ export function updateCitizens(world, ticks) {
 
     const work = citizen.fatigue >= 100 ? ticks / 2 : ticks;
     if (citizen.action.phase === 'perform') {
-      perform(world, citizen, store, work);
+      perform(world, citizen, store, work, population.get(citizen.settlementId));
       continue;
     }
     let remaining = work;

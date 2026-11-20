@@ -76,3 +76,19 @@ test('injured residents recover during rest when adequately fed', () => {
   assert.ok(worker.hp > 25);
   assert.ok(worker.alive);
 });
+
+test('loot cannot consume space reserved for the settlement food target', () => {
+  const world = createWorld('food-space');
+  const [store] = world.stockpiles;
+  const [worker] = world.citizens;
+  worker.inventory.wood = 100;
+  worker.inventory.food = 12;
+  assert.equal(deposit(worker, store, 48), true);
+  assert.equal(store.total.food, 36);
+  assert.equal(freeCapacity(store), 12);
+  assert.equal(deposit(worker, store, 48), false);
+  worker.inventory.food = 12;
+  assert.equal(deposit(worker, store, 48), true);
+  assert.equal(store.total.food, 48);
+  assert.equal(freeCapacity(store), 0);
+});

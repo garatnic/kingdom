@@ -1,6 +1,6 @@
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { nextId } from './Identity.js';
-import { available } from './Economy.js';
+import { available, freeCapacity } from './Economy.js';
 import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
@@ -143,7 +143,9 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
       (policy === 'food' && available(store, 'food') < population * 4) ||
       (local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
         unlocked(world, settlement.id, 'farming_1')));
-  const urgent = farms === 0 || requiresFarms ? 'farm' : needsHousing ? 'house' : null;
+  const emergencySpace = population * FOOD_EMERGENCY_PER_PERSON;
+  const cramped = freeCapacity(store) + store.total.food < emergencySpace;
+  const urgent = cramped ? 'warehouse' : farms === 0 || requiresFarms ? 'farm' : needsHousing ? 'house' : null;
   if (existing) {
     const committed = world.reservations.some(r => r.siteId === existing.id);
     if (!urgent || urgent === existing.kind || committed) return existing;
