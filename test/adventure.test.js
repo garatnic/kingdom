@@ -12,7 +12,6 @@ test('adventurers depart, defeat monsters, collect drops and return across three
     for (let i = 0; i < 300; i++) advanceFrame(world, 100);
     const completed = world.quests.filter(q => q.status === 'completed' && q.lootIds.length > 0);
     assert.ok(completed.length, seed);
-    assert.ok(world.quests.some(q => q.status === 'retreated'), seed);
     for (const q of completed) {
       const events = world.events.filter(e => e.questId === q.id);
       assert.deepEqual(events.map(e => e.type), ['adventureDeparted', 'monsterDefeated', 'adventureReturned']);
@@ -73,4 +72,23 @@ test('magic requires research, resolves after casting and consumes MP once', asy
   assert.equal(citizen.mp, 20);
   continueAdventure(world, citizen, quest, store, tile, travel);
   assert.equal(citizen.mp, 20);
+});
+
+test('fear and low HP trigger retreat without a strike or reward', () => {
+  const world = createWorld('retreat');
+  const [store] = world.stockpiles;
+  const citizen = world.citizens.find(c => c.profession === 'adventurer');
+  const tile = { x: store.x, y: store.y };
+  citizen.lastKnownSafeTile = tile;
+  const monster = spawnMonster(world, 'slime', { x: store.x - 1, y: store.y });
+  const quest = issueQuest(world, world.settlements[0], monster);
+  const travel = () => true;
+  assert.ok(claimAdventure(world, citizen, store, travel));
+  citizen.hp = 15;
+  citizen.fear = 85;
+  continueAdventure(world, citizen, quest, store, tile, travel);
+  assert.equal(quest.status, 'retreated');
+  assert.equal(monster.hp, 30);
+  assert.equal(citizen.inventory.food, 0);
+  assert.equal(world.events.at(-1).retreated, true);
 });

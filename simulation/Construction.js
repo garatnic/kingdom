@@ -130,7 +130,6 @@ export function workTile(world, start, site) {
 
 export function planSettlementConstruction(world, settlement, store, origin, population) {
   const existing = world.constructionSites.find(site => site.settlementId === settlement.id);
-  if (existing) return existing;
   const local = world.buildings.filter(building => building.settlementId === settlement.id);
   const farms = local.filter(b => b.kind === 'farm').length;
   const housing = local.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
@@ -144,10 +143,16 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
       (policy === 'food' && available(store, 'food') < population * 4) ||
       (local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
         unlocked(world, settlement.id, 'farming_1')));
-  const kind = farms === 0 || requiresFarms ? 'farm' :
-    needsHousing ? 'house' : facilityOrder.find(type =>
-      !local.some(b => b.kind === type));
+  const urgent = farms === 0 || requiresFarms ? 'farm' : needsHousing ? 'house' : null;
+  if (existing) {
+    const committed = world.reservations.some(r => r.siteId === existing.id);
+    if (!urgent || urgent === existing.kind || committed) return existing;
+    cancelSite(world, existing);
+  }
+  const kind = urgent ?? facilityOrder.find(type => !local.some(b => b.kind === type) &&
+    Object.entries(buildings[type].cost).every(([resource, quantity]) => available(store, resource) >= quantity));
   if (!kind) return null;
+  const reachableNodes = world.resourceNodes.filter(node => !node.dropped && findPath(world, origin, node) !== null);
   for (let radius = 1; radius <= 12; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -159,7 +164,7 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
         // Protect access to essential terrain and resources once the site becomes occupied.
         const probe = { ...world, buildings: [...world.buildings, footprintCandidate] };
         if (footprint(footprintCandidate, origin) ||
-            world.resourceNodes.some(node => !node.dropped && findPath(probe, origin, node) === null)) continue;
+            reachableNodes.some(node => findPath(probe, origin, node) === null)) continue;
         const site = planSite(world, settlement, kind, x, y);
         if (site) return site;
       }

@@ -8,6 +8,9 @@ export function updateNeeds(world, citizen, ticks) {
   const resting = citizen.action.kind === 'sleep';
   const delta = resting ? -NEEDS.restPerHour : NEEDS.fatiguePerHour;
   citizen.fatigue = Math.max(0, Math.min(100, citizen.fatigue + delta));
+  if (resting && citizen.hunger < NEEDS.eat) {
+    citizen.hp = Math.min(100, citizen.hp + NEEDS.healingPerHour);
+  }
   if (citizen.hunger === 100) citizen.hp = Math.max(0, citizen.hp - NEEDS.starvationDamage);
 }
 

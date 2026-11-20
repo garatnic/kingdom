@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
-import { buildAtSite, cancelSite, deliverMaterials, pickUpMaterials, planSite, reserveMaterials } from '../simulation/Construction.js';
+import { buildAtSite, cancelSite, deliverMaterials, pickUpMaterials, planSettlementConstruction, planSite, reserveMaterials } from '../simulation/Construction.js';
 import { workTicks } from '../data/buildings.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { findPath } from '../simulation/path.js';
@@ -89,4 +89,17 @@ test('cancellation releases reserved stone and drops in-transit wood once', () =
   assert.equal(store.total.stone, 10);
   assert.equal(store.total.wood + world.resourceNodes.find(n => n.dropped).quantity, 20);
   assert.equal(world.inTransit.length, 0);
+});
+
+test('an unfunded smithy cannot block the first farm', () => {
+  const world = createWorld('needs-first');
+  const [store] = world.stockpiles;
+  const [settlement] = world.settlements;
+  const site = planSite(world, settlement, 'smithy', 30, 30);
+  assert.ok(site);
+  assert.equal(reserveMaterials(world, site, store), false);
+  const next = planSettlementConstruction(world, settlement, store, store, world.citizens.length);
+  assert.equal(next.kind, 'farm');
+  assert.ok(!world.constructionSites.includes(site));
+  assert.equal(store.total.iron, 0);
 });

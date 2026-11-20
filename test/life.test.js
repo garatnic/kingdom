@@ -63,3 +63,16 @@ test('starvation records one death, preserves inventory as drops, and survives s
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   assert.deepEqual(restored, world);
 });
+
+test('injured residents recover during rest when adequately fed', () => {
+  const world = createWorld('recovery');
+  const worker = world.citizens[0];
+  worker.hp = 25;
+  worker.hunger = 20;
+  advanceFrame(world, 100);
+  assert.equal(worker.action.kind, 'sleep');
+  setSpeed(world, 20);
+  for (let i = 0; i < 35; i++) advanceFrame(world, 100);
+  assert.ok(worker.hp > 25);
+  assert.ok(worker.alive);
+});

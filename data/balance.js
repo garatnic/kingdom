@@ -50,7 +50,7 @@ export const LAYOUT = {
 export const GATHER_BATCH = 2;
 export const GATHER_TICKS = 60;
 export const NEED_HOUR_TICKS = 60 * TIME_TICKS_PER_MINUTE;
-export const NEEDS = { eat: 80, sleep: 85, fatiguePerHour: 2, restPerHour: 12, starvationDamage: 3 };
+export const NEEDS = { eat: 80, sleep: 85, fatiguePerHour: 2, restPerHour: 12, starvationDamage: 3, healingPerHour: 4, recoveryHp: 75 };
 export const NODE_RENEWAL_TICKS = { food: 8 * NEED_HOUR_TICKS, wood: TIME_TICKS_PER_DAY };
 
 export const ADULT_AGE = 16;

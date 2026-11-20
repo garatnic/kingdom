@@ -100,6 +100,21 @@ function checkBirth(world, parent, people) {
     nationId: child.nationId, settlementId: child.settlementId, ...tile });
 }
 
+function fillVacancies(world) {
+  for (const settlement of world.settlements) {
+    const adults = world.citizens.filter(c => c.alive && c.settlementId === settlement.id &&
+      ageYears(world, c) >= ADULT_AGE);
+    const priorities = ['farmer', 'builder', 'woodcutter', 'miner', 'adventurer'].slice(0, adults.length);
+    for (const role of priorities) {
+      if (adults.some(c => c.profession === role)) continue;
+      const candidate = adults.find(c => !world.inTransit.some(shipment => shipment.carrierId === c.id) &&
+        !world.quests.some(quest => quest.status === 'claimed' && quest.claimedBy === c.id) &&
+        (!priorities.includes(c.profession) || adults.filter(person => person.profession === c.profession).length > 1));
+      if (candidate) candidate.profession = role;
+    }
+  }
+}
+
 export function updatePopulation(world, ticks) {
   const daily = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) >
     Math.floor((world.worldTimeTick - ticks) / TIME_TICKS_PER_DAY);
@@ -117,7 +132,10 @@ export function updatePopulation(world, ticks) {
     }
     birthDue ||= citizen.nextBirthCheckTick <= world.worldTimeTick;
   }
-  if (daily) dailyRelationships(world, world.citizens);
+  if (daily) {
+    fillVacancies(world);
+    dailyRelationships(world, world.citizens);
+  }
   if (!birthDue) return;
   const people = new Map(world.citizens.map(c => [c.id, c]));
   for (const citizen of people.values()) checkBirth(world, citizen, people);

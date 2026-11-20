@@ -1,7 +1,7 @@
 # Kingdom Observer Ver.0.1 開発進捗
 
-- 最終更新日時：2026-11-21 01:38 JST
-- 最新コミット：このファイルの [履歴](https://github.com/garatnic/kingdom/commits/main/DEVELOPMENT_STATUS.md) の先頭。今回の基点は `45fc0e1`。
+- 最終更新日時：2026-11-21 01:42 JST
+- 最新コミット：このファイルの [履歴](https://github.com/garatnic/kingdom/commits/main/DEVELOPMENT_STATUS.md) の先頭。今回の基点は `7009ae0`。
 - 現在地：第6段階。3シードの長期論理テストと経路探索の改善を実施。ブラウザ受入と実時間安定性を確認中。
 - 全体進捗：完了 **22 / 24 項目（92%）**。下表の完了件数を分子とし、保留・作業中は数えない。
 
@@ -36,14 +36,14 @@
 
 | コマンド | 結果 | 再現・修正状況 |
 |---|---|---|
-| `npm test` | 25合格、0失敗 | 基盤6件、生活3件、建築4件、家族3件、冒険3件、国家・研究3件、観察・介入3件。標準・障害地形・0のシードで採集、食事、睡眠を確認 |
+| `npm test` | 28合格、0失敗 | 基盤6件、生活4件、建築5件、家族3件、冒険4件、国家・研究3件、観察・介入3件。標準・障害地形・0のシードで採集、食事、睡眠を確認 |
 | `npm run test:browser` | 実行1件が環境エラー、画面検証0件 | Chromium起動で `socket() failed: Operation not permitted`。アプリの画面到達前。別の実行環境で再試行 |
 | `npm run test:integration` | 4合格、0失敗 | [測定結果](test/results/verification.json)。各シードの保存復元・継続再現性と資源・ID・所属を検証 |
-| 30-minute browser stability | 再実行中 | 初回はDevToolsの起動前に失敗。Headless Shellに切り替え、実時間30分・1倍速・自動保存・描画フレーム数を測る |
+| 30-minute browser stability | 再実行中 | 初回はDevTools起動前に失敗、2回目はUbuntu 26.04でのブラウザ導入に失敗。Ubuntu 24.04に固定して再実行し、実時間30分・1倍速・自動保存・描画フレーム数を測る |
 
 ## 再開
 
-1. 30-minute browser stability の実時間テストと描画フレーム数を確認する。Chrome初回はDevTools起動前に失敗し、専用ランナーをHeadless Shellに変更済み。
+1. 30-minute browser stability の実時間テストと描画フレーム数を確認する。通常のブラウザ受入とは別に専用ランナーをUbuntu 24.04のHeadless Shellへ変更した。
 2. 成功したコミットの測定結果を台帳へ反映し、仕様02・13の最終判定を行う。
 3. 第1段階の旧JSONには物資置場座標がない。住民AIの集落基準の補完を保持する。
 4. 各再開時はこの台帳→GitHub最新コミット→未完了・不具合→関連仕様→コード・テストの順に確認する。機能完了、テスト結果や不具合の変化、終了前に表を更新する。
@@ -62,3 +62,5 @@
 - `4ac6d6a` の [Actions実行](https://github.com/garatnic/kingdom/actions/runs/44773098989) が成功し、幅390 CSS pxのモバイル相当表示とタップにも合格。スマホ実機は未使用。
 
 - `45fc0e1` の [Actions実行](https://github.com/garatnic/kingdom/actions/runs/44774818483) はブラウザ・ビルド・公開とも合格。公開版で世界史と介入メニューの表示も確認した。
+
+- 長期試行で、資材が足りない施設が着工待ちになると住宅・食料の優先需要が停滞しうることを確認。未着工現場の優先順、建築資材の確認、必須職欠員の補充を修正した。冒険者の休息回復も追加。

@@ -3,6 +3,7 @@ import { random } from '../engine/random.js';
 import { findPath } from './path.js';
 import { available, deposit, freeCapacity, harvest, renewNodes, resources } from './Economy.js';
 import { eat, updateNeeds } from './Needs.js';
+import { COMBAT } from '../data/combat.js';
 import { FARM_HARVEST_TICKS, FARM_YIELD } from '../data/buildings.js';
 import {
   buildAtSite, deliverMaterials, materialsDelivered, pickUpMaterials, planSettlementConstruction,
@@ -76,7 +77,7 @@ function chooseRoute(world, citizen, store, population) {
   }
   if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0 &&
       travel(world, citizen, storeTile(world, store), 'eat', store.id)) return;
-  if (citizen.fatigue >= NEEDS.sleep) {
+  if (citizen.fatigue >= NEEDS.sleep || (citizen.hp <= COMBAT.retreatHp && citizen.hunger < NEEDS.eat)) {
     citizen.action = { ...idle(world.worldTimeTick), kind: 'sleep', phase: 'perform' };
     return;
   }
@@ -125,7 +126,8 @@ function perform(world, citizen, store, ticks) {
     const quest = world.quests.find(q => q.id === action.targetId);
     if (adventure(world, citizen, quest, store)) return;
   }
-  if (action.kind === 'sleep' && citizen.fatigue > 20) {
+  if (action.kind === 'sleep' &&
+      (citizen.fatigue > 20 || (citizen.hp < NEEDS.recoveryHp && citizen.hunger < NEEDS.eat))) {
     if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0) {
       travel(world, citizen, storeTile(world, store), 'eat', store.id);
     }
@@ -211,11 +213,12 @@ export function updateCitizens(world, ticks) {
       chooseRoute(world, citizen, store, population.get(citizen.settlementId));
     }
 
+    const work = citizen.fatigue >= 100 ? ticks / 2 : ticks;
     if (citizen.action.phase === 'perform') {
-      perform(world, citizen, store, ticks);
+      perform(world, citizen, store, work);
       continue;
     }
-    let remaining = ticks;
+    let remaining = work;
     while (remaining > 0 && citizen.action.phase === 'travel') {
       const action = citizen.action;
       const [target] = action.path;

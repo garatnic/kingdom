@@ -21,8 +21,8 @@
       },
       "expectedWorldTimeTick": 216000,
       "measuredWorldTimeTick": 216000,
-      "averageSimulationStepMs": 0.095,
-      "largestStepMs": 321.942,
+      "averageSimulationStepMs": 0.065,
+      "largestStepMs": 47.468,
       "population": 12,
       "nations": 1,
       "worldEvents": {
@@ -30,7 +30,7 @@
         "birth": 0,
         "death": 0,
         "research_unlocked": 4,
-        "adventureReturned": 7
+        "adventureReturned": 30
       },
       "invariantViolations": 0,
       "result": "pass"
@@ -55,8 +55,8 @@
       },
       "expectedWorldTimeTick": 864000,
       "measuredWorldTimeTick": 864000,
-      "averageSimulationStepMs": 1.515,
-      "largestStepMs": 178.884,
+      "averageSimulationStepMs": 1.368,
+      "largestStepMs": 47.721,
       "population": 12,
       "nations": 1,
       "worldEvents": {
@@ -64,7 +64,7 @@
         "birth": 0,
         "death": 0,
         "research_unlocked": 4,
-        "adventureReturned": 7
+        "adventureReturned": 121
       },
       "invariantViolations": 0,
       "result": "pass"
@@ -89,8 +89,8 @@
       },
       "expectedWorldTimeTick": 864000,
       "measuredWorldTimeTick": 864000,
-      "averageSimulationStepMs": 1.266,
-      "largestStepMs": 100.637,
+      "averageSimulationStepMs": 1.246,
+      "largestStepMs": 85.021,
       "population": 13,
       "nations": 1,
       "worldEvents": {
@@ -98,7 +98,7 @@
         "birth": 1,
         "death": 0,
         "research_unlocked": 4,
-        "adventureReturned": 6
+        "adventureReturned": 122
       },
       "invariantViolations": 0,
       "result": "pass"
@@ -123,8 +123,8 @@
       },
       "expectedWorldTimeTick": 864000,
       "measuredWorldTimeTick": 864000,
-      "averageSimulationStepMs": 1.316,
-      "largestStepMs": 30.777,
+      "averageSimulationStepMs": 1.393,
+      "largestStepMs": 37.238,
       "population": 13,
       "nations": 1,
       "worldEvents": {
@@ -132,7 +132,7 @@
         "birth": 1,
         "death": 0,
         "research_unlocked": 4,
-        "adventureReturned": 6
+        "adventureReturned": 119
       },
       "invariantViolations": 0,
       "result": "pass"
