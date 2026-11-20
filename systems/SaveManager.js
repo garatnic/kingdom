@@ -1,10 +1,11 @@
+import { FAR_MOVEMENT_STEPS } from '../simulation/DetailLevel.js';
 import { resources } from '../simulation/Economy.js';
 import { NATIONS } from '../data/nations.js';
 import { monsters } from '../data/combat.js';
 import { technologies } from '../data/technologies.js';
 import { buildings, footprint } from '../data/buildings.js';
 import { validWorldDimension } from '../engine/Expansion.js';
-import { SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
+import { SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS, TICKS_PER_STEP_AT_1X } from '../data/balance.js';
 
 const VERSION = 1;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -130,6 +131,8 @@ function validate(world) {
 
 function validRoute(citizen, passable, terrainAt, navigationVersion) {
   const { action } = citizen;
+  if (action.deferredMovement !== undefined &&
+      (action.kind !== 'explore' || !integer(action.deferredMovement, 0, FAR_MOVEMENT_STEPS * TICKS_PER_STEP_AT_1X - 1))) return false;
   if (Number.isInteger(action.navigationVersion) && action.navigationVersion < navigationVersion) {
     // The next simulation step replans from the saved safe tile before advancing.
     return Number.isInteger(action.goal?.x) && Number.isInteger(action.goal?.y);

@@ -1,3 +1,4 @@
+import { LIFE_CREATION_LIMIT } from '../simulation/DetailLevel.js';
 import { LAYOUT, TERRAIN_COST, TIME_TICKS_PER_YEAR } from '../data/balance.js';
 import { footprint } from '../data/buildings.js';
 import { monsters } from '../data/combat.js';
@@ -10,7 +11,6 @@ import { emitOnce } from './History.js';
 
 const races = ['human', 'elf', 'dwarf'];
 const scope = 8;
-const maximumCreatedPopulation = 100;
 const sumDistance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const cell = person => person.lastKnownSafeTile ?? person;
 const same = (a, b) => a.x === b.x && a.y === b.y;
@@ -107,7 +107,7 @@ export function applyGodCommand(world, command) {
       world.resourceNodes.push({ id: nextId(world, 'node'), resource: value, quantity, ...tile, dropped: true });
     } else {
       if (kind === 'life' && !races.includes(value) || kind === 'monster' && !Object.hasOwn(monsters, value)) return 'INVALID_KIND';
-      const limit = kind === 'life' ? maximumCreatedPopulation : monsters[value].cap;
+      const limit = kind === 'life' ? LIFE_CREATION_LIMIT : monsters[value].cap;
       const count = kind === 'life' ? world.citizens.filter(c => c.alive).length :
         world.monsters.filter(m => m.alive && m.species === value).length;
       if (count + quantity > limit) return 'LIMIT_REACHED';

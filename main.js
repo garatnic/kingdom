@@ -68,7 +68,7 @@ function frame(now) {
     godQueue = [];
     endTerrainEdit();
   }
-  advanceFrame(world, elapsed, document.hidden);
+  advanceFrame(world, elapsed, document.hidden, camera);
   lastTime = now;
   showReadouts();
   viewer.render();

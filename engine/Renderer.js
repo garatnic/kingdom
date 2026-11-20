@@ -88,7 +88,15 @@ export class Renderer {
       ctx.fillRect(x + 2, y - 3, 2, 2);
     }
     const citizens = world.citizens.filter(c => c.alive && visible(c)).sort((a, b) => a.y - b.y);
-    for (const c of citizens) this.citizen(c, world.worldTimeTick, world.quests.find(q => q.id === c.action.targetId));
+    for (const c of citizens) {
+      if (camera.zoom <= 0.65) {
+        ctx.fillStyle = clothes[c.race];
+        ctx.fillRect(c.x * TILE - 3, c.y * TILE - 3, 6, 6);
+      } else {
+        const quest = c.action.kind === 'adventure' ? world.quests.find(q => q.id === c.action.targetId) : undefined;
+        this.citizen(c, world.worldTimeTick, quest);
+      }
+    }
   }
 
   tile(x, y, terrain) {

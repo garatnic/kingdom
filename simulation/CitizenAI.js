@@ -1,5 +1,6 @@
 import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, NEEDS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
+import { movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
 import { findPath } from './path.js';
 import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom } from './Economy.js';
@@ -186,7 +187,7 @@ function perform(world, citizen, store, ticks, population) {
   citizen.action = idle(world.worldTimeTick);
 }
 
-export function updateCitizens(world, ticks) {
+export function updateCitizens(world, ticks, camera) {
   renewNodes(world);
   const population = new Map();
   for (const c of world.citizens) {
@@ -215,6 +216,7 @@ export function updateCitizens(world, ticks) {
       citizen.y = safe.y + 0.5;
       const path = findPath(world, safe, citizen.action.goal);
       if (path?.length) {
+        delete citizen.action.deferredMovement;
         Object.assign(citizen.action, { path, progress: 0, navigationVersion: world.map.navigationVersion });
       } else {
         citizen.action = path ? { ...citizen.action, phase: 'perform', progress: 0 } : idle(world.worldTimeTick);
@@ -232,7 +234,7 @@ export function updateCitizens(world, ticks) {
       perform(world, citizen, store, work, population.get(citizen.settlementId));
       continue;
     }
-    let remaining = work;
+    let remaining = citizen.action.phase === 'travel' ? movementBudget(citizen, camera, work) : 0;
     while (remaining > 0 && citizen.action.phase === 'travel') {
       const action = citizen.action;
       const [target] = action.path;

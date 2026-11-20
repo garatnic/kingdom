@@ -9,7 +9,7 @@ import { updateNations } from '../simulation/Nations.js';
 import { updateResearch } from '../simulation/Research.js';
 import { updatePopulation } from '../simulation/Population.js';
 
-export function advanceFrame(world, elapsedMs, hidden = false) {
+export function advanceFrame(world, elapsedMs, hidden = false, camera) {
   if (hidden || !world.gameSpeed) return;
   world.tickRemainder += Math.min(MAX_FRAME_MS, Math.max(0, elapsedMs));
   let steps = 0;
@@ -20,7 +20,7 @@ export function advanceFrame(world, elapsedMs, hidden = false) {
     for (let i = 0; i < world.gameSpeed; i++) {
       world.worldTimeTick += TICKS_PER_STEP_AT_1X;
       updateAdventureWorld(world, TICKS_PER_STEP_AT_1X);
-      updateCitizens(world, TICKS_PER_STEP_AT_1X);
+      updateCitizens(world, TICKS_PER_STEP_AT_1X, camera);
       updatePopulation(world, TICKS_PER_STEP_AT_1X);
       updateNations(world, TICKS_PER_STEP_AT_1X);
       updateResearch(world, TICKS_PER_STEP_AT_1X);
