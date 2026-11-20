@@ -1,7 +1,7 @@
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { nextId } from './Identity.js';
 import { available, freeCapacity } from './Economy.js';
-import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
+import { FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
@@ -152,7 +152,8 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const farms = local.filter(b => b.kind === 'farm').length;
   const housing = local.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
   const hasCouples = world.citizens.some(c => c.alive && c.settlementId === settlement.id && c.partnerId);
-  const needsHousing = housing < population || (hasCouples && housing === population);
+  const growthReserve = population >= 16 && available(store, 'food') >= population * FOOD_BIRTH_PER_PERSON ? 2 : 0;
+  const needsHousing = housing < population + growthReserve || (hasCouples && housing === population);
   const policy = world.nations.find(n => n.id === settlement.nationId)?.policy.primary;
   const facilityOrder = policy === 'defense'
     ? ['warehouse', 'barracks', 'smithy', 'guild'] : ['warehouse', 'smithy', 'guild', 'barracks'];
@@ -162,7 +163,7 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
       (policy === 'food' && available(store, 'food') < population * 4) ||
       (farms < TECH.farmEraFarms && local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
         unlocked(world, settlement.id, 'farming_1')));
-  const emergencySpace = population * FOOD_EMERGENCY_PER_PERSON;
+  const emergencySpace = population * (population >= 24 ? FOOD_BIRTH_PER_PERSON : FOOD_EMERGENCY_PER_PERSON);
   const cramped = freeCapacity(store) + store.total.food < emergencySpace;
   const urgent = cramped ? 'warehouse' : farms === 0 || requiresFarms ? 'farm' : needsHousing ? 'house' : null;
   if (existing) {

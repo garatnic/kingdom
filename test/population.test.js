@@ -34,7 +34,7 @@ test('birth consumes one annual draw, preserves reciprocal family on reload, and
   const partner = world.citizens.find(c => c.id === parent.partnerId);
   for (const c of world.citizens) if (c !== parent) delete c.nextBirthCheckTick;
   world.stockpiles[0].total.food = 36;
-  world.buildings[0].capacity = 5;
+  world.buildings[0].capacity = world.citizens.length + 1;
   world.rngState = [1, 1, 1, 1];
   world.worldTimeTick = parent.nextBirthCheckTick;
   updatePopulation(world, 12);
@@ -84,7 +84,7 @@ test('an expanded and connected world admits migrants only with food and spare h
   updatePopulation(world, 12);
   assert.equal(world.citizens.length, 12);
   store.total.food = 45;
-  home.capacity++;
+  home.capacity = world.citizens.length + 1;
   world.worldTimeTick = 60 * TIME_TICKS_PER_DAY;
   updatePopulation(world, 12);
   const migrant = world.citizens.at(-1);
@@ -113,4 +113,17 @@ test('food shortages in larger settlements add a farmer and retain essential job
   updatePopulation(world, 12);
   assert.equal(world.citizens.filter(c => c.profession === 'farmer').length, 2);
   assert.ok(jobs.every(role => world.citizens.some(c => c.profession === role)));
+});
+
+test('vacant housing is reassigned to unhoused residents without exceeding capacity', () => {
+  const world = createWorld('housing');
+  const house = world.buildings.find(b => b.kind === 'house');
+  const initialResidents = world.citizens.filter(c => c.homeBuildingId === house.id);
+  const unhoused = world.citizens.find(c => !c.homeBuildingId);
+  assert.equal(initialResidents.length, house.capacity);
+  initialResidents[0].alive = false;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  assert.equal(unhoused.homeBuildingId, house.id);
+  assert.equal(world.citizens.filter(c => c.alive && c.homeBuildingId === house.id).length, house.capacity);
 });

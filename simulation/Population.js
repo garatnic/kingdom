@@ -149,6 +149,22 @@ function fillVacancies(world) {
   }
 }
 
+function fillVacantHomes(world) {
+  const occupancy = new Map();
+  for (const citizen of world.citizens) {
+    if (!citizen.alive || !citizen.homeBuildingId) continue;
+    occupancy.set(citizen.homeBuildingId, (occupancy.get(citizen.homeBuildingId) ?? 0) + 1);
+  }
+  for (const citizen of world.citizens) {
+    if (!citizen.alive || citizen.homeBuildingId || !citizen.settlementId) continue;
+    const house = world.buildings.find(b => b.kind === 'house' && b.settlementId === citizen.settlementId &&
+      (occupancy.get(b.id) ?? 0) < b.capacity);
+    if (!house) continue;
+    citizen.homeBuildingId = house.id;
+    occupancy.set(house.id, (occupancy.get(house.id) ?? 0) + 1);
+  }
+}
+
 function admitMigrant(world) {
   const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
   if (day < 30 || day % 15 !== 0) return;
@@ -197,6 +213,7 @@ export function updatePopulation(world, ticks) {
   }
   if (daily) {
     fillVacancies(world);
+    fillVacantHomes(world);
     dailyRelationships(world, world.citizens);
     admitMigrant(world);
   }
