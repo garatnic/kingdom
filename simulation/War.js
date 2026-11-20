@@ -2,6 +2,7 @@ import { ADULT_AGE, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { available, freeCapacity } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
+import { unlocked } from './Research.js';
 import { findPath } from './path.js';
 
 const WAR = { hostility: -60, unitCount: 3, foodPerUnit: 8, marchDays: 3, siegeDays: 5, occupationDays: 3, truceDays: 10 };
@@ -72,12 +73,42 @@ function occupy(world, campaign, attacker, defender) {
   }
 }
 
+function fightFieldBattle(world, campaign, attackers, defender) {
+  const militia = world.citizens.filter(c => c.alive && c.nationId === defender.id &&
+    c.settlementId === campaign.settlementId && ageYears(world, c) >= ADULT_AGE && c.hp >= 50 &&
+    !c.expeditionId && !world.quests.some(q => q.claimedBy === c.id && q.status === 'claimed') &&
+    Math.abs(c.lastKnownSafeTile.x - campaign.x) + Math.abs(c.lastKnownSafeTile.y - campaign.y) <= 8);
+  if (militia.length < 2) return true;
+  const strength = group => group.reduce((sum, c) => {
+    const weapons = unlocked(world, c.settlementId, 'weapons_1') ? 1.5 : 0;
+    return sum + (2 + c.skills.combat + c.traits.bravery + weapons) * c.hp / 100;
+  }, 0);
+  const attack = strength(attackers);
+  const defense = strength(militia);
+  const attackerWon = attack > defense;
+  const wound = (group, opposingStrength, lost) => {
+    const damage = Math.min(45, Math.ceil(opposingStrength / group.length * (lost ? 7 : 4)));
+    for (const citizen of group) citizen.hp = Math.max(1, citizen.hp - damage);
+  };
+  wound(attackers, defense, !attackerWon);
+  wound(militia, attack, attackerWon);
+  emitOnce(world, campaign.id, 'fieldBattle', {
+    x: campaign.x, y: campaign.y, nationIds: [campaign.attackerId, defender.id],
+    actorIds: [...attackers, ...militia].map(c => c.id), winnerId: attackerWon ? campaign.attackerId : defender.id
+  });
+  return attackerWon;
+}
+
 function resolveCampaign(world, campaign, attacker, defender) {
   const team = world.citizens.filter(c => c.alive && c.nationId === attacker.id && campaign.memberIds.includes(c.id));
   const present = team.filter(c => campaign.arrivedIds.includes(c.id) &&
     Math.abs(c.lastKnownSafeTile.x - campaign.x) + Math.abs(c.lastKnownSafeTile.y - campaign.y) <= 2);
   if (campaign.status === 'marching') {
     if (team.length >= 2 && present.length === team.length) {
+      if (!fightFieldBattle(world, campaign, present, defender)) {
+        campaign.status = 'repelled';
+        return;
+      }
       campaign.status = 'siege';
       emitOnce(world, campaign.id, 'siegeStarted', { x: campaign.x, y: campaign.y, nationIds: [attacker.id, defender.id] });
     } else if (team.length < 2 || world.worldTimeTick - campaign.beganAt >= WAR.marchDays * TIME_TICKS_PER_DAY) {

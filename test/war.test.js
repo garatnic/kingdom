@@ -96,3 +96,28 @@ test('two defeats between the same nations lead to peace and neutral relations',
   updateWar(restored);
   assert.equal(restored.campaigns.length, 2);
 });
+
+test('a defending militia can repel the invading force in a field battle before the siege', async () => {
+  const { world, invader, defender } = twoNations();
+  const militia = world.citizens.filter(c => c.nationId === defender.id);
+  for (const citizen of militia) {
+    citizen.lastKnownSafeTile = { x: 13, y: 13 };
+    citizen.x = citizen.y = 13.5;
+    citizen.skills.combat = 10;
+  }
+  updateWar(world);
+  const [campaign] = world.campaigns;
+  for (const citizen of world.citizens.filter(c => campaign.memberIds.includes(c.id))) {
+    citizen.lastKnownSafeTile = { x: 13, y: 13 };
+    campaign.arrivedIds.push(citizen.id);
+  }
+  updateWar(world);
+  assert.equal(campaign.status, 'repelled');
+  assert.equal(campaign.siegeDays, 0);
+  const battle = world.events.find(e => e.type === 'fieldBattle');
+  assert.equal(battle.winnerId, defender.id);
+  assert.deepEqual(battle.nationIds, [invader.id, defender.id]);
+  assert.equal(battle.actorIds.length, 5);
+  assert.ok(militia.every(c => c.hp < 100 && c.alive));
+  assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
+});
