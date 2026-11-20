@@ -10,7 +10,7 @@ const professions = ['farmer', 'farmer', 'woodcutter', 'miner', 'builder', 'adve
 const names = ['アルディン', 'ミラ', 'ドルン', 'リナ', 'フィア', 'バルド',
   'ノア', 'エリン', 'ガレン', 'セラ', 'イリス', 'トルン'];
 
-function nextId(world, kind) {
+export function nextId(world, kind) {
   const next = world.idCounters[kind] ?? 1;
   world.idCounters[kind] = next + 1;
   return `${kind}:${next}`;
@@ -79,7 +79,7 @@ export function createWorld(seed) {
     }
   }
   const inventory = Object.fromEntries(Object.keys(LAYOUT.provisions).map(resource => [resource, 0]));
-  world.stockpiles.push({ id: nextId(world, 'stockpile'), settlementId, capacity: LAYOUT.stockpileCapacity,
+  world.stockpiles.push({ id: nextId(world, 'stockpile'), settlementId, ...origin, capacity: LAYOUT.stockpileCapacity,
     total: { ...LAYOUT.provisions }, reserved: { ...inventory } });
 
   const spawn = [];

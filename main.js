@@ -12,10 +12,17 @@ let camera = createCamera(world);
 let lastTime = null;
 let lastSpeed = 1;
 
-function showState() {
+function showReadouts() {
   const time = calendar(world.worldTimeTick);
   if (get('clock').textContent !== time) get('clock').textContent = time;
-  get('population').textContent = `住民 ${world.citizens.filter(c => c.alive).length}人`;
+  const population = `住民 ${world.citizens.filter(c => c.alive).length}人`;
+  if (get('population').textContent !== population) get('population').textContent = population;
+  const food = `食料 ${world.stockpiles.reduce((sum, store) => sum + store.total.food - store.reserved.food, 0)}`;
+  if (get('food').textContent !== food) get('food').textContent = food;
+}
+
+function showState() {
+  showReadouts();
   get('nations').textContent = `国家 ${world.nations.length}`;
   for (const button of get('speeds').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(Number(button.dataset.speed) === world.gameSpeed));
@@ -25,8 +32,7 @@ function showState() {
 function frame(now) {
   advanceFrame(world, lastTime === null ? 0 : now - lastTime, document.hidden);
   lastTime = now;
-  const time = calendar(world.worldTimeTick);
-  if (get('clock').textContent !== time) get('clock').textContent = time;
+  showReadouts();
   renderer.draw(world, camera);
   requestAnimationFrame(frame);
 }

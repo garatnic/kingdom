@@ -63,10 +63,10 @@ function validate(world) {
   for (const c of world.citizens) {
     const action = c.action;
     if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || c.settlementId !== settlement.id ||
-        c.nationId !== null || c.alive !== true ||
+        c.nationId !== null || typeof c.alive !== 'boolean' ||
         (c.homeBuildingId !== null && !world.buildings.some(b => b.id === c.homeBuildingId)) ||
         !integer(c.decisionAt, 0) || !passable(c.lastKnownSafeTile) ||
-        !action || !['plan', 'travel'].includes(action.phase) ||
+        !action || !['plan', 'travel', 'perform'].includes(action.phase) ||
         (action.phase === 'travel' && !validRoute(c, passable, terrainAt, map.navigationVersion))) {
       throw new Error('保存データの住民・経路が無効です。');
     }
