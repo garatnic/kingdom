@@ -48,3 +48,16 @@ ID、表示名、カテゴリ、前提条件、コスト、効果、更新間隔
 - 時刻フィールドは `worldTimeTick`、出生は `birthWorldTimeTick`、年次抽選は `nextBirthCheckTick`。`worldMinute` 等の旧名称は使用しない。
 - 研究の資源条件は倉庫の利用可能在庫のみ。建築資材予約と共有しない。
 - 初期資源0でも、鉄/魔石ノードと鉱夫の採掘により研究へ到達可能とする。
+
+## Ver.0.1 実装時の追加共通契約【暫定】
+- 時刻は整数 `worldTimeTick`、1tick=ゲーム内0.1分。ゲーム内1日は14,400tick、1年432,000tick。固定100ms実時間ステップで通常12tick進める。
+- `rngState` は4つの符号なし32bit整数（xoshiro128**）を保存。seedから初期化、全て0は禁止。乱数呼出順を固定するため、シミュレーション内で `Math.random()` を禁止。
+- `idCounters` は種別ごとに次に割り当てる正整数を保持。IDは `citizen:1` 等の形式で、削除後も再利用しない。
+- 数値資源は整数非負、位置はタイル単位の有限数。倉庫の `available=total-reserved` を満たす。
+- 倉庫の予約は `reservationId,siteId,resource,quantity,state`、輸送は `shipmentId,sourceId,destinationId,carrierId,resource,quantity,state`。状態は `reserved→inTransit→delivered` または `cancelled`。同一数量を複数状態で現物計上しない。
+- 生存住民の `settlementId` はnullまたは存在集落。 `nationId` は所属集落の国家IDと一致。開拓隊移動中は `settlementId=null,nationId=null,expeditionId` を持ち、元所属は遠征レコードで保持。
+- 研究は `researchOwnerId` で一意の正本へ接続。国家成立時は集落から国家へ移管し二重加算しない。
+- 出生の `nextBirthCheckTick` は年次抽選期限。親の生死・婚姻状態・備蓄条件をその時点で検証し、未達でも期限を1年先へ進める。再ロードで同じ抽選を再実行しない。
+- すべてのゲーム状態変更は固定tick境界のコマンド/トランザクションで確定。UIアニメーションとHistoryは副作用の表示であり、資源/HP/人口の正本を変更しない。
+- JSONセーブの正規化はキーを辞書順に並べ、配列は定義された順序（実体ID順、履歴は発行順）に保持、NaN/Infinity/undefinedを拒否しUTF-8でSHA-256。チェックサム欄自体はハッシュ対象外。
+- セーブは同じschemaVersionの検証済みデータのみロード。将来バージョン移行は純関数で追加する。
