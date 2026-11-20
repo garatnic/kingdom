@@ -158,8 +158,9 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const facilityOrder = policy === 'defense'
     ? ['warehouse', 'barracks', 'smithy', 'guild'] : ['warehouse', 'smithy', 'guild', 'barracks'];
   const farmTarget = Math.max(TECH.farmEraFarms, Math.ceil(population / 8));
+  const farmReserve = population >= 32 ? FOOD_BIRTH_PER_PERSON : FOOD_EMERGENCY_PER_PERSON;
   const requiresFarms = farms < farmTarget &&
-    (available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON ||
+    (available(store, 'food') < population * farmReserve ||
       (policy === 'food' && available(store, 'food') < population * 4) ||
       (farms < TECH.farmEraFarms && local.some(b => b.kind === 'warehouse') && population >= TECH.farmEraPopulation &&
         unlocked(world, settlement.id, 'farming_1')));

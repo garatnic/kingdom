@@ -1,5 +1,5 @@
 import { monsters } from '../data/combat.js';
-import { TILE, citizenRaces } from '../data/balance.js';
+import { NEED_HOUR_TICKS, TILE, citizenRaces } from '../data/balance.js';
 
 const colors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
 const resourceColors = { food: '#d88479', wood: '#99bb72', stone: '#bbc5c1', iron: '#db926b', manaStone: '#c6a7e8' };
@@ -110,6 +110,21 @@ export class Renderer {
         const quest = c.action.kind === 'adventure' ? world.quests.find(q => q.id === c.action.targetId) : undefined;
         this.citizen(c, world.worldTimeTick, quest);
       }
+    }
+
+    const battleDisplayTicks = 2 * NEED_HOUR_TICKS;
+    for (let i = world.events.length - 1; i >= 0; i--) {
+      const event = world.events[i];
+      const elapsed = world.worldTimeTick - event.worldTimeTick;
+      if (elapsed >= battleDisplayTicks) break;
+      if (event.type !== 'fieldBattle' || !visible(event)) continue;
+      const x = (event.x + 0.5) * TILE;
+      const y = (event.y + 0.5) * TILE;
+      const radius = 18 + Math.floor(elapsed / battleDisplayTicks * 12);
+      ctx.strokeStyle = event.winnerId === event.nationIds[0] ? '#e89a67' : '#f4d889';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - radius, y - radius, 2 * radius, 2 * radius);
+      ctx.lineWidth = 1;
     }
   }
 

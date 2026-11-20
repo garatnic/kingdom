@@ -43,6 +43,9 @@ export function deposit(worker, store, foodTarget = 0) {
 
 export function renewNodes(world) {
   for (const node of world.resourceNodes) {
+    if (node.resource === 'stone' && !node.dropped && node.quantity === 0 && node.renewAt === undefined) {
+      node.renewAt = world.worldTimeTick + NODE_RENEWAL_TICKS.stone;
+    }
     if (node.renewAt !== undefined && world.worldTimeTick >= node.renewAt) {
       node.quantity = LAYOUT.nodes.find(([resource]) => resource === node.resource)[2];
       delete node.renewAt;

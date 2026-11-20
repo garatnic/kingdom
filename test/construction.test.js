@@ -135,3 +135,14 @@ test('a growing settlement plans food production beyond its first two farms', ()
   store.capacity += 100;
   assert.equal(planSettlementConstruction(world, settlement, store, store, 24)?.kind, 'farm');
 });
+
+test('a large settlement below the family food reserve plans an additional farm', () => {
+  const world = createWorld('farm-reserve');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('grass');
+  store.capacity = 200;
+  store.total.food = 80;
+  world.buildings.push({ ...world.buildings[0], kind: 'farm', x: settlement.x + 3, y: settlement.y + 2 });
+  assert.equal(planSettlementConstruction(world, settlement, store, store, 32).kind, 'farm');
+});

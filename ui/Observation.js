@@ -117,6 +117,10 @@ export function observation(getWorld, getCamera, focus) {
 
   function showEvent(world, event) {
     let title = events[event.type] ?? event.type;
+    if (event.type === 'fieldBattle') {
+      const winner = world.nations.find(n => n.id === event.winnerId);
+      if (winner) title += '（勝利 ' + winner.name + '）';
+    }
     if (event.type === 'civilizationAdvanced') title = civilizationNames[event.civilization] + 'へ進展';
     if (event.type === 'god_intervention' && event.kind === 'blessing') title = '回復の祝福（' + event.quantity + '人）';
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
