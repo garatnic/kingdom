@@ -5,7 +5,7 @@
 `engine/GameLoop,World,Camera,Renderer`、`simulation/CitizenAI,Economy,Construction,Combat,NationAI,Research`、`systems/Events,History,GodPowers,SaveManager`、`data/races,buildings,technologies,balance`、`ui/HUD,Inspector`。
 
 ## 時間の単一ソース
-`worldTime` は整数精度の内部時間。1年=30日、通常速度で実時間120秒=ゲーム内1日（03の暫定値）。AI/経済/人口/国家はすべてこの時間を参照し、描画フレーム数を直接参照しない。速度変更時も同じシミュレーションイベント順を守る。
+`worldTimeTick` は整数精度の唯一の内部時間（1 tick=ゲーム内0.1分）。1年=30日、通常速度で実時間120秒=ゲーム内1日（03の暫定値）。AI/経済/人口/国家はすべてこの時間を参照し、描画フレーム数を直接参照しない。速度変更時も同じシミュレーションイベント順を守る。
 
 ## 更新パイプライン
 1. 時間進行と期限到来イベント抽出
@@ -27,7 +27,7 @@ IDは `citizen:N`, `settlement:N`, `nation:N`, `building:N`, `node:N`, `event:N`
 - 単一スレッドのシミュレーションを初版の正本とし、Worker導入は後続。
 
 ## 保存
-`schemaVersion`, `worldTime`, `gameSpeed`, `rngState`, `idCounters`, `map`, `citizens`, `settlements`, `nations`, `resourceNodes`, `stockpiles`, `constructionSites`, `events`, `settings`。予約・輸送中の資源も保存。ロード後に参照整合性を検証する。
+`schemaVersion`, `worldTimeTick`, `gameSpeed`, `rngState`, `idCounters`, `map`, `citizens`, `settlements`, `nations`, `resourceNodes`, `stockpiles`, `constructionSites`, `events`, `settings`。予約・輸送中の資源も保存。ロード後に参照整合性を検証する。
 
 ## 遠景処理【将来】
 近景は個別AI、遠景は統計更新。集約前後で人物ID・家系・人口・在庫・重要履歴を保存する。詳細な集約/復元規則は未決定。
