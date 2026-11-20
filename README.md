@@ -16,6 +16,10 @@
 - [未決定事項](OPEN_QUESTIONS.md)
 - [変更履歴](CHANGELOG.md)
 
+## ブラウザ版
+
+公開先は [garatnic.github.io/kingdom](https://garatnic.github.io/kingdom/) です。公開・検証状況は [開発進捗](DEVELOPMENT_STATUS.md) を参照してください。
+
 ## 起動とテスト
 
 Node.js 22以降で `npm start` を実行し、ブラウザで [http://127.0.0.1:8080/](http://127.0.0.1:8080/) を開く。依存パッケージのインストールは不要。

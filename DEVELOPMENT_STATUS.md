@@ -1,7 +1,7 @@
 # Kingdom Observer Ver.0.1 開発進捗
 
-- 最終更新日時：2026-11-21 01:06 JST
-- 最新コミット：このファイルの [履歴](https://github.com/garatnic/kingdom/commits/main/DEVELOPMENT_STATUS.md) の先頭。今回の基点は `146be0b`。
+- 最終更新日時：2026-11-21 01:08 JST
+- 最新コミット：このファイルの [履歴](https://github.com/garatnic/kingdom/commits/main/DEVELOPMENT_STATUS.md) の先頭。今回の基点は `be7a80d`。
 - 現在地：第2段階。採集・運搬と欲求を固定刻みに接続済み。建築・家族が次。
 - 全体進捗：完了 **6 / 24 項目（25%）**。下表の完了件数を分子とし、保留・作業中は数えない。
 
@@ -46,3 +46,10 @@
 2. 畑の生産・建築の完了と食料収支をテストし、婚姻・出生・寿命を追加する。
 3. 第1段階の旧JSONには物資置場座標がない。住民AIの集落基準の補完を保持する。
 4. 各再開時はこの台帳→GitHub最新コミット→未完了・不具合→関連仕様→コード・テストの順に確認する。機能完了、テスト結果や不具合の変化、終了前に表を更新する。
+
+## GitHub Pages
+
+- 公開予定URLは [https://garatnic.github.io/kingdom/](https://garatnic.github.io/kingdom/)。
+- `main` 更新と手動実行に対応するPagesワークフローを追加。テストに通った静的ゲームファイルを配信対象にする。
+- GitHubのPages設定は未確認。CLIに認証がなく、ブラウザの設定ページは未ログイン状態で404。初回公開とPC・スマホ相当の表示・操作確認は未実施。
+- Pagesのソースに「GitHub Actions」を設定し、リポジトリのActionsでデプロイ結果を確認する。
