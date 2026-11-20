@@ -42,7 +42,8 @@ export const LAYOUT = {
     ['wood', 'forest', 20, 3, 0],
     ['stone', 'mountain', 30, 0, -3],
     ['iron', 'mountain', INITIAL_IRON_NODE_MIN_QTY, 3, -3],
-    ['manaStone', 'mountain', INITIAL_MANA_NODE_MIN_QTY, -3, -3]
+    ['manaStone', 'mountain', INITIAL_MANA_NODE_MIN_QTY, -3, -3],
+    ['stone', 'mountain', 30, -3, 3]
   ]
 };
 

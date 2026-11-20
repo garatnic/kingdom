@@ -3,6 +3,7 @@ import {
   MAGIC_AFFINITY_THRESHOLD, INITIAL_MAGIC_AFFINITY_MIN_COUNT
 } from '../data/balance.js';
 import { random, seedState } from './random.js';
+import { buildings, footprint } from '../data/buildings.js';
 import { findPath } from '../simulation/path.js';
 import { lifespan, nextId, professions } from '../simulation/Identity.js';
 
@@ -43,7 +44,9 @@ export function createWorld(seed) {
   const settlementId = nextId(world, 'settlement');
   world.settlements.push({ id: settlementId, x: center, y: center, nationId: null });
   const houseId = nextId(world, 'building');
-  world.buildings.push({ id: houseId, kind: 'house', settlementId, x: center, y: center, capacity: LAYOUT.houseCapacity });
+  const house = { id: houseId, kind: 'house', settlementId, x: center, y: center,
+    width: buildings.house.width, height: buildings.house.height, capacity: LAYOUT.houseCapacity, state: 'active' };
+  world.buildings.push(house);
 
   for (let dy = -LAYOUT.spawnRadius; dy <= LAYOUT.spawnRadius; dy++) {
     for (let dx = -LAYOUT.spawnRadius; dx <= LAYOUT.spawnRadius; dx++) {
@@ -51,7 +54,7 @@ export function createWorld(seed) {
     }
   }
 
-  const origin = { x: center + 1, y: center };
+  const origin = { x: center + 1, y: center - 1 };
   for (const [resource, terrain, quantity, dx, dy] of LAYOUT.nodes) {
     const node = { id: nextId(world, 'node'), resource, quantity, x: center + dx, y: center + dy };
     set(node.x, node.y, terrain);
@@ -79,7 +82,8 @@ export function createWorld(seed) {
   const spawn = [];
   for (let dy = -LAYOUT.spawnRadius; dy <= LAYOUT.spawnRadius; dy++) {
     for (let dx = -LAYOUT.spawnRadius; dx <= LAYOUT.spawnRadius; dx++) {
-      if (dx || dy) spawn.push({ x: center + dx, y: center + dy });
+      const tile = { x: center + dx, y: center + dy };
+      if (!footprint(house, tile)) spawn.push(tile);
     }
   }
   for (let i = 0; i < POPULATION; i++) {

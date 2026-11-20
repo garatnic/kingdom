@@ -108,6 +108,18 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await poll(() => evaluate("document.querySelector('#status').textContent === 'セーブを読み込みました'"));
     assert.equal(await evaluate("document.querySelector('#clock').textContent"), paused);
     assert.equal(await evaluate("document.querySelector('#seed').value"), 'world-tree');
+    await send('Emulation.setDeviceMetricsOverride', {
+      width: 390, height: 844, deviceScaleFactor: 2, mobile: true
+    });
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+    await poll(() => evaluate("innerWidth === 390 && document.documentElement.scrollWidth === 390"));
+    const button = await evaluate(`(() => {
+      const rect = document.querySelector('[data-speed="5"]').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    })()`);
+    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [button] });
+    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await poll(() => evaluate(`document.querySelector('[data-speed="5"]').getAttribute('aria-pressed') === 'true'`));
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();

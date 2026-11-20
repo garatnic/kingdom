@@ -62,10 +62,13 @@ function chooseRoute(world, citizen, store, population) {
     citizen.action = { ...idle(world.worldTimeTick), kind: 'sleep', phase: 'perform' };
     return;
   }
-  if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
   if (store && freeCapacity(store) > 0) {
     if (resources.some(key => citizen.inventory[key] > 0) &&
         travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
+    if (citizen.profession === 'builder') {
+      const dropped = world.resourceNodes.find(node => node.dropped && node.quantity > 0);
+      if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
+    }
     if (citizen.profession === 'farmer' && available(store, 'food') < population * FOOD_TARGET_PER_PERSON) {
       const farm = world.buildings.find(b => b.kind === 'farm' && b.settlementId === citizen.settlementId &&
         (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick);
@@ -82,6 +85,7 @@ function chooseRoute(world, citizen, store, population) {
       }
     }
   }
+  if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
   const { x, y } = world.settlements.find(s => s.id === citizen.settlementId) ?? world.settlements[0];
   const offset = () => Math.floor(random(world.rngState) * (2 * WANDER_RADIUS + 1)) - WANDER_RADIUS;
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');

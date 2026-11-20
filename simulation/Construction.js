@@ -4,7 +4,7 @@ import { available } from './Economy.js';
 import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
 import { findPath } from './path.js';
 
-export function planSite(world, settlement, kind, x, y) {
+function availableSite(world, kind, x, y) {
   const type = buildings[kind];
   if (!type || !Number.isInteger(x) || !Number.isInteger(y)) return null;
   const site = { x, y, width: type.width, height: type.height };
@@ -18,6 +18,12 @@ export function planSite(world, settlement, kind, x, y) {
           world.stockpiles.some(s => s.x === tile.x && s.y === tile.y)) return null;
     }
   }
+  return site;
+}
+
+export function planSite(world, settlement, kind, x, y) {
+  const site = availableSite(world, kind, x, y);
+  if (!site) return null;
   Object.assign(site, { id: nextId(world, 'site'), settlementId: settlement.id, kind, delivered: {}, progress: 0 });
   world.constructionSites.push(site);
   return site;
@@ -79,6 +85,10 @@ export function buildAtSite(world, site, ticks) {
   const building = { id: nextId(world, 'building'), x, y, width, height, kind, settlementId, state: 'active',
     capacity: buildings[kind].capacity ?? 0, completedAt: world.worldTimeTick };
   world.buildings.push(building);
+  if (kind === 'warehouse') {
+    const store = world.stockpiles.find(candidate => candidate.settlementId === settlementId);
+    if (store) store.capacity += building.capacity;
+  }
   if (kind === 'house') {
     const residents = world.citizens.filter(c => c.alive && c.settlementId === settlementId && !c.homeBuildingId);
     for (const citizen of residents.slice(0, building.capacity)) citizen.homeBuildingId = building.id;
@@ -120,19 +130,20 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const hasCouples = world.citizens.some(c => c.alive && c.settlementId === settlement.id && c.partnerId);
   const needsHousing = housing < population || (hasCouples && housing === population);
   const kind = farms === 0 || (farms < 2 && available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON) ? 'farm' :
-    needsHousing ? 'house' : null;
+    needsHousing ? 'house' : ['warehouse', 'smithy', 'guild', 'barracks'].find(type =>
+      !local.some(b => b.kind === type));
   if (!kind) return null;
-  for (let radius = 1; radius <= 6; radius++) {
+  for (let radius = 1; radius <= 12; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
         const x = settlement.x + dx;
         const y = settlement.y + dy;
-        const { width, height } = buildings[kind];
-        if (!workTile(world, origin, { x, y, width, height })) continue;
+        const footprintCandidate = availableSite(world, kind, x, y);
+        if (!footprintCandidate || !workTile(world, origin, footprintCandidate)) continue;
         // Protect access to essential terrain and resources once the site becomes occupied.
-        const probe = { ...world, buildings: [...world.buildings, { x, y, width, height }] };
-        if (footprint({ x, y, width, height }, origin) ||
+        const probe = { ...world, buildings: [...world.buildings, footprintCandidate] };
+        if (footprint(footprintCandidate, origin) ||
             world.resourceNodes.some(node => !node.dropped && findPath(probe, origin, node) === null)) continue;
         const site = planSite(world, settlement, kind, x, y);
         if (site) return site;
@@ -140,4 +151,29 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
     }
   }
   return null;
+}
+
+export function cancelSite(world, site) {
+  const index = world.constructionSites.indexOf(site);
+  if (index < 0) return false;
+  const reservations = world.reservations.filter(r => r.siteId === site.id);
+  const dropMaterials = (resource, quantity, tile) => {
+    world.resourceNodes.push({ id: nextId(world, 'node'), resource, quantity,
+      x: tile.x, y: tile.y, dropped: true });
+  };
+  for (const reservation of reservations) {
+    const store = world.stockpiles.find(s => s.id === reservation.sourceId);
+    const { resource, quantity, state } = reservation;
+    if (state === 'reserved') store.reserved[resource] -= quantity;
+    if (state === 'delivered') dropMaterials(resource, quantity, site);
+    if (state === 'inTransit') {
+      const shipment = world.inTransit.find(s => s.reservationId === reservation.id);
+      const carrier = world.citizens.find(person => person.id === shipment.carrierId);
+      dropMaterials(resource, quantity, carrier?.lastKnownSafeTile ?? shipment);
+      world.inTransit.splice(world.inTransit.indexOf(shipment), 1);
+    }
+  }
+  world.reservations = world.reservations.filter(r => r.siteId !== site.id);
+  world.constructionSites.splice(index, 1);
+  return true;
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
-import { buildAtSite, deliverMaterials, pickUpMaterials, planSite, reserveMaterials } from '../simulation/Construction.js';
+import { buildAtSite, cancelSite, deliverMaterials, pickUpMaterials, planSite, reserveMaterials } from '../simulation/Construction.js';
 import { workTicks } from '../data/buildings.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { findPath } from '../simulation/path.js';
@@ -59,17 +59,34 @@ test('shortage never creates a partial reservation', () => {
   assert.equal(world.reservations.length, 0);
 });
 
-test('three seeded settlements autonomously build farms, house residents and retain food for five days', async () => {
+test('three seeded settlements autonomously build farms, house residents and retain food for ten days', async () => {
   const { advanceFrame, setSpeed } = await import('../engine/GameLoop.js');
   for (const seed of ['world-tree', '障害地形', '0']) {
     const world = createWorld(seed);
     setSpeed(world, 20);
-    for (let i = 0; i < 300; i++) advanceFrame(world, 100);
-    assert.equal(world.worldTimeTick, 5 * 14400);
+    for (let i = 0; i < 600; i++) advanceFrame(world, 100);
+    assert.equal(world.worldTimeTick, 10 * 14400);
     const farms = world.buildings.filter(b => b.kind === 'farm');
     assert.ok(farms.some(farm => farm.harvestAt > farm.completedAt + 4800), seed);
     assert.ok(world.citizens.every(c => c.alive && c.homeBuildingId), seed);
     assert.ok(world.stockpiles[0].total.food >= 24, seed);
+    assert.deepEqual(new Set(world.buildings.map(b => b.kind)),
+      new Set(['house', 'farm', 'warehouse', 'smithy', 'guild', 'barracks']), seed);
     assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
   }
+});
+
+test('cancellation releases reserved stone and drops in-transit wood once', () => {
+  const world = createWorld('cancellation');
+  const [store] = world.stockpiles;
+  const site = planSite(world, world.settlements[0], 'house', 30, 30);
+  assert.ok(site);
+  assert.equal(reserveMaterials(world, site, store), true);
+  pickUpMaterials(world, world.reservations[0], world.citizens[0]);
+  assert.equal(cancelSite(world, site), true);
+  assert.equal(cancelSite(world, site), false);
+  assert.equal(store.reserved.stone, 0);
+  assert.equal(store.total.stone, 10);
+  assert.equal(store.total.wood + world.resourceNodes.find(n => n.dropped).quantity, 20);
+  assert.equal(world.inTransit.length, 0);
 });
