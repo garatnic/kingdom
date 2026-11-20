@@ -85,7 +85,10 @@ function checkBirth(world, parent, people) {
   const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === parent.settlementId &&
     residents.filter(c => c.homeBuildingId === b.id).length < b.capacity);
   const store = world.stockpiles.find(s => s.settlementId === parent.settlementId);
-  if (!home || !store || available(store, 'food') < residents.length * FOOD_BIRTH_PER_PERSON) return;
+  if (!home || !store || available(store, 'food') < residents.length * FOOD_BIRTH_PER_PERSON) {
+    if (residents.length >= 16) parent.nextBirthCheckTick = world.worldTimeTick + 5 * TIME_TICKS_PER_DAY;
+    return;
+  }
   const recentChild = [...parent.childIds, ...partner.childIds].some(id =>
     world.worldTimeTick - people.get(id)?.birthWorldTimeTick < FAMILY.birthSpacingYears * TIME_TICKS_PER_YEAR);
   if (recentChild || random(world.rngState) >= BIRTH_PROBABILITY_PER_YEAR) return;
@@ -165,32 +168,41 @@ function fillVacantHomes(world) {
   }
 }
 
-function admitMigrant(world) {
+function admitMigrants(world) {
   const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
-  if (day < 30 || day % 15 !== 0) return;
+  if (day < 30 || day % 5 !== 0) return;
   const latestFrontier = world.events.findLast(e => e.type === 'frontierDiscovered');
   if (!latestFrontier) return;
   const living = world.citizens.filter(c => c.alive);
-  if (living.length >= LIFE_CREATION_LIMIT) return;
-  const race = ['orc', 'halfling', 'fairy'][(day / 15 - 2) % 3];
+  const migrationRaces = ['orc', 'halfling', 'fairy'];
+  const race = migrationRaces[(Math.floor(day / 15) - 2) % migrationRaces.length];
   for (const settlement of world.settlements) {
     const residents = living.filter(c => c.settlementId === settlement.id);
+    if (!residents.length || (day % 15 !== 0 && residents.length < 24)) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
-    if (!residents.length || !store || available(store, 'food') < (residents.length + 1) * FOOD_BIRTH_PER_PERSON) continue;
-    const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === settlement.id &&
-      residents.filter(c => c.homeBuildingId === b.id).length < b.capacity);
-    if (!home) continue;
+    if (!store) continue;
+    const food = available(store, 'food');
+    let places = Math.min(Math.floor(food / FOOD_BIRTH_PER_PERSON) - residents.length,
+      Math.max(1, Math.floor(residents.length / 24)), LIFE_CREATION_LIMIT - living.length);
+    if (places <= 0) continue;
     const { x, y } = storeTile(world, store);
     const reception = { x, y };
     const reachable = reachableTiles(world, reception);
     if (!reachable[latestFrontier.y * world.map.width + latestFrontier.x]) continue;
-    const migrant = createAdult(world, race, reception, settlement);
-    migrant.homeBuildingId = home.id;
-    world.citizens.push(migrant);
-    emitOnce(world, migrant.id + '/arrival', 'migrantArrived', {
-      citizenId: migrant.id, settlementId: settlement.id, nationId: settlement.nationId, race, ...reception
-    });
-    return;
+    for (const home of world.buildings) {
+      if (home.kind !== 'house' || home.settlementId !== settlement.id) continue;
+      const freeBeds = home.capacity - residents.filter(c => c.homeBuildingId === home.id).length;
+      for (let i = 0; i < freeBeds && places > 0; i++, places--) {
+        const migrant = createAdult(world, race, reception, settlement);
+        migrant.homeBuildingId = home.id;
+        world.citizens.push(migrant);
+        living.push(migrant);
+        emitOnce(world, migrant.id + '/arrival', 'migrantArrived', {
+          citizenId: migrant.id, settlementId: settlement.id, nationId: settlement.nationId, race, ...reception
+        });
+      }
+      if (places <= 0) break;
+    }
   }
 }
 
@@ -215,7 +227,7 @@ export function updatePopulation(world, ticks) {
     fillVacancies(world);
     fillVacantHomes(world);
     dailyRelationships(world, world.citizens);
-    admitMigrant(world);
+    admitMigrants(world);
   }
   if (!birthDue) return;
   const people = new Map(world.citizens.map(c => [c.id, c]));

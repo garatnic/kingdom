@@ -127,3 +127,27 @@ test('vacant housing is reassigned to unhoused residents without exceeding capac
   assert.equal(unhoused.homeBuildingId, house.id);
   assert.equal(world.citizens.filter(c => c.alive && c.homeBuildingId === house.id).length, house.capacity);
 });
+
+test('a mature settlement admits a bounded group between regular migration days', () => {
+  const world = createWorld('migration-group');
+  const store = world.stockpiles[0];
+  const home = world.buildings.find(b => b.kind === 'house');
+  const { y } = store;
+  for (let x = store.x; x < 64; x++) world.map.terrain[y * 64 + x] = 'grass';
+  assert.ok(discoverFrontier(world, { x: 63, y }, 'east', world.citizens[0].id));
+  while (world.citizens.length < 48) {
+    const adult = structuredClone(world.citizens[0]);
+    adult.id = 'citizen:' + (world.citizens.length + 1);
+    world.citizens.push(adult);
+  }
+  world.idCounters.citizen = 49;
+  home.capacity = 53;
+  store.capacity = 300;
+  store.total.food = 150;
+  world.worldTimeTick = 35 * TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  assert.equal(world.citizens.length, 50);
+  assert.equal(world.events.filter(event => event.type === 'migrantArrived').length, 2);
+  assert.ok(world.citizens.every(c => c.homeBuildingId === home.id));
+  assert.equal(store.total.food, 150);
+});

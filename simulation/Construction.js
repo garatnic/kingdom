@@ -152,7 +152,7 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const farms = local.filter(b => b.kind === 'farm').length;
   const housing = local.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
   const hasCouples = world.citizens.some(c => c.alive && c.settlementId === settlement.id && c.partnerId);
-  const growthReserve = population >= 16 && available(store, 'food') >= population * FOOD_BIRTH_PER_PERSON ? 2 : 0;
+  const growthReserve = population >= 16 && available(store, 'food') >= population * FOOD_BIRTH_PER_PERSON ? Math.max(2, Math.ceil(population / 12)) : 0;
   const needsHousing = housing < population + growthReserve || (hasCouples && housing === population);
   const policy = world.nations.find(n => n.id === settlement.nationId)?.policy.primary;
   const facilityOrder = policy === 'defense'
