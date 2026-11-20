@@ -10,7 +10,7 @@ IndexedDBに世界スナップショットを保存。自動保存は現実60秒
  schemaVersion:1, saveId:"save:123", createdAtIso:"2026-11-21T00:00:00Z",
  checksum:"sha256:...", world:{
    seed:1234, rngState:[], worldTimeTick:123456,
-   speed:1, tickRemainder:0, idCounters:{citizen:13,event:42},
+   speed:1, tickRemainder:0, idCounters:{"citizen":13,"event":42},
    terrain:[], citizens:[], settlements:[], nations:[],
    resourceNodes:[], stockpiles:[], constructionSites:[],
    inTransit:[], reservations:[], monsters:[], quests:[],
@@ -54,3 +54,9 @@ T13-05：タブ非表示30秒後に復帰しても世界時間が進んでいな
 T13-06：同一シード/同一操作の進行結果が保存復元後も一致。
 T13-07：将来LOD切替を100回繰り返しても人口/在庫/人物IDが不変。
 T13-08：歴史索引とスプライトキャッシュを再構築できる。
+
+## v0.6 時間・人口・研究の保存整合【暫定】
+- 全イベント日時、出生時刻、次回出生抽選、魔物再出現期限、研究更新期限を整数 `worldTimeTick` で保存。旧 `birthWorldMinute` は保存形式で使用しない。
+- 人物の `traits.magicAffinity`、`skills.magic`、MP、`nextBirthCheckTick`、国家/集落研究所有権、開拓隊の運搬資源を保存。
+- T13-09：セーブ直前/直後で出生抽選回数が変化しない。
+- T13-10：鍛冶屋建設と研究資源の予約/消費が二重計上されない。
