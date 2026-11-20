@@ -85,7 +85,8 @@ export function buildAtSite(world, site, ticks) {
   const preciseTicks = ticks * percent + (site.workRemainder ?? 0);
   site.workRemainder = preciseTicks % 100;
   site.progress = Math.min(site.progress + Math.floor(preciseTicks / 100), workTicks(site.kind));
-  if (site.progress < workTicks(site.kind) || world.citizens.some(c => c.alive &&
+  if (site.progress < workTicks(site.kind) || world.monsters.some(m => m.alive && footprint(site, m)) ||
+      world.citizens.some(c => c.alive &&
       (footprint(site, c.lastKnownSafeTile) || footprint(site, { x: Math.floor(c.x), y: Math.floor(c.y) })))) return null;
   const { x, y, width, height, kind, settlementId } = site;
   const building = { id: nextId(world, 'building'), x, y, width, height, kind, settlementId, state: 'active',

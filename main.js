@@ -20,6 +20,7 @@ let loadRequest = 0;
 let lastBackup = 0;
 let saveQueue = Promise.resolve();
 let godQueue = [];
+let terrainSpeed = null;
 const storage = openSaveStorage().then(database => ({ database }), error => ({ error }));
 const viewer = observation(() => world, () => camera, (target, mode) => {
   camera.x = target.x;
@@ -65,6 +66,7 @@ function frame(now) {
       get('god-status').textContent = error ? `実行できません（${error}）` : '介入を適用しました';
     }
     godQueue = [];
+    endTerrainEdit();
   }
   advanceFrame(world, elapsed, document.hidden);
   lastTime = now;
@@ -91,6 +93,7 @@ function selectSpeed(speed) {
 function replaceWorld(next) {
   world = next;
   godQueue = [];
+  terrainSpeed = null;
   viewer.reset();
   camera = next.settings.camera ? { ...next.settings.camera } : createCamera(next);
   lastSpeed = next.gameSpeed || 1;
@@ -123,6 +126,7 @@ function zoom(factor, clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const dx = clientX === undefined ? 0 : clientX - rect.left - rect.width / 2;
   const dy = clientY === undefined ? 0 : clientY - rect.top - rect.height / 2;
+  viewer.markManual();
   zoomAt(camera, factor, dx, dy, world.map);
 }
 get('zoom-out').onclick = () => zoom(0.8);
@@ -149,6 +153,7 @@ canvas.addEventListener('pointermove', event => {
   const next = { x: event.clientX, y: event.clientY };
   pointers.set(event.pointerId, next);
   if (pointers.size === 1) {
+    viewer.markManual();
     pan(camera, next.x - previous.x, next.y - previous.y, world.map);
   } else {
     const other = [...pointers.values()].find(point => point !== next);
@@ -219,8 +224,21 @@ function showGodOptions() {
   get('god-amount').hidden = kind === 'terrain';
   get('god-quantity').disabled = kind === 'terrain';
   get('god-quantity').max = { life: 10, resource: 100, monster: 5, terrain: 1 }[kind];
+  if (kind === 'terrain' && get('god-form').parentElement.open) {
+    terrainSpeed ??= world.gameSpeed;
+    selectSpeed(0);
+  } else {
+    endTerrainEdit();
+  }
+}
+function endTerrainEdit() {
+  if (terrainSpeed === null) return;
+  const previous = terrainSpeed;
+  terrainSpeed = null;
+  selectSpeed(previous);
 }
 get('god-kind').onchange = showGodOptions;
+get('god-form').parentElement.ontoggle = showGodOptions;
 get('god-form').onsubmit = event => {
   event.preventDefault();
   const kind = get('god-kind').value;

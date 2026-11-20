@@ -195,7 +195,7 @@ export function updateCitizens(world, ticks) {
       if (path?.length) {
         Object.assign(citizen.action, { path, progress: 0, navigationVersion: world.map.navigationVersion });
       } else {
-        citizen.action = path ? { ...citizen.action, phase: 'perform' } : idle(world.worldTimeTick);
+        citizen.action = path ? { ...citizen.action, phase: 'perform', progress: 0 } : idle(world.worldTimeTick);
       }
     }
 

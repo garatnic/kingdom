@@ -1,3 +1,4 @@
+import { resources } from '../simulation/Economy.js';
 import { NATIONS } from '../data/nations.js';
 import { footprint } from '../data/buildings.js';
 import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
@@ -63,9 +64,13 @@ function validate(world) {
       !world.nations.every(n => settlements.get(n.capitalId)?.nationId === n.id &&
         n.settlementIds.every(id => settlements.get(id)?.nationId === n.id)) ||
       !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId)) ||
-      !world.resourceNodes.every(n => passable(n) && integer(n.quantity, 0)) ||
+      !world.resourceNodes.every(n => passable(n) && resources.includes(n.resource) && integer(n.quantity, 0)) ||
+      world.stockpiles.length !== settlements.size ||
+      new Set(world.stockpiles.map(p => p.settlementId)).size !== settlements.size ||
       !world.stockpiles.every(p => settlements.has(p.settlementId) && p.total && p.reserved &&
-        Object.entries(p.total).every(([key, total]) => integer(total, 0) && integer(p.reserved[key], 0, total)))) {
+        integer(p.capacity, 0) && (p.x === undefined || passable(p)) &&
+        resources.every(key => integer(p.total[key], 0) && integer(p.reserved[key], 0, p.total[key])) &&
+        resources.reduce((sum, key) => sum + p.total[key], 0) <= p.capacity)) {
     throw new Error('保存データの集落・資源が無効です。');
   }
   const people = new Map(world.citizens.map(c => [c.id, c]));
@@ -74,6 +79,10 @@ function validate(world) {
     if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || (c.settlementId === null
           ? c.nationId !== null || (c.alive && c.expeditionId && !expeditions.get(c.expeditionId)?.memberIds.includes(c.id))
           : !settlements.has(c.settlementId) || settlements.get(c.settlementId).nationId !== c.nationId) || typeof c.alive !== 'boolean' || !Object.hasOwn(LIFESPAN_YEARS, c.race) ||
+        !c.inventory || !resources.every(key => integer(c.inventory[key], 0)) ||
+        !c.traits || !['diligence', 'bravery', 'curiosity', 'magicAffinity'].every(key =>
+          Number.isFinite(c.traits[key]) && c.traits[key] >= 0 && c.traits[key] <= 1) ||
+        !Number.isFinite(c.hp) || c.hp < 0 || c.hp > 100 ||
         !Number.isSafeInteger(c.birthWorldTimeTick) || c.birthWorldTimeTick > world.worldTimeTick ||
         !Array.isArray(c.parentIds) || !Array.isArray(c.childIds) ||
         c.parentIds.some(id => !people.get(id)?.childIds?.includes(c.id) ||

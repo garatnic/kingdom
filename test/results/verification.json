@@ -1,0 +1,141 @@
+{
+  "scope": "Simulation clock and state; browser is tested separately.",
+  "cases": [
+    {
+      "label": "normal-30-minutes-of-fixed-steps",
+      "seed": "world-tree",
+      "startState": {
+        "worldTimeTick": 0,
+        "rngState": [
+          2681232579,
+          2593756531,
+          4175904453,
+          1133474749
+        ],
+        "food": 24
+      },
+      "operations": {
+        "speed": 1,
+        "frames": 18000,
+        "frameMs": 100
+      },
+      "expectedWorldTimeTick": 216000,
+      "measuredWorldTimeTick": 216000,
+      "averageSimulationStepMs": 0.049,
+      "largestStepMs": 30.913,
+      "population": 12,
+      "nations": 1,
+      "worldEvents": {
+        "founding": 1,
+        "birth": 0,
+        "death": 0,
+        "research_unlocked": 4,
+        "adventureReturned": 7
+      },
+      "invariantViolations": 0,
+      "result": "pass"
+    },
+    {
+      "label": "normal-seed-two-years",
+      "seed": "world-tree",
+      "startState": {
+        "worldTimeTick": 0,
+        "rngState": [
+          2681232579,
+          2593756531,
+          4175904453,
+          1133474749
+        ],
+        "food": 24
+      },
+      "operations": {
+        "speed": 20,
+        "frames": 3600,
+        "frameMs": 100
+      },
+      "expectedWorldTimeTick": 864000,
+      "measuredWorldTimeTick": 864000,
+      "averageSimulationStepMs": 1.075,
+      "largestStepMs": 42.376,
+      "population": 13,
+      "nations": 1,
+      "worldEvents": {
+        "founding": 1,
+        "birth": 1,
+        "death": 0,
+        "research_unlocked": 4,
+        "adventureReturned": 7
+      },
+      "invariantViolations": 0,
+      "result": "pass"
+    },
+    {
+      "label": "food-shortage-two-years",
+      "seed": "food-shortage",
+      "startState": {
+        "worldTimeTick": 0,
+        "rngState": [
+          856100958,
+          1047770101,
+          3085551325,
+          2265996717
+        ],
+        "food": 0
+      },
+      "operations": {
+        "speed": 20,
+        "frames": 3600,
+        "frameMs": 100
+      },
+      "expectedWorldTimeTick": 864000,
+      "measuredWorldTimeTick": 864000,
+      "averageSimulationStepMs": 1.024,
+      "largestStepMs": 43.096,
+      "population": 15,
+      "nations": 1,
+      "worldEvents": {
+        "founding": 1,
+        "birth": 3,
+        "death": 0,
+        "research_unlocked": 4,
+        "adventureReturned": 8
+      },
+      "invariantViolations": 0,
+      "result": "pass"
+    },
+    {
+      "label": "obstacle-terrain-two-years",
+      "seed": "障害地形",
+      "startState": {
+        "worldTimeTick": 0,
+        "rngState": [
+          4205221451,
+          3960129211,
+          3081065129,
+          2690005014
+        ],
+        "food": 24
+      },
+      "operations": {
+        "speed": 20,
+        "frames": 3600,
+        "frameMs": 100
+      },
+      "expectedWorldTimeTick": 864000,
+      "measuredWorldTimeTick": 864000,
+      "averageSimulationStepMs": 1.157,
+      "largestStepMs": 28.729,
+      "population": 14,
+      "nations": 1,
+      "worldEvents": {
+        "founding": 1,
+        "birth": 2,
+        "death": 0,
+        "research_unlocked": 4,
+        "adventureReturned": 6
+      },
+      "invariantViolations": 0,
+      "result": "pass"
+    }
+  ]
+}

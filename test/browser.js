@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-async function poll(fn) {
-  for (let i = 0; i < 100; i++) {
+async function poll(fn, attempts = 100) {
+  for (let i = 0; i < attempts; i++) {
     const value = await fn();
     if (value) return value;
     await delay(50);
@@ -16,11 +16,13 @@ async function poll(fn) {
   throw new Error('Browser condition timed out');
 }
 
-test('Chromium renders the map and runs pause, speed, camera and JSON controls', { timeout: 30_000 }, async () => {
+const realtimeMinutes = Number(process.env.KINGDOM_REALTIME_MINUTES ?? 0);
+
+test('Chromium renders the map and runs pause, speed, camera and JSON controls', { timeout: 90_000 + realtimeMinutes * 60_000 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), 'kingdom-chromium-'));
   const server = spawn(process.execPath, ['serve.js'], { env: { ...process.env, PORT: '0' } });
   const browser = spawn(process.env.CHROMIUM ?? 'chromium', [
-    '--headless', '--disable-dev-shm-usage',
+    '--headless', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-gpu',
     ...(process.env.GITHUB_ACTIONS === 'true' ? ['--no-sandbox'] : []),
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -39,7 +41,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
         if (browser.exitCode !== null || browser.signalCode !== null) throw new Error(browserError || 'Chromium exited');
         return null;
       }
-    }).catch(error => { throw new Error(browserError || error.message); });
+    }, 600).catch(error => { throw new Error(browserError || error.message); });
     const [page] = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
     socket = new WebSocket(page.webSocketDebuggerUrl);
     await once(socket, 'open');
@@ -139,6 +141,25 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     await poll(() => evaluate("document.querySelector('#god-status').textContent === '介入を適用しました'"));
     await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('神の介入')"));
+    await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'citizen';
+      tab.dispatchEvent(new Event('change'));
+      document.querySelector('#follow').click();
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('アルディン')"));
+    await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'family';
+      tab.dispatchEvent(new Event('change'));
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('配偶者')"));
+    await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'nation';
+      tab.dispatchEvent(new Event('change'));
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('対象がまだありません')"));
     await send('Emulation.setDeviceMetricsOverride', {
       width: 390, height: 844, deviceScaleFactor: 2, mobile: true
     });
@@ -151,6 +172,34 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [button] });
     await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await poll(() => evaluate(`document.querySelector('[data-speed="5"]').getAttribute('aria-pressed') === 'true'`));
+    if (realtimeMinutes) {
+      await send('Emulation.clearDeviceMetricsOverride');
+      await evaluate("document.querySelector('#seed').value = 'world-tree'; document.querySelector('form').requestSubmit()");
+      await send('Page.bringToFront');
+      const clock = () => evaluate("document.querySelector('#clock').textContent");
+      const gameMinutes = label => {
+        const match = /第([0-9]+)日 ([0-9]+):([0-9]+)/.exec(label);
+        return (Number(match[1]) - 1) * 1440 + Number(match[2]) * 60 + Number(match[3]);
+      };
+      const started = gameMinutes(await clock());
+      const begin = performance.now();
+      await delay(realtimeMinutes * 60_000);
+      const elapsed = performance.now() - begin;
+      const minutes = gameMinutes(await clock()) - started;
+      const expectedMinutes = elapsed * 12 / 1000;
+      assert.ok(Math.abs(minutes - expectedMinutes) / expectedMinutes <= 0.01,
+        `Observed ${minutes} game minutes, expected ${expectedMinutes.toFixed(1)}`);
+      assert.equal(await evaluate("document.querySelector('#population').textContent.startsWith('住民 ')"), true);
+      assert.equal(await evaluate(`(async () => {
+        const { openSaveStorage, readLatestGeneration } = await import('/systems/SaveStorage.js');
+        const database = await openSaveStorage();
+        const saved = await readLatestGeneration(database);
+        database.close();
+        return saved.seed === 'world-tree' && saved.worldTimeTick > 0;
+      })()`), true);
+      console.log(JSON.stringify({ seed: 'world-tree', realtimeElapsedMs: Math.round(elapsed), approximateGameMinutes: minutes,
+        javascriptExceptions: errors.length, speed: 1 }));
+    }
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();

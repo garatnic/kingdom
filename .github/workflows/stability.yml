@@ -1,0 +1,23 @@
+name: 30-minute browser stability
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/stability.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 37
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:browser
+        env:
+          CHROMIUM: google-chrome
+          KINGDOM_REALTIME_MINUTES: '30'

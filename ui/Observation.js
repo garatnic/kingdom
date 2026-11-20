@@ -42,6 +42,8 @@ export function observation(getWorld, getCamera, focus) {
   let observedEvent = '';
   let eventAt = -Infinity;
   let currentEvent = null;
+  let suspendedAt = null;
+  const seen = new Set();
 
   function render(force = false) {
     const world = getWorld();
@@ -108,7 +110,10 @@ export function observation(getWorld, getCamera, focus) {
     const target = eventLocation(world, event);
     if (!target) { add(body, 'p', label); return; }
     const button = add(body, 'button', label);
-    button.onclick = () => focus(target, 'manualOverride');
+    button.onclick = () => {
+      markManual();
+      focus(target, 'manualOverride');
+    };
   }
 
   tab.onchange = () => render(true);
@@ -116,15 +121,25 @@ export function observation(getWorld, getCamera, focus) {
   get('follow').onclick = () => {
     const camera = getCamera();
     camera.subjectId = subjects.value;
+    suspendedAt = null;
     camera.mode = tab.value === 'nation' ? 'followNation' : 'followCitizen';
   };
   get('auto-camera').onchange = event => {
     const camera = getCamera();
+    suspendedAt = null;
     camera.mode = event.target.checked ? 'autoEvent' : 'free';
   };
 
+  get('auto-resume').onchange = event => { getCamera().autoResume = event.target.checked; };
+
+  function markManual() {
+    const camera = getCamera();
+    if (camera.mode === 'autoEvent' || suspendedAt !== null) suspendedAt = performance.now();
+  }
+
   return {
     render,
+    markManual,
     inspectTile(x, y) {
       const citizen = getWorld().citizens.find(c => c.alive && Math.floor(c.x) === x && Math.floor(c.y) === y);
       if (!citizen) return;
@@ -136,7 +151,13 @@ export function observation(getWorld, getCamera, focus) {
     updateCamera(now, elapsed) {
       const world = getWorld();
       const camera = getCamera();
+      if (camera.mode === 'manualOverride' && camera.autoResume && suspendedAt !== null &&
+          now - suspendedAt >= 60000) {
+        camera.mode = 'autoEvent';
+        suspendedAt = null;
+      }
       get('auto-camera').checked = camera.mode === 'autoEvent';
+      get('auto-resume').checked = Boolean(camera.autoResume);
       let target;
       if (camera.mode === 'followCitizen') {
         target = world.citizens.find(c => c.id === camera.subjectId);
@@ -155,11 +176,15 @@ export function observation(getWorld, getCamera, focus) {
         if (seat) target = { x: seat.x + 0.5, y: seat.y + 0.5 };
       }
       if (camera.mode === 'autoEvent') {
-        const candidate = world.events.slice(-40).reverse().find(e =>
-          eventImportance(e) >= 4 && eventLocation(world, e));
+        const score = event => eventImportance(event) * 10 + 5 +
+          (event.citizenId === camera.subjectId ? 8 : 0) - (event.type === currentEvent?.type ? 10 : 0);
+        const candidates = world.events.slice(-40).reverse().filter(e =>
+          eventImportance(e) >= 4 && !seen.has(e.id) && eventLocation(world, e));
+        const candidate = candidates.sort((a, b) => score(b) - score(a))[0];
         if (candidate && candidate.id !== observedEvent &&
             (now - eventAt >= 30000 || eventImportance(candidate) >= 5)) {
           observedEvent = candidate.id;
+          seen.add(candidate.id);
           eventAt = now;
           currentEvent = candidate;
         }
@@ -175,6 +200,8 @@ export function observation(getWorld, getCamera, focus) {
       observedEvent = '';
       eventAt = -Infinity;
       currentEvent = null;
+      suspendedAt = null;
+      seen.clear();
     }
   };
 }
