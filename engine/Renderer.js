@@ -40,9 +40,24 @@ export class Renderer {
     }
 
     const visible = ({ x, y }) => x >= left - 1 && x <= right + 1 && y >= top - 1 && y <= bottom + 1;
+    for (const site of world.constructionSites.filter(visible)) {
+      ctx.strokeStyle = '#dfbc81';
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(site.x * TILE + 2, site.y * TILE + 2, site.width * TILE - 4, site.height * TILE - 4);
+      ctx.setLineDash([]);
+    }
     for (const building of world.buildings.filter(visible)) {
       const x = building.x * TILE;
       const y = building.y * TILE;
+      if (building.kind === 'farm') {
+        ctx.fillStyle = '#735e3c';
+        ctx.fillRect(x + 2, y + 2, building.width * TILE - 4, building.height * TILE - 4);
+        ctx.fillStyle = '#a5a25b';
+        for (let row = 7; row < building.height * TILE - 4; row += 8) {
+          ctx.fillRect(x + 6, y + row, building.width * TILE - 12, 3);
+        }
+        continue;
+      }
       ctx.fillStyle = '#354233';
       ctx.fillRect(x + 3, y + 20, 26, 11);
       ctx.fillStyle = '#c8a574';

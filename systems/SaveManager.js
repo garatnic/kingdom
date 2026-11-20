@@ -1,3 +1,4 @@
+import { footprint } from '../data/buildings.js';
 import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, POPULATION, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
 
 const VERSION = 1;
@@ -52,7 +53,7 @@ function validate(world) {
   }
   const [settlement] = world.settlements;
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&
-    !world.buildings.some(building => building.x === tile.x && building.y === tile.y);
+    !world.buildings.some(building => footprint(building, tile));
   if (!validTile(settlement) || settlement.nationId !== null ||
       !world.buildings.every(b => validTile(b) && b.settlementId === settlement.id) ||
       !world.resourceNodes.every(n => passable(n) && integer(n.quantity, 0)) ||
@@ -65,7 +66,7 @@ function validate(world) {
     if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || c.settlementId !== settlement.id ||
         c.nationId !== null || typeof c.alive !== 'boolean' ||
         (c.homeBuildingId !== null && !world.buildings.some(b => b.id === c.homeBuildingId)) ||
-        !integer(c.decisionAt, 0) || !passable(c.lastKnownSafeTile) ||
+        !integer(c.decisionAt, 0) || !(c.alive ? passable(c.lastKnownSafeTile) : validTile(c.lastKnownSafeTile)) ||
         !action || !['plan', 'travel', 'perform'].includes(action.phase) ||
         (action.phase === 'travel' && !validRoute(c, passable, terrainAt, map.navigationVersion))) {
       throw new Error('保存データの住民・経路が無効です。');
@@ -75,6 +76,10 @@ function validate(world) {
 
 function validRoute(citizen, passable, terrainAt, navigationVersion) {
   const { action } = citizen;
+  if (Number.isInteger(action.navigationVersion) && action.navigationVersion < navigationVersion) {
+    // The next simulation step replans from the saved safe tile before advancing.
+    return Number.isInteger(action.goal?.x) && Number.isInteger(action.goal?.y);
+  }
   if (action.navigationVersion !== navigationVersion || !Array.isArray(action.path) || !action.path.length ||
       !passable(action.goal)) return false;
   let previous = citizen.lastKnownSafeTile;

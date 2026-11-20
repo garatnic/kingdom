@@ -13,6 +13,9 @@ export function recordDeath(world, citizen, cause) {
     delete partner.nextBirthCheckTick;
   }
   delete citizen.nextBirthCheckTick;
+  for (const shipment of world.inTransit.filter(item => item.carrierId === citizen.id)) {
+    Object.assign(shipment, citizen.lastKnownSafeTile, { carrierId: null });
+  }
   for (const resource of resources) {
     const quantity = citizen.inventory[resource];
     if (!quantity) continue;

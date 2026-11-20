@@ -1,3 +1,4 @@
+import { footprint } from '../data/buildings.js';
 import { TERRAIN_COST } from '../data/balance.js';
 
 export function findPath(world, start, goal) {
@@ -9,7 +10,12 @@ export function findPath(world, start, goal) {
   const index = ({ x, y }) => y * width + x;
   const origin = index(start);
   const destination = index(goal);
-  const blocked = new Set(world.buildings.map(index));
+  const blocked = new Set();
+  for (const building of world.buildings) {
+    for (let y = building.y; y < building.y + (building.height ?? 1); y++) {
+      for (let x = building.x; footprint(building, { x, y }); x++) blocked.add(index({ x, y }));
+    }
+  }
   if (blocked.has(destination) || !Number.isFinite(TERRAIN_COST[terrain[destination]])) return null;
 
   const heuristic = tile => Math.abs(tile % width - goal.x) + Math.abs(Math.floor(tile / width) - goal.y);

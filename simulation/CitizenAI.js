@@ -3,6 +3,11 @@ import { random } from '../engine/random.js';
 import { findPath } from './path.js';
 import { available, deposit, freeCapacity, harvest, renewNodes, resources } from './Economy.js';
 import { eat, updateNeeds } from './Needs.js';
+import { FARM_HARVEST_TICKS, FARM_YIELD } from '../data/buildings.js';
+import {
+  buildAtSite, deliverMaterials, materialsDelivered, pickUpMaterials, planSettlementConstruction,
+  reserveMaterials, workTile
+} from './Construction.js';
 import { recordDeath } from './Population.js';
 
 const tileOf = citizen => ({ x: Math.floor(citizen.x), y: Math.floor(citizen.y) });
@@ -27,6 +32,29 @@ function travel(world, citizen, goal, kind, targetId = null) {
   return true;
 }
 
+function constructionRoute(world, citizen, store, population) {
+  const origin = storeTile(world, store);
+  const shipment = world.inTransit.find(item => item.carrierId === citizen.id);
+  if (shipment) {
+    const site = world.constructionSites.find(s => s.id === shipment.destinationId);
+    const goal = site && workTile(world, tileOf(citizen), site);
+    return goal && travel(world, citizen, goal, 'deliverMaterials', shipment.id);
+  }
+  const abandoned = world.inTransit.find(item => item.carrierId === null &&
+    world.constructionSites.some(site => site.id === item.destinationId && site.settlementId === citizen.settlementId));
+  if (abandoned && travel(world, citizen, abandoned, 'recoverMaterials', abandoned.id)) return true;
+  const settlement = world.settlements.find(s => s.id === citizen.settlementId);
+  const site = planSettlementConstruction(world, settlement, store, origin, population);
+  if (!site) return false;
+  if (materialsDelivered(site)) {
+    const goal = workTile(world, tileOf(citizen), site);
+    return goal && travel(world, citizen, goal, 'build', site.id);
+  }
+  reserveMaterials(world, site, store);
+  const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
+  return reservation && travel(world, citizen, origin, 'pickUpMaterials', reservation.id);
+}
+
 function chooseRoute(world, citizen, store, population) {
   if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0 &&
       travel(world, citizen, storeTile(world, store), 'eat', store.id)) return;
@@ -34,9 +62,16 @@ function chooseRoute(world, citizen, store, population) {
     citizen.action = { ...idle(world.worldTimeTick), kind: 'sleep', phase: 'perform' };
     return;
   }
+  if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
   if (store && freeCapacity(store) > 0) {
     if (resources.some(key => citizen.inventory[key] > 0) &&
         travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
+    if (citizen.profession === 'farmer' && available(store, 'food') < population * FOOD_TARGET_PER_PERSON) {
+      const farm = world.buildings.find(b => b.kind === 'farm' && b.settlementId === citizen.settlementId &&
+        (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick);
+      const goal = farm && workTile(world, tileOf(citizen), farm);
+      if (goal && travel(world, citizen, goal, 'farm', farm.id)) return;
+    }
     const candidates = (jobs[citizen.profession] ?? []).filter(key =>
       available(store, key) < (key === 'food' ? population * FOOD_TARGET_PER_PERSON : key === 'wood' ? 24 : 12));
     candidates.sort((a, b) => available(store, a) - available(store, b));
@@ -61,6 +96,32 @@ function perform(world, citizen, store, ticks) {
     const node = world.resourceNodes.find(n => n.id === action.targetId);
     harvest(world, citizen, node);
     if (store && node && citizen.inventory[node.resource] && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
+  }
+  if (action.kind === 'farm') {
+    const farm = world.buildings.find(b => b.id === action.targetId);
+    if (farm && (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick) {
+      farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
+      citizen.inventory.food += FARM_YIELD;
+      if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
+    }
+  }
+  if (action.kind === 'build') {
+    const site = world.constructionSites.find(s => s.id === action.targetId);
+    if (site && !buildAtSite(world, site, ticks)) return;
+  }
+  if (action.kind === 'pickUpMaterials') {
+    pickUpMaterials(world, world.reservations.find(r => r.id === action.targetId), citizen);
+  }
+  if (action.kind === 'recoverMaterials') {
+    const shipment = world.inTransit.find(item => item.id === action.targetId && item.carrierId === null);
+    if (shipment) {
+      shipment.carrierId = citizen.id;
+      delete shipment.x;
+      delete shipment.y;
+    }
+  }
+  if (action.kind === 'deliverMaterials') {
+    deliverMaterials(world, world.inTransit.find(item => item.id === action.targetId), citizen);
   }
   if (action.kind === 'haul' && store?.id === action.targetId) deposit(citizen, store);
   if (action.kind === 'eat' && store?.id === action.targetId) eat(citizen, store);

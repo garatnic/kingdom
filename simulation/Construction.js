@@ -1,0 +1,141 @@
+import { buildings, footprint, workTicks } from '../data/buildings.js';
+import { nextId } from '../engine/World.js';
+import { available } from './Economy.js';
+import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
+import { findPath } from './path.js';
+
+export function planSite(world, settlement, kind, x, y) {
+  const type = buildings[kind];
+  if (!type || !Number.isInteger(x) || !Number.isInteger(y)) return null;
+  const site = { x, y, width: type.width, height: type.height };
+  for (let dy = 0; dy < type.height; dy++) {
+    for (let dx = 0; dx < type.width; dx++) {
+      const tile = { x: x + dx, y: y + dy };
+      if (tile.x < 0 || tile.x >= world.map.width || tile.y < 0 || tile.y >= world.map.height ||
+          world.map.terrain[tile.y * world.map.width + tile.x] !== 'grass' ||
+          [...world.buildings, ...world.constructionSites].some(b => footprint(b, tile)) ||
+          world.resourceNodes.some(n => n.x === tile.x && n.y === tile.y) ||
+          world.stockpiles.some(s => s.x === tile.x && s.y === tile.y)) return null;
+    }
+  }
+  Object.assign(site, { id: nextId(world, 'site'), settlementId: settlement.id, kind, delivered: {}, progress: 0 });
+  world.constructionSites.push(site);
+  return site;
+}
+
+export function reserveMaterials(world, site, store) {
+  if (store.settlementId !== site.settlementId || !world.constructionSites.includes(site) ||
+      world.reservations.some(r => r.siteId === site.id)) return false;
+  const materials = Object.entries(buildings[site.kind].cost);
+  if (materials.some(([key, quantity]) => available(store, key) < quantity)) return false;
+  for (const [resource, quantity] of materials) {
+    const id = nextId(world, 'reservation');
+    world.reservations.push({ id, reservationId: id, siteId: site.id, sourceId: store.id,
+      resource, quantity, state: 'reserved' });
+    store.reserved[resource] += quantity;
+  }
+  return true;
+}
+
+export function pickUpMaterials(world, reservation, carrier) {
+  if (!world.reservations.includes(reservation) || reservation.state !== 'reserved' || !carrier.alive) return null;
+  const store = world.stockpiles.find(s => s.id === reservation.sourceId);
+  const { resource, quantity } = reservation;
+  if (carrier.settlementId !== store?.settlementId || store.reserved[resource] < quantity ||
+      store.total[resource] < quantity) return null;
+  store.reserved[resource] -= quantity;
+  store.total[resource] -= quantity;
+  reservation.state = 'inTransit';
+  const id = nextId(world, 'shipment');
+  const shipment = { id, shipmentId: id, reservationId: reservation.id, sourceId: store.id,
+    destinationId: reservation.siteId, carrierId: carrier.id, resource, quantity, state: 'inTransit' };
+  world.inTransit.push(shipment);
+  return shipment;
+}
+
+export function deliverMaterials(world, shipment, carrier) {
+  if (!world.inTransit.includes(shipment) || shipment.state !== 'inTransit' ||
+      shipment.carrierId !== carrier.id || !carrier.alive) return false;
+  const site = world.constructionSites.find(s => s.id === shipment.destinationId);
+  const reservation = world.reservations.find(r => r.id === shipment.reservationId);
+  if (!site || reservation?.state !== 'inTransit') return false;
+  site.delivered[shipment.resource] = (site.delivered[shipment.resource] ?? 0) + shipment.quantity;
+  reservation.state = 'delivered';
+  world.inTransit.splice(world.inTransit.indexOf(shipment), 1);
+  return true;
+}
+
+export function materialsDelivered(site) {
+  return Object.entries(buildings[site.kind].cost).every(([key, qty]) => site.delivered[key] === qty);
+}
+
+export function buildAtSite(world, site, ticks) {
+  if (!world.constructionSites.includes(site) || !materialsDelivered(site) ||
+      !Number.isSafeInteger(ticks) || ticks <= 0) return null;
+  site.progress = Math.min(site.progress + ticks, workTicks(site.kind));
+  if (site.progress < workTicks(site.kind) || world.citizens.some(c => c.alive &&
+      (footprint(site, c.lastKnownSafeTile) || footprint(site, { x: Math.floor(c.x), y: Math.floor(c.y) })))) return null;
+  const { x, y, width, height, kind, settlementId } = site;
+  const building = { id: nextId(world, 'building'), x, y, width, height, kind, settlementId, state: 'active',
+    capacity: buildings[kind].capacity ?? 0, completedAt: world.worldTimeTick };
+  world.buildings.push(building);
+  if (kind === 'house') {
+    const residents = world.citizens.filter(c => c.alive && c.settlementId === settlementId && !c.homeBuildingId);
+    for (const citizen of residents.slice(0, building.capacity)) citizen.homeBuildingId = building.id;
+  }
+  world.map.navigationVersion++;
+  world.reservations = world.reservations.filter(r => r.siteId !== site.id);
+  world.constructionSites.splice(world.constructionSites.indexOf(site), 1);
+  world.events.push({ id: nextId(world, 'event'), type: 'constructionCompleted', buildingId: building.id,
+    worldTimeTick: world.worldTimeTick, x, y, consumed: { ...site.delivered } });
+  return building;
+}
+
+export function workTile(world, start, site) {
+  const points = [];
+  for (let x = site.x; x < site.x + site.width; x++) {
+    points.push({ x, y: site.y - 1 }, { x, y: site.y + site.height });
+  }
+  for (let y = site.y; y < site.y + site.height; y++) {
+    points.push({ x: site.x - 1, y }, { x: site.x + site.width, y });
+  }
+  let best = null;
+  let distance = Infinity;
+  for (const goal of points) {
+    const path = findPath(world, start, goal);
+    if (path !== null && path.length < distance) {
+      best = goal;
+      distance = path.length;
+    }
+  }
+  return best;
+}
+
+export function planSettlementConstruction(world, settlement, store, origin, population) {
+  const existing = world.constructionSites.find(site => site.settlementId === settlement.id);
+  if (existing) return existing;
+  const local = world.buildings.filter(building => building.settlementId === settlement.id);
+  const farms = local.filter(b => b.kind === 'farm').length;
+  const housing = local.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
+  const kind = farms === 0 || (farms < 2 && available(store, 'food') < population * FOOD_EMERGENCY_PER_PERSON) ? 'farm' :
+    housing < population ? 'house' : null;
+  if (!kind) return null;
+  for (let radius = 1; radius <= 6; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        const x = settlement.x + dx;
+        const y = settlement.y + dy;
+        const { width, height } = buildings[kind];
+        if (!workTile(world, origin, { x, y, width, height })) continue;
+        // Protect access to essential terrain and resources once the site becomes occupied.
+        const probe = { ...world, buildings: [...world.buildings, { x, y, width, height }] };
+        if (footprint({ x, y, width, height }, origin) ||
+            world.resourceNodes.some(node => !node.dropped && findPath(probe, origin, node) === null)) continue;
+        const site = planSite(world, settlement, kind, x, y);
+        if (site) return site;
+      }
+    }
+  }
+  return null;
+}
