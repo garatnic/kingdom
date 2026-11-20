@@ -6,7 +6,9 @@ export const technologies = [
   { id: 'steel_1', cost: 1200, era: 'iron', requires: 'weapons_1', building: 'smithy', resources: { iron: 2 } },
   { id: 'irrigation_1', cost: 900, era: 'iron', requires: 'farming_1', building: 'farm', resources: { stone: 8 } },
   { id: 'magic_2', cost: 1800, era: 'kingdom', requires: 'magic_1', requiresAffinity: true,
-    building: 'guild', resources: { manaStone: 2 } }
+    building: 'guild', resources: { manaStone: 2 } },
+  { id: 'restoration_1', cost: 850, era: 'kingdom', requires: 'magic_1', requiresAffinity: true,
+    building: 'guild', resources: { manaStone: 1 } }
 ];
 
 export const TECH = {
@@ -14,7 +16,7 @@ export const TECH = {
   steelWeaponBonus: 2, irrigationBonus: 0.25, arcaneSpellBonus: 4,
   farmEraDays: 3, farmEraFarms: 2, farmEraPopulation: 8,
   spellRange: 3, spellAttack: 8, spellMp: 10, maxMp: 30, mpRecovery: 5,
-  spellCastTicks: 100, spellCooldownTicks: 300
+  spellCastTicks: 100, spellCooldownTicks: 300, restorationHp: 12, restorationMp: 10
 };
 
 

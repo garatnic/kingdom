@@ -1,6 +1,6 @@
 import { emitOnce } from '../systems/History.js';
 import { technologies, TECH, civilizationNames, civilizationTransitions } from '../data/technologies.js';
-import { ADULT_AGE, MAGIC_AFFINITY_THRESHOLD, NEED_HOUR_TICKS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { ADULT_AGE, NEEDS, MAGIC_AFFINITY_THRESHOLD, NEED_HOUR_TICKS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { available } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 
@@ -105,6 +105,12 @@ function updateOwner(world, owner, state, context, daily) {
     for (const citizen of context.affinity) {
       citizen.skills.magic = Math.max(1, citizen.skills.magic);
       citizen.mp = Math.min(TECH.maxMp, (citizen.mp ?? TECH.maxMp) + TECH.mpRecovery);
+      if (state.unlockedIds.includes('restoration_1') && citizen.action.kind === 'sleep' &&
+          citizen.action.phase === 'perform' && citizen.hunger < NEEDS.eat &&
+          citizen.hp < NEEDS.recoveryHp && citizen.mp >= TECH.restorationMp) {
+        citizen.mp -= TECH.restorationMp;
+        citizen.hp = Math.min(100, citizen.hp + TECH.restorationHp);
+      }
     }
   }
   if (daily) advanceCivilization(world, owner, state, context);

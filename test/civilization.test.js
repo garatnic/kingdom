@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { ensureResearch, updateResearch } from '../simulation/Research.js';
 import { nextId } from '../simulation/Identity.js';
-import { TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { NEED_HOUR_TICKS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 
 test('civilization advances per nation, resets interrupted streaks and unlocks later research', () => {
   const world = createWorld('civilization');
@@ -56,4 +56,30 @@ test('civilization advances per nation, resets interrupted streaks and unlocks l
   assert.deepEqual(world.events.filter(e => e.type === 'civilizationAdvanced').map(e => e.civilization),
     ['iron', 'kingdom', 'arcane']);
   for (const technology of ['steel_1', 'irrigation_1', 'magic_2']) assert.ok(state.unlockedIds.includes(technology));
+});
+
+test('restoration research heals a resting resident and spends MP once per game hour', () => {
+  const world = createWorld('restoration');
+  const state = ensureResearch(world, world.settlements[0]);
+  state.unlockedIds.push('magic_1');
+  const patient = world.citizens[0];
+  patient.traits.magicAffinity = 1;
+  patient.action = { kind: 'sleep', phase: 'perform' };
+  patient.hp = 45;
+  patient.mp = 5;
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  updateResearch(world, 1);
+  assert.equal(patient.hp, 45);
+  state.unlockedIds.push('restoration_1');
+  world.worldTimeTick += NEED_HOUR_TICKS;
+  updateResearch(world, 1);
+  assert.equal(patient.hp, 57);
+  assert.equal(patient.mp, 5);
+  world.worldTimeTick++;
+  updateResearch(world, 1);
+  assert.equal(patient.hp, 57);
+  patient.action.phase = 'travel';
+  world.worldTimeTick = NEED_HOUR_TICKS * 3;
+  updateResearch(world, 1);
+  assert.equal(patient.hp, 57);
 });
