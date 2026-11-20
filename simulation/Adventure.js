@@ -147,6 +147,27 @@ function moveMonsters(world) {
   }
 }
 
+function huntPrey(world) {
+  const protectedTargets = new Set(world.quests.filter(q => q.status === 'claimed').map(q => q.targetId));
+  for (const predator of world.monsters) {
+    const { prey, huntDamage } = monsters[predator.species];
+    if (!predator.alive || !prey || protectedTargets.has(predator.id)) continue;
+    const target = world.monsters.find(m => m.alive && m.species === prey &&
+      !protectedTargets.has(m.id) && distance(predator, m) === 1);
+    if (!target) continue;
+    target.hp = Math.max(0, target.hp - huntDamage);
+    if (target.hp > 0) continue;
+    target.alive = false;
+    target.diedAt = world.worldTimeTick;
+    for (const quest of world.quests) {
+      if (quest.targetId === target.id && quest.status === 'open') quest.status = 'expired';
+    }
+    emitOnce(world, target.id + '/predation', 'monsterPredation', {
+      monsterId: target.id, predatorId: predator.id, x: target.x, y: target.y
+    });
+  }
+}
+
 export function updateAdventureWorld(world, ticks) {
   const now = world.worldTimeTick;
   const first = world.nextMonsterSpawnTick === undefined;
@@ -192,6 +213,7 @@ export function updateAdventureWorld(world, ticks) {
   }
   moveMonsters(world);
   const day = Math.floor(now / TIME_TICKS_PER_DAY) > Math.floor((now - ticks) / TIME_TICKS_PER_DAY);
+  if (day) huntPrey(world);
   if (!first && !day) return;
   for (const settlement of world.settlements) {
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);

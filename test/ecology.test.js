@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { discoverFrontier } from '../engine/Expansion.js';
-import { spawnMonster, updateAdventureWorld } from '../simulation/Adventure.js';
+import { issueQuest, spawnMonster, updateAdventureWorld } from '../simulation/Adventure.js';
 import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 
 test('a colony reproduces in suitable terrain without ignoring local limits or cooldown', () => {
@@ -40,4 +40,24 @@ test('wisps immigrate after expansion and inhabit forest beyond the initial map'
   assert.ok(wisp);
   assert.ok(wisp.homeTile.x >= 64);
   assert.equal(world.map.terrain[wisp.homeTile.y * world.map.width + wisp.homeTile.x], 'forest');
+});
+
+test('wisps prey on adjacent slimes and close unresolved bounties without awarding loot', () => {
+  const world = createWorld('predation');
+  world.map.terrain.fill('forest');
+  world.nextMonsterSpawnTick = Number.MAX_SAFE_INTEGER;
+  const slime = spawnMonster(world, 'slime', { x: 8, y: 8 });
+  const wisp = spawnMonster(world, 'wisp', { x: 8, y: 9 });
+  slime.moveAt = wisp.moveAt = Number.MAX_SAFE_INTEGER;
+  const quest = issueQuest(world, world.settlements[0], slime);
+  quest.expiresAt = 4 * TIME_TICKS_PER_DAY;
+  const resourceCount = world.resourceNodes.length;
+  for (let day = 1; day <= 3; day++) {
+    world.worldTimeTick = day * TIME_TICKS_PER_DAY;
+    updateAdventureWorld(world, 12);
+  }
+  assert.equal(slime.alive, false);
+  assert.equal(quest.status, 'expired');
+  assert.equal(world.resourceNodes.length, resourceCount);
+  assert.equal(world.events.find(e => e.type === 'monsterPredation').predatorId, wisp.id);
 });

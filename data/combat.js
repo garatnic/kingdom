@@ -4,7 +4,7 @@ export const monsters = {
   slime: { label: 'スライム', color: '#9da75d', habitat: ['grass', 'forest'], cap: 8, hp: 30, attack: 5, defense: 1, sight: 5, stepTicks: 125, xp: 5, loot: [['food', 0.5], ['manaStone', 0.1]] },
   goblin: { label: 'ゴブリン', color: '#b66d54', habitat: ['forest', 'mountain'], cap: 4, hp: 45, attack: 9, defense: 3, sight: 7, stepTicks: 91, xp: 10, loot: [['wood', 0.5], ['iron', 0.2]] },
   wisp: { label: 'ウィスプ', color: '#9bd5ef', habitat: ['forest'], requiresExpansion: true,
-    cap: 3, hp: 28, attack: 12, defense: 1, sight: 7, stepTicks: 85, xp: 14, loot: [['manaStone', 0.65]] }
+    prey: 'slime', huntDamage: 10, cap: 3, hp: 28, attack: 12, defense: 1, sight: 7, stepTicks: 85, xp: 14, loot: [['manaStone', 0.65]] }
 };
 export const COMBAT = {
   attack: 10, defense: 3, rangedDistance: 1, retreatHp: 35, braveRetreatHp: 20,

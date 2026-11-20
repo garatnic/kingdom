@@ -8,7 +8,7 @@ import { eventImportance, historyFor } from '../systems/History.js';
 
 const events = {
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
-  constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', borderFriction: '国境摩擦',
+  constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', monsterPredation: '魔物が別の魔物を捕食', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
   adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
