@@ -127,6 +127,12 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       for (const seed of ['one', 'two', 'three', 'four']) {
         await writeGeneration(database, await createSnapshot(createWorld(seed)));
       }
+      const readKeys = () => new Promise((resolve, reject) => {
+        const request = database.transaction('snapshots').objectStore('snapshots').getAllKeys();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const before = await readKeys();
       const aborted = await new Promise(resolve => {
         const tx = database.transaction('snapshots', 'readwrite');
         tx.onabort = () => resolve(true);
@@ -134,17 +140,20 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
         tx.objectStore('snapshots').add({ incomplete: true });
         tx.abort();
       });
+      const after = await readKeys();
+      const restoredAfterAbort = await readLatestGeneration(database);
       await writeGeneration(database, { corrupt: true });
-      const count = await new Promise((resolve, reject) => {
-        const request = database.transaction('snapshots').objectStore('snapshots').count();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
+      const count = (await readKeys()).length;
       const latest = await readLatestGeneration(database);
       database.close();
-      return [count, latest.seed, aborted];
+      return { before, after, count, seedAfterCorruption: latest.seed, seedAfterAbort: restoredAfterAbort.seed, aborted };
     })()`);
-    assert.deepEqual(generations, [3, 'four', true]);
+    assert.equal(generations.aborted, true);
+    assert.equal(generations.before.length, 3);
+    assert.deepEqual(generations.after, generations.before);
+    assert.equal(generations.seedAfterAbort, 'four');
+    assert.equal(generations.count, 3);
+    assert.equal(generations.seedAfterCorruption, 'four');
     await evaluate(`(() => {
       document.querySelector('#god-kind').value = 'resource';
       document.querySelector('#god-kind').dispatchEvent(new Event('change'));
