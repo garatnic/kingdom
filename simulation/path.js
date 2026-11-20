@@ -81,3 +81,34 @@ export function findPath(world, start, goal) {
   }
   return null;
 }
+
+export function reachableTiles(world, start, extraBlock) {
+  const { width, height, terrain } = world.map;
+  const inside = ({ x, y }) => x >= 0 && x < width && y >= 0 && y < height;
+  const index = ({ x, y }) => y * width + x;
+  const seen = new Uint8Array(width * height);
+  if (!inside(start)) return seen;
+  for (const b of extraBlock ? [...world.buildings, extraBlock] : world.buildings) {
+    for (let y = b.y; y < b.y + (b.height ?? 1); y++) {
+      for (let x = b.x; x < b.x + (b.width ?? 1); x++) {
+        if (inside({ x, y })) seen[y * width + x] = 2;
+      }
+    }
+  }
+  if (seen[index(start)] || terrain[index(start)] === 'water') return seen;
+  const queue = [index(start)];
+  seen[index(start)] = 1;
+  for (let i = 0; i < queue.length; i++) {
+    const current = queue[i];
+    const x = current % width;
+    const y = Math.floor(current / width);
+    for (const tile of [{ x: x - 1, y }, { x: x + 1, y }, { x, y: y - 1 }, { x, y: y + 1 }]) {
+      if (!inside(tile)) continue;
+      const next = index(tile);
+      if (seen[next] || terrain[next] === 'water') continue;
+      seen[next] = 1;
+      queue.push(next);
+    }
+  }
+  return seen;
+}

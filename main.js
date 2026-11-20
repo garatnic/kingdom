@@ -1,3 +1,4 @@
+import { monsters } from './data/combat.js';
 import { TILE } from './data/balance.js';
 import { applyGodCommand } from './systems/GodPowers.js';
 import { openSaveStorage, readLatestGeneration, writeGeneration } from './systems/SaveStorage.js';
@@ -224,7 +225,7 @@ const godOptions = {
   life: { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' },
   resource: { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' },
   terrain: { grass: '草原', forest: '森', mountain: '山', water: '水' },
-  monster: { slime: 'スライム', goblin: 'ゴブリン' }
+  monster: Object.fromEntries(Object.entries(monsters).map(([id, config]) => [id, config.label]))
 };
 function showGodOptions() {
   const kind = get('god-kind').value;

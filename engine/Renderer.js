@@ -1,3 +1,4 @@
+import { monsters } from '../data/combat.js';
 import { TILE } from '../data/balance.js';
 
 const colors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
@@ -80,7 +81,7 @@ export class Renderer {
     for (const monster of world.monsters.filter(m => m.alive && visible(m))) {
       const x = monster.x * TILE + 16;
       const y = monster.y * TILE + 16;
-      ctx.fillStyle = monster.species === 'slime' ? '#9da75d' : '#b66d54';
+      ctx.fillStyle = monsters[monster.species]?.color ?? '#b66d54';
       ctx.fillRect(x - 6, y - 4, 12, 9);
       ctx.fillRect(x - 3, y - 7, 6, 3);
       ctx.fillStyle = '#233a32';

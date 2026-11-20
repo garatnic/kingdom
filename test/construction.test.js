@@ -103,3 +103,19 @@ test('an unfunded smithy cannot block the first farm', () => {
   assert.ok(!world.constructionSites.includes(site));
   assert.equal(store.total.iron, 0);
 });
+
+test('a completed building cannot sever the only land connection', () => {
+  const world = createWorld('crossing');
+  world.map.terrain.fill('water');
+  for (let y = 8; y <= 9; y++) {
+    for (let x = 4; x <= 12; x++) world.map.terrain[y * world.map.width + x] = 'grass';
+  }
+  const shore = { x: 12, y: 8 };
+  const base = { x: 4, y: 8 };
+  assert.ok(findPath(world, base, shore));
+  const site = planSite(world, world.settlements[0], 'farm', 7, 8);
+  assert.ok(site);
+  site.delivered.wood = 2;
+  assert.equal(buildAtSite(world, site, workTicks('farm')), null);
+  assert.ok(findPath(world, base, shore));
+});

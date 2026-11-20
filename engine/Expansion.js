@@ -1,7 +1,7 @@
 import { SIZE, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { nextId } from '../simulation/Identity.js';
-import { findPath } from '../simulation/path.js';
+import { findPath, reachableTiles } from '../simulation/path.js';
 
 export const CHUNK_SIZE = 32;
 export const MAX_WORLD_SIZE = 128;
@@ -46,12 +46,11 @@ export function surveyRoute(world, citizen) {
   }
   const cost = tile => Math.abs(tile.x - origin.x) + Math.abs(tile.y - origin.y);
   candidates.sort((a, b) => cost(a) - cost(b));
-  const land = candidates.filter(tile => map.terrain[tile.y * map.width + tile.x] !== 'water');
-  for (const goal of land.slice(0, 16)) {
-    const path = findPath(world, origin, goal);
-    if (path !== null) return { goal, path };
-  }
-  if (candidates.length) map.nextSurveyTick = worldTimeTick + RETRY_TICKS;
+  if (!candidates.length) return null;
+  const reachable = reachableTiles(world, origin);
+  const goal = candidates.find(tile => reachable[tile.y * map.width + tile.x] === 1);
+  if (goal) return { goal, path: findPath(world, origin, goal) };
+  map.nextSurveyTick = worldTimeTick + RETRY_TICKS;
   return null;
 }
 

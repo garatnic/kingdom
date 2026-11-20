@@ -5,7 +5,7 @@ import { FOOD_EMERGENCY_PER_PERSON } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
-import { findPath } from './path.js';
+import { findPath, reachableTiles } from './path.js';
 
 function availableSite(world, kind, x, y) {
   const type = buildings[kind];
@@ -87,7 +87,7 @@ export function buildAtSite(world, site, ticks) {
   site.progress = Math.min(site.progress + Math.floor(preciseTicks / 100), workTicks(site.kind));
   if (site.progress < workTicks(site.kind) || world.monsters.some(m => m.alive && footprint(site, m)) ||
       world.citizens.some(c => c.alive &&
-      (footprint(site, c.lastKnownSafeTile) || footprint(site, { x: Math.floor(c.x), y: Math.floor(c.y) })))) return null;
+      (footprint(site, c.lastKnownSafeTile) || footprint(site, { x: Math.floor(c.x), y: Math.floor(c.y) }))) || !keepsPathsOpen(world, site)) return null;
   const { x, y, width, height, kind, settlementId } = site;
   const building = { id: nextId(world, 'building'), x, y, width, height, kind, settlementId, state: 'active',
     capacity: buildings[kind].capacity ?? 0, completedAt: world.worldTimeTick };
@@ -108,7 +108,7 @@ export function buildAtSite(world, site, ticks) {
   return building;
 }
 
-export function workTile(world, start, site) {
+function perimeter(site) {
   const points = [];
   for (let x = site.x; x < site.x + site.width; x++) {
     points.push({ x, y: site.y - 1 }, { x, y: site.y + site.height });
@@ -116,6 +116,24 @@ export function workTile(world, start, site) {
   for (let y = site.y; y < site.y + site.height; y++) {
     points.push({ x: site.x - 1, y }, { x: site.x + site.width, y });
   }
+  return points;
+}
+
+function keepsPathsOpen(world, site) {
+  const { width, height, terrain } = world.map;
+  const indices = perimeter(site)
+    .filter(t => t.x >= 0 && t.x < width && t.y >= 0 && t.y < height &&
+      !world.buildings.some(building => footprint(building, t)))
+    .map(t => t.y * width + t.x)
+    .filter(index => terrain[index] !== 'water');
+  if (indices.length < 2) return true;
+  const start = { x: indices[0] % width, y: Math.floor(indices[0] / width) };
+  const reachable = reachableTiles(world, start, site);
+  return indices.every(index => reachable[index] === 1);
+}
+
+export function workTile(world, start, site) {
+  const points = perimeter(site);
   let best = null;
   let distance = Infinity;
   for (const goal of points) {
@@ -154,7 +172,6 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const kind = urgent ?? facilityOrder.find(type => !local.some(b => b.kind === type) &&
     Object.entries(buildings[type].cost).every(([resource, quantity]) => available(store, resource) >= quantity));
   if (!kind) return null;
-  const reachableNodes = world.resourceNodes.filter(node => !node.dropped && findPath(world, origin, node) !== null);
   for (let radius = 1; radius <= 12; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -163,10 +180,7 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
         const y = settlement.y + dy;
         const footprintCandidate = availableSite(world, kind, x, y);
         if (!footprintCandidate || !workTile(world, origin, footprintCandidate)) continue;
-        // Protect access to essential terrain and resources once the site becomes occupied.
-        const probe = { ...world, buildings: [...world.buildings, footprintCandidate] };
-        if (footprint(footprintCandidate, origin) ||
-            reachableNodes.some(node => findPath(probe, origin, node) === null)) continue;
+        if (footprint(footprintCandidate, origin) || !keepsPathsOpen(world, footprintCandidate)) continue;
         const site = planSite(world, settlement, kind, x, y);
         if (site) return site;
       }

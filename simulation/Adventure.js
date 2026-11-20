@@ -3,7 +3,7 @@ import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { commissionGear, recordAdventureSuccess, trainCombat } from './AdventurerGrowth.js';
 import { COMBAT, gear, monsters } from '../data/combat.js';
-import { ADULT_AGE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { ADULT_AGE, SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
 import { available, deposit } from './Economy.js';
@@ -32,15 +32,35 @@ export function spawnMonster(world, species, tile) {
   return monster;
 }
 
-function spawnAway(world, species) {
+function spawnZones(world) {
+  const forbidden = new Set();
+  const protect = (origin, radius) => {
+    for (let dy = 1 - radius; dy < radius; dy++) {
+      for (let dx = 1 - radius; dx < radius; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) < radius) {
+          forbidden.add(tileKey({ x: origin.x + dx, y: origin.y + dy }));
+        }
+      }
+    }
+  };
+  for (const settlement of world.settlements) protect(settlement, COMBAT.spawnDistance);
+  for (const citizen of world.citizens) {
+    if (citizen.alive) protect(tileOf(citizen), COMBAT.residentSafety);
+  }
+  return forbidden;
+}
+
+function spawnAway(world, species, forbidden, habitatOnly = false) {
   const candidates = [];
   const occupied = new Set(world.monsters.filter(m => m.alive).map(tileKey));
   for (let y = 0; y < world.map.height; y++) {
     for (let x = 0; x < world.map.width; x++) {
       const tile = { x, y };
-      const safe = world.settlements.every(s => distance(s, tile) >= COMBAT.spawnDistance) &&
-        world.citizens.every(c => !c.alive || distance(tileOf(c), tile) >= COMBAT.residentSafety);
-      if (safe && !occupied.has(tileKey(tile)) && world.map.terrain[y * world.map.width + x] !== 'water') {
+      const terrain = world.map.terrain[y * world.map.width + x];
+      const key = tileKey(tile);
+      if (!forbidden.has(key) && !occupied.has(key) && terrain !== 'water' &&
+          (!habitatOnly || monsters[species].habitat.includes(terrain)) &&
+          (!monsters[species].requiresExpansion || x >= SIZE || y >= SIZE)) {
         candidates.push(tile);
       }
     }
@@ -52,6 +72,39 @@ function spawnAway(world, species) {
     candidates.splice(index, 1);
   }
   return null;
+}
+
+function replenishSpecies(world, species, forbidden) {
+  const config = monsters[species];
+  const population = world.monsters.filter(m => m.alive && m.species === species);
+  for (const parent of population) {
+    if (world.worldTimeTick < (parent.nextBreedAt ?? 0)) continue;
+    const colony = population.filter(m => distance(m, parent) <= 6).length;
+    if (colony >= 3) continue;
+    const candidates = [];
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const tile = { x: parent.x + dx, y: parent.y + dy };
+        if (tile.x < 0 || tile.x >= world.map.width || tile.y < 0 || tile.y >= world.map.height ||
+            forbidden.has(tileKey(tile)) ||
+            !config.habitat.includes(world.map.terrain[tile.y * world.map.width + tile.x])) continue;
+        candidates.push(tile);
+      }
+    }
+    while (candidates.length) {
+      const index = Math.floor(random(world.rngState) * candidates.length);
+      const newborn = spawnMonster(world, species, candidates.splice(index, 1)[0]);
+      if (!newborn) continue;
+      newborn.parentMonsterId = parent.id;
+      newborn.nextBreedAt = parent.nextBreedAt = world.worldTimeTick + TIME_TICKS_PER_DAY;
+      return true;
+    }
+  }
+  // Immigration restores a locally extinct species after a quiet day.
+  const lastDeath = world.monsters.reduce((time, m) =>
+    m.species === species && !m.alive ? Math.max(time, m.diedAt ?? 0) : time, 0);
+  return !population.length && world.worldTimeTick - lastDeath >= TIME_TICKS_PER_DAY &&
+    Boolean(spawnAway(world, species, forbidden, true));
 }
 
 export function issueQuest(world, settlement, target) {
@@ -98,17 +151,26 @@ export function updateAdventureWorld(world, ticks) {
   const now = world.worldTimeTick;
   const first = world.nextMonsterSpawnTick === undefined;
   if (first) {
+    const forbidden = spawnZones(world);
     for (const [species, config] of Object.entries(monsters)) {
+      if (config.requiresExpansion) continue;
       for (let i = 0; i < config.cap; i++) {
         if (world.monsters.filter(m => m.alive && m.species === species).length >= config.cap) break;
-        if (!spawnAway(world, species)) break;
+        if (!spawnAway(world, species, forbidden)) break;
       }
     }
     world.nextMonsterSpawnTick = now + COMBAT.spawnInterval;
   } else if (now >= world.nextMonsterSpawnTick) {
     world.nextMonsterSpawnTick += COMBAT.spawnInterval;
-    const species = Object.keys(monsters).find(key => world.monsters.filter(m => m.alive && m.species === key).length < monsters[key].cap);
-    if (species) spawnAway(world, species);
+    const expanded = world.map.width > SIZE || world.map.height > SIZE;
+    const candidates = Object.keys(monsters).filter(key => {
+      const config = monsters[key];
+      return (!config.requiresExpansion || expanded) && world.monsters.filter(m => m.alive && m.species === key).length < config.cap;
+    });
+    if (candidates.length) {
+      const forbidden = spawnZones(world);
+      candidates.some(species => replenishSpecies(world, species, forbidden));
+    }
   }
 
   for (const quest of world.quests) {
@@ -192,6 +254,7 @@ function damage(world, attack, defense) {
 function defeat(world, citizen, quest, monster) {
   const config = monsters[monster.species];
   monster.alive = false;
+  monster.diedAt = world.worldTimeTick;
   trainCombat(world, citizen, quest, config.xp);
   for (const [resource, chance] of config.loot) {
     if (random(world.rngState) >= chance) continue;
