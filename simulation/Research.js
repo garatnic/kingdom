@@ -80,6 +80,26 @@ function advanceCivilization(world, owner, state, context) {
   });
 }
 
+const canReceiveHealing = c => c.action.kind === 'sleep' && c.action.phase === 'perform' &&
+  c.hunger < NEEDS.eat && c.hp < NEEDS.recoveryHp;
+
+function restoreResidents(context) {
+  const patients = context.citizens.filter(canReceiveHealing).sort((a, b) => a.hp - b.hp);
+  const treated = new Set();
+  for (const caster of context.affinity) {
+    if (caster.mp < TECH.restorationMp || caster.action.kind !== 'sleep' ||
+        caster.action.phase !== 'perform' || caster.hunger >= NEEDS.eat) continue;
+    const target = canReceiveHealing(caster) && !treated.has(caster.id) ? caster :
+      patients.find(patient => !treated.has(patient.id) && patient.settlementId === caster.settlementId &&
+        Math.abs(patient.lastKnownSafeTile.x - caster.lastKnownSafeTile.x) +
+        Math.abs(patient.lastKnownSafeTile.y - caster.lastKnownSafeTile.y) <= 3);
+    if (!target) continue;
+    caster.mp -= TECH.restorationMp;
+    target.hp = Math.min(100, target.hp + TECH.restorationHp);
+    treated.add(target.id);
+  }
+}
+
 function updateOwner(world, owner, state, context, daily) {
   const tech = technologies.find(t => t.id === state.activeTechId && eligible(t, context, state)) ??
     technologies.find(t => !state.unlockedIds.includes(t.id) && eligible(t, context, state));
@@ -105,13 +125,8 @@ function updateOwner(world, owner, state, context, daily) {
     for (const citizen of context.affinity) {
       citizen.skills.magic = Math.max(1, citizen.skills.magic);
       citizen.mp = Math.min(TECH.maxMp, (citizen.mp ?? TECH.maxMp) + TECH.mpRecovery);
-      if (state.unlockedIds.includes('restoration_1') && citizen.action.kind === 'sleep' &&
-          citizen.action.phase === 'perform' && citizen.hunger < NEEDS.eat &&
-          citizen.hp < NEEDS.recoveryHp && citizen.mp >= TECH.restorationMp) {
-        citizen.mp -= TECH.restorationMp;
-        citizen.hp = Math.min(100, citizen.hp + TECH.restorationHp);
-      }
     }
+    if (state.unlockedIds.includes('restoration_1')) restoreResidents(context);
   }
   if (daily) advanceCivilization(world, owner, state, context);
 }

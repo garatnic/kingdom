@@ -93,3 +93,23 @@ test('restoration research heals a resting resident and spends MP once per game 
   updateResearch(world, 1);
   assert.equal(patient.hp, 57);
 });
+
+test('restoration can treat a nearby resting neighbor once per hour', () => {
+  const world = createWorld('care');
+  ensureResearch(world, world.settlements[0], ['magic_1', 'restoration_1']);
+  const [first, second, patient, distant] = world.citizens;
+  for (const citizen of [first, second, patient, distant]) {
+    citizen.action = { kind: 'sleep', phase: 'perform' };
+    citizen.lastKnownSafeTile = { x: 32, y: 32 };
+  }
+  first.traits.magicAffinity = second.traits.magicAffinity = 1;
+  patient.traits.magicAffinity = distant.traits.magicAffinity = 0;
+  distant.lastKnownSafeTile = { x: 38, y: 38 };
+  patient.hp = distant.hp = 30;
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  updateResearch(world, 12);
+  assert.equal(patient.hp, 42);
+  assert.equal(distant.hp, 30);
+  assert.equal(first.mp, 20);
+  assert.equal(second.mp, 30);
+});
