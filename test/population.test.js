@@ -97,3 +97,20 @@ test('an expanded and connected world admits migrants only with food and spare h
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   assert.deepEqual(restored.citizens.at(-1), migrant);
 });
+
+test('food shortages in larger settlements add a farmer and retain essential jobs', () => {
+  const world = createWorld('workforce');
+  const jobs = ['farmer', 'builder', 'woodcutter', 'miner', 'adventurer'];
+  for (const [index, citizen] of world.citizens.entries()) citizen.profession = index === 0 ? jobs[0] : jobs[1 + index % 4];
+  for (let index = 0; index < 12; index++) {
+    const adult = structuredClone(world.citizens[index]);
+    adult.id = 'citizen:' + (13 + index);
+    adult.profession = 'woodcutter';
+    world.citizens.push(adult);
+  }
+  world.stockpiles[0].total.food = 0;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  assert.equal(world.citizens.filter(c => c.profession === 'farmer').length, 2);
+  assert.ok(jobs.every(role => world.citizens.some(c => c.profession === role)));
+});

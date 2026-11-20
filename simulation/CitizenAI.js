@@ -97,10 +97,14 @@ function chooseRoute(world, citizen, store, population) {
       if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
     }
     if (citizen.profession === 'farmer' && available(store, 'food') < population * FOOD_TARGET_PER_PERSON) {
-      const farm = world.buildings.find(b => b.kind === 'farm' && b.settlementId === citizen.settlementId &&
-        (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick);
-      const goal = farm && workTile(world, tileOf(citizen), farm);
-      if (goal && travel(world, citizen, goal, 'farm', farm.id)) return;
+      const assigned = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
+        .map(c => c.action.targetId));
+      for (const farm of world.buildings) {
+        if (farm.kind !== 'farm' || farm.settlementId !== citizen.settlementId || assigned.has(farm.id) ||
+            !((farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick)) continue;
+        const goal = workTile(world, tileOf(citizen), farm);
+        if (goal && travel(world, citizen, goal, 'farm', farm.id)) return;
+      }
     }
     const candidates = (jobs[citizen.profession] ?? []).filter(key =>
       storageRoom(store, key, foodTarget) > 0 && available(store, key) < (key === 'food' ? population * FOOD_TARGET_PER_PERSON : key === 'wood' ? 24 : 12));

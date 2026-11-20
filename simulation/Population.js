@@ -116,17 +116,36 @@ function checkBirth(world, parent, people) {
 }
 
 function fillVacancies(world) {
+  const occupied = new Set([
+    ...world.inTransit.map(shipment => shipment.carrierId),
+    ...world.quests.filter(quest => quest.status === 'claimed').map(quest => quest.claimedBy),
+    ...(world.campaigns ?? []).filter(c => c.status === 'marching' || c.status === 'siege').flatMap(c => c.memberIds)
+  ]);
   for (const settlement of world.settlements) {
-    const adults = world.citizens.filter(c => c.alive && c.settlementId === settlement.id &&
-      ageYears(world, c) >= ADULT_AGE);
+    const residents = world.citizens.filter(c => c.alive && c.settlementId === settlement.id);
+    const adults = residents.filter(c => ageYears(world, c) >= ADULT_AGE);
     const priorities = ['farmer', 'builder', 'woodcutter', 'miner', 'adventurer'].slice(0, adults.length);
+    const counts = new Map();
+    for (const adult of adults) counts.set(adult.profession, (counts.get(adult.profession) ?? 0) + 1);
     for (const role of priorities) {
-      if (adults.some(c => c.profession === role)) continue;
-      const candidate = adults.find(c => !world.inTransit.some(shipment => shipment.carrierId === c.id) &&
-        !world.quests.some(quest => quest.status === 'claimed' && quest.claimedBy === c.id) &&
-        (!priorities.includes(c.profession) || adults.filter(person => person.profession === c.profession).length > 1));
-      if (candidate) candidate.profession = role;
+      if (counts.has(role)) continue;
+      const candidate = adults.find(c => !occupied.has(c.id) &&
+        (!priorities.includes(c.profession) || counts.get(c.profession) > 1));
+      if (!candidate) continue;
+      counts.set(candidate.profession, counts.get(candidate.profession) - 1);
+      candidate.profession = role;
+      counts.set(role, 1);
     }
+
+    const store = world.stockpiles.find(s => s.settlementId === settlement.id);
+    if (residents.length < 16 || !counts.has('farmer') || !store ||
+        available(store, 'food') >= residents.length * FOOD_BIRTH_PER_PERSON) continue;
+    const target = Math.min(adults.length - 4, Math.ceil(residents.length / 8));
+    if (counts.get('farmer') >= target) continue;
+    const candidate = adults.find(c => c.profession !== 'farmer' && !occupied.has(c.id) &&
+      c.action.kind === 'idle' && counts.get(c.profession) > 1 &&
+      c.id !== world.nations.find(nation => nation.id === settlement.nationId)?.leaderId);
+    if (candidate) candidate.profession = 'farmer';
   }
 }
 
