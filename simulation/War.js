@@ -4,10 +4,17 @@ import { available, freeCapacity } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 import { findPath } from './path.js';
 
-const WAR = { hostility: -60, unitCount: 3, foodPerUnit: 8, marchDays: 3, siegeDays: 5, occupationDays: 3 };
+const WAR = { hostility: -60, unitCount: 3, foodPerUnit: 8, marchDays: 3, siegeDays: 5, occupationDays: 3, truceDays: 10 };
 
 export function activeNations(world) {
   return world.nations.filter(n => n.fallenAt === undefined);
+}
+
+export function truceBetween(world, first, second) {
+  return world.campaigns?.findLast(c => c.status === 'repelled' && c.endedAt !== undefined &&
+    ((c.attackerId === first.id && c.defenderId === second.id) ||
+      (c.attackerId === second.id && c.defenderId === first.id)) &&
+    world.worldTimeTick < c.endedAt + WAR.truceDays * TIME_TICKS_PER_DAY);
 }
 
 export function campaignFor(world, citizen) {
@@ -120,12 +127,17 @@ export function updateWar(world) {
       recoverRations(world, active, attacker);
     }
     if (active.status === 'repelled') {
-      emitOnce(world, active.id, 'siegeRepelled', { x: active.x, y: active.y, nationIds: [attacker.id, defender.id] });
+      const location = { x: active.x, y: active.y, nationIds: [attacker.id, defender.id] };
+      emitOnce(world, active.id, 'siegeRepelled', location);
+      emitOnce(world, active.id, 'truceAgreed', {
+        ...location, expiresAt: world.worldTimeTick + WAR.truceDays * TIME_TICKS_PER_DAY
+      });
     }
     return;
   }
   const last = world.campaigns?.at(-1);
-  if (last?.endedAt !== undefined && world.worldTimeTick - last.endedAt < 10 * TIME_TICKS_PER_DAY) return;
+  if (truceBetween(world, first, second)) return;
+  if (last?.status === 'occupied' && world.worldTimeTick - last.endedAt < WAR.truceDays * TIME_TICKS_PER_DAY) return;
   if ((first.relations[second.id] ?? 0) > WAR.hostility) return;
   const attackers = [first, second].sort((a, b) => b.weights.defense - a.weights.defense);
   for (const candidate of attackers) {

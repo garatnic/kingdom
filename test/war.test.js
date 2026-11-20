@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
+import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { advanceFrame } from '../engine/GameLoop.js';
 import { nextId } from '../simulation/Identity.js';
-import { activeNations, updateWar } from '../simulation/War.js';
+import { activeNations, truceBetween, updateWar } from '../simulation/War.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 
-test('hostile nations send real citizens, occupying and inheriting ownership without duplicating stock', async () => {
+function twoNations() {
   const world = createWorld('war');
   world.map.terrain.fill('grass');
   const home = world.settlements[0];
@@ -33,6 +34,11 @@ test('hostile nations send real citizens, occupying and inheriting ownership wit
     settlementId: away.id, x: 13, y: 13 });
   world.buildings.push({ id: nextId(world, 'building'), kind: 'barracks', settlementId: home.id,
     x: 25, y: 25, width: 1, height: 1 });
+  return { world, invader, defender, away, homeStore };
+}
+
+test('hostile nations send real citizens, occupying and inheriting ownership without duplicating stock', async () => {
+  const { world, invader, defender, away, homeStore } = twoNations();
   updateWar(world);
   assert.equal(homeStore.total.food, 28);
   assert.equal(world.campaigns[0].memberIds.length, 3);
@@ -50,4 +56,23 @@ test('hostile nations send real citizens, occupying and inheriting ownership wit
   assert.ok(world.citizens.every(c => c.nationId === invader.id));
   assert.ok(world.events.some(e => e.type === 'nationFallen' && e.nationId === defender.id));
   assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
+});
+
+test('a failed campaign establishes a bilateral truce that expires after ten days', async () => {
+  const { world, invader, defender } = twoNations();
+  updateWar(world);
+  world.worldTimeTick = 3 * TIME_TICKS_PER_DAY;
+  updateWar(world);
+  const [campaign] = world.campaigns;
+  assert.equal(campaign.status, 'repelled');
+  const treaty = world.events.find(e => e.type === 'truceAgreed');
+  assert.equal(treaty.expiresAt, world.worldTimeTick + 10 * TIME_TICKS_PER_DAY);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(truceBetween(restored, defender, invader).id, campaign.id);
+  restored.worldTimeTick = treaty.expiresAt - TIME_TICKS_PER_DAY;
+  updateWar(restored);
+  assert.equal(restored.campaigns.length, 1);
+  restored.worldTimeTick = treaty.expiresAt;
+  updateWar(restored);
+  assert.equal(restored.campaigns.length, 2);
 });

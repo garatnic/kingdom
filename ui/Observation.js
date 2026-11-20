@@ -12,7 +12,7 @@ const events = {
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
   adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
-  warDeclared: '開戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', nationFallen: '国家が滅亡',
+  warDeclared: '開戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', truceAgreed: '休戦を締結', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };

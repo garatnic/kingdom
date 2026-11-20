@@ -1,4 +1,4 @@
-import { activeNations, updateWar } from './War.js';
+import { activeNations, truceBetween, updateWar } from './War.js';
 import { emitOnce } from '../systems/History.js';
 import { ADULT_AGE, FOOD_EMERGENCY_PER_PERSON, LAYOUT, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { buildings, footprint } from '../data/buildings.js';
@@ -183,7 +183,7 @@ function finishExpedition(world, expedition, failed) {
 
 function updateRelations(world) {
   const [first, second] = activeNations(world);
-  if (!second) return;
+  if (!second || truceBetween(world, first, second)) return;
   const crossings = world.citizens.filter(c => c.alive && c.nationId &&
     [first.id, second.id].includes(c.nationId) && territoryAt(world, c.lastKnownSafeTile) ===
       (c.nationId === first.id ? second.id : first.id));
