@@ -1,7 +1,7 @@
 import { FAR_MOVEMENT_STEPS } from '../simulation/DetailLevel.js';
 import { resources } from '../simulation/Economy.js';
 import { NATIONS } from '../data/nations.js';
-import { monsters } from '../data/combat.js';
+import { gear, monsters } from '../data/combat.js';
 import { technologies } from '../data/technologies.js';
 import { buildings, footprint } from '../data/buildings.js';
 import { validWorldDimension } from '../engine/Expansion.js';
@@ -121,6 +121,9 @@ function validate(world) {
         !c.traits || !['diligence', 'bravery', 'curiosity', 'magicAffinity'].every(key =>
           Number.isFinite(c.traits[key]) && c.traits[key] >= 0 && c.traits[key] <= 1) ||
         !Number.isFinite(c.hp) || c.hp < 0 || c.hp > 100 ||
+        (c.gearId !== undefined && !Object.hasOwn(gear, c.gearId)) ||
+        (c.adventuresCompleted !== undefined && !integer(c.adventuresCompleted, 0)) ||
+        (c.combatXp !== undefined && !integer(c.combatXp, 0)) ||
         !Number.isSafeInteger(c.birthWorldTimeTick) || c.birthWorldTimeTick > world.worldTimeTick ||
         !Array.isArray(c.parentIds) || !Array.isArray(c.childIds) ||
         c.parentIds.some(id => !people.get(id)?.childIds?.includes(c.id) ||

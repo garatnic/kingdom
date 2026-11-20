@@ -1,3 +1,5 @@
+import { commissionGear, trainCombat } from '../simulation/AdventurerGrowth.js';
+import { ensureResearch } from '../simulation/Research.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
@@ -13,10 +15,13 @@ test('adventurers depart, defeat monsters, collect drops and return across three
     const completed = world.quests.filter(q => q.status === 'completed' && q.lootIds.length > 0);
     assert.ok(completed.length, seed);
     for (const q of completed) {
-      const events = world.events.filter(e => e.questId === q.id);
+      const phases = ['adventureDeparted', 'monsterDefeated', 'adventureReturned'];
+      const events = world.events.filter(e => e.questId === q.id && phases.includes(e.type));
       assert.deepEqual(events.map(e => e.type), ['adventureDeparted', 'monsterDefeated', 'adventureReturned']);
       assert.ok(q.lootIds.every(id => world.resourceNodes.find(n => n.id === id)?.quantity === 0));
     }
+    assert.ok(world.citizens.some(c => c.adventuresCompleted > 0));
+    assert.ok(world.events.some(e => e.type === 'adventurerRankUp'));
     const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
     advanceFrame(world, 100);
     advanceFrame(restored, 100);
@@ -91,4 +96,27 @@ test('fear and low HP trigger retreat without a strike or reward', () => {
   assert.equal(monster.hp, 30);
   assert.equal(citizen.inventory.food, 0);
   assert.equal(world.events.at(-1).retreated, true);
+});
+
+
+test('combat experience can advance multiple levels and forged gear uses available stock once', () => {
+  const world = createWorld('equipment');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const citizen = world.citizens.find(c => c.profession === 'adventurer');
+  trainCombat(world, citizen, { id: 'quest:1' }, 65);
+  assert.equal(citizen.skills.combat, 2);
+  assert.equal(citizen.combatXp, 5);
+  world.buildings.push({ kind: 'smithy', settlementId: home.id });
+  ensureResearch(world, home, ['weapons_1']);
+  store.total.iron = 4;
+  store.reserved.iron = 3;
+  commissionGear(world, citizen, store);
+  assert.equal(citizen.gearId, undefined);
+  store.reserved.iron = 1;
+  commissionGear(world, citizen, store);
+  commissionGear(world, citizen, store);
+  assert.equal(citizen.gearId, 'iron');
+  assert.equal(store.total.iron, 2);
+  assert.equal(store.reserved.iron, 1);
 });

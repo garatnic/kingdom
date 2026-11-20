@@ -1,7 +1,8 @@
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
-import { COMBAT, monsters } from '../data/combat.js';
+import { commissionGear, recordAdventureSuccess, trainCombat } from './AdventurerGrowth.js';
+import { COMBAT, gear, monsters } from '../data/combat.js';
 import { ADULT_AGE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
@@ -170,6 +171,7 @@ export function claimAdventure(world, citizen, store, travel) {
     const monster = world.monsters.find(m => m.id === quest.targetId && m.alive);
     const goal = monster && approach(world, citizen, monster);
     if (!goal || !travel(goal, 'adventure', quest.id)) continue;
+    commissionGear(world, citizen, store);
     store.total.food--;
     citizen.inventory.food++;
     quest.status = 'claimed';
@@ -190,14 +192,7 @@ function damage(world, attack, defense) {
 function defeat(world, citizen, quest, monster) {
   const config = monsters[monster.species];
   monster.alive = false;
-  const bonus = (citizen.combatXp ?? 0) + config.xp;
-  const nextLevel = citizen.skills.combat + 1;
-  if (nextLevel <= COMBAT.maxLevel && bonus >= COMBAT.xpPerLevel * nextLevel) {
-    citizen.skills.combat = nextLevel;
-    citizen.combatXp = bonus - COMBAT.xpPerLevel * nextLevel;
-  } else {
-    citizen.combatXp = bonus;
-  }
+  trainCombat(world, citizen, quest, config.xp);
   for (const [resource, chance] of config.loot) {
     if (random(world.rngState) >= chance) continue;
     const node = { id: nextId(world, 'node'), resource, quantity: 1, x: monster.x, y: monster.y, dropped: true, questId: quest.id };
@@ -242,7 +237,7 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
         const weapon = unlocked(world, citizen.settlementId, 'weapons_1') ? TECH.weaponBonus : 0;
         const steel = !quest.casting && unlocked(world, citizen.settlementId, 'steel_1') ? TECH.steelWeaponBonus : 0;
         const arcane = quest.casting && unlocked(world, citizen.settlementId, 'magic_2') ? TECH.arcaneSpellBonus : 0;
-        const attack = quest.casting ? TECH.spellAttack + arcane : COMBAT.attack + citizen.skills.combat + weapon + steel;
+        const attack = quest.casting ? TECH.spellAttack + arcane : COMBAT.attack + citizen.skills.combat + weapon + steel + (gear[citizen.gearId]?.attack ?? 0);
         if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
           monster.hp = Math.max(0, monster.hp - damage(world, attack, config.defense));
         }
@@ -251,7 +246,7 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
         if (monster.hp === 0) defeat(world, citizen, quest, monster);
       }
       if (monster.alive && distance(position, monster) <= COMBAT.rangedDistance && world.worldTimeTick >= monster.attackAt) {
-        citizen.hp = Math.max(0, citizen.hp - damage(world, config.attack, COMBAT.defense));
+        citizen.hp = Math.max(0, citizen.hp - damage(world, config.attack, COMBAT.defense + (gear[citizen.gearId]?.defense ?? 0)));
         monster.attackAt = world.worldTimeTick + COMBAT.interval;
         if (!citizen.hp) {
           recordDeath(world, citizen, 'combat');
@@ -289,6 +284,7 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
     quest.unpaidFood = quest.rewardFood;
   }
   quest.status = quest.retreated ? 'retreated' : 'completed';
+  if (!quest.retreated) recordAdventureSuccess(world, citizen, quest);
   emit(world, 'adventureReturned', quest, origin, { citizenId: citizen.id, retreated: Boolean(quest.retreated) });
   return false;
 }

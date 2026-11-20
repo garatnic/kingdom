@@ -11,3 +11,10 @@ export const COMBAT = {
   spawnDistance: 10, residentSafety: 5, wanderRadius: 8, spawnInterval: 6 * NEED_HOUR_TICKS,
   questLimit: 2, questDuration: 2 * TIME_TICKS_PER_DAY, rewardFood: 1
 };
+
+export const gear = {
+  steel: { label: '鋼鉄装備', attack: 3, defense: 2, iron: 3, requiredLevel: 5, technology: 'steel_1' },
+  iron: { label: '鉄製装備', attack: 1, defense: 1, iron: 2, requiredLevel: 2, technology: 'weapons_1' }
+};
+
+export const adventurerRanks = { novice: '駆け出し', explorer: '探索者', veteran: '熟練者', hero: '英雄' };

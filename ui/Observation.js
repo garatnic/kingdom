@@ -1,3 +1,5 @@
+import { adventurerRanks, gear } from '../data/combat.js';
+import { adventurerRank } from '../simulation/AdventurerGrowth.js';
 import { civilizationNames } from '../data/technologies.js';
 import { calendar } from '../engine/GameLoop.js';
 import { ageYears } from '../simulation/Identity.js';
@@ -8,6 +10,7 @@ const events = {
   constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
+  adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   warDeclared: '開戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
@@ -77,6 +80,10 @@ export function observation(getWorld, getCamera, focus) {
       const settlement = world.settlements.find(s => s.id === person.settlementId);
       if (settlement) add(body, 'p', `集落 ${settlement.id} / ${world.nations.find(n => n.id === person.nationId)?.name ?? '国家未所属'}`);
       add(body, 'p', `HP ${person.hp} / 空腹 ${person.hunger} / 疲労 ${person.fatigue} · ${actions[person.action.kind] ?? '待機'}`);
+      if (person.profession === 'adventurer' || person.adventuresCompleted) {
+        add(body, 'p', `${adventurerRanks[adventurerRank(person)]} · 戦闘 Lv.${person.skills.combat} · 討伐達成 ${person.adventuresCompleted ?? 0}回`);
+        if (person.gearId) add(body, 'p', gear[person.gearId]?.label ?? person.gearId);
+      }
       const inventory = Object.entries(person.inventory).filter(([, qty]) => qty > 0);
       if (inventory.length) add(body, 'p', inventory.map(([key, qty]) => `${resources[key]} ${qty}`).join(' / '));
       if (mode === 'family') {
