@@ -166,6 +166,7 @@ function perform(world, citizen, store, ticks, population) {
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
       let multiplier = unlocked(world, citizen.settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
       if (unlocked(world, citizen.settlementId, 'irrigation_1')) multiplier += TECH.irrigationBonus;
+      if (unlocked(world, citizen.settlementId, 'verdant_1')) multiplier += TECH.verdantBonus;
       citizen.inventory.food += Math.floor(FARM_YIELD * multiplier);
       if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     }

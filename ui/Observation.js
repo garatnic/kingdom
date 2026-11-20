@@ -108,7 +108,7 @@ export function observation(getWorld, getCamera, focus) {
       const priorities = { food: '農業', housing: '住宅', defense: '防衛', research: '研究', exploration: '探索' };
       add(body, 'p', `主要方針 ${priorities[nation.policy.primary] ?? '選択中'}`);
       const state = world.researchStates.find(item => item.ownerId === nation.id);
-      const tech = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法', steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅', restoration_1: '治癒術' };
+      const tech = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法', steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅', restoration_1: '治癒術', verdant_1: '豊穣魔法' };
       if (state) add(body, 'p', civilizationNames[state.civilization] ?? state.civilization);
       if (state) add(body, 'p', `解禁研究 ${state.unlockedIds.map(id => tech[id]).join('・') || 'なし'}`);
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);

@@ -53,8 +53,18 @@ test('civilization advances per nation, resets interrupted streaks and unlocks l
   advance(20);
   assert.equal(state.civilization, 'arcane');
   assert.equal(otherState.civilization, 'agrarian');
+  store.total.food = 60;
+  store.total.manaStone = 5;
+  for (const citizen of world.citizens.filter(c => c.settlementId === other.id).slice(0, 4)) citizen.settlementId = home.id;
+  world.buildings.push(...Array.from({ length: 2 }, () => ({ kind: 'farm', settlementId: home.id })));
+  advance(29);
+  assert.equal(state.civilization, 'arcane');
+  advance(1);
+  assert.equal(state.civilization, 'mythic');
+  assert.ok(state.unlockedIds.includes('verdant_1'));
+  assert.ok(!otherState.unlockedIds.includes('verdant_1'));
   assert.deepEqual(world.events.filter(e => e.type === 'civilizationAdvanced').map(e => e.civilization),
-    ['iron', 'kingdom', 'arcane']);
+    ['iron', 'kingdom', 'arcane', 'mythic']);
   for (const technology of ['steel_1', 'irrigation_1', 'magic_2']) assert.ok(state.unlockedIds.includes(technology));
 });
 
