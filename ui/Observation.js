@@ -7,12 +7,12 @@ const events = {
   constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
-  research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '農耕社会に発展'
+  frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '農耕社会に発展'
 };
 const races = { human: '人間', elf: 'エルフ', dwarf: 'ドワーフ' };
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
-  idle: '待機', explore: '探索', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
+  idle: '待機', explore: '探索', survey: '境界を調査', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
   farm: '収穫', build: '建築', pickUpMaterials: '資材引取', deliverMaterials: '資材搬入',
   recoverMaterials: '資材回収', adventure: '冒険', expedition: '開拓'
 };

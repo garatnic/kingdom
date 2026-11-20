@@ -79,6 +79,10 @@ function frame(now) {
       get('status').textContent = `自動保存失敗：${error.message}。手動でJSONを保存できます。`;
     });
   }
+  for (const [id, max] of [['god-x', world.map.width - 1], ['god-y', world.map.height - 1]]) {
+    const coordinate = get(id);
+    if (Number(coordinate.max) !== max) coordinate.max = max;
+  }
   renderer.draw(world, camera);
   requestAnimationFrame(frame);
 }

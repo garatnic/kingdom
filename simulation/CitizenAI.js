@@ -1,4 +1,5 @@
 import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, NEEDS, GATHER_TICKS } from '../data/balance.js';
+import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { random } from '../engine/random.js';
 import { findPath } from './path.js';
 import { available, deposit, freeCapacity, harvest, renewNodes, resources, storageRoom } from './Economy.js';
@@ -110,6 +111,14 @@ function chooseRoute(world, citizen, store, population) {
       }
     }
   }
+  const survey = surveyRoute(world, citizen);
+  if (survey) {
+    const { goal, path } = survey;
+    citizen.action = { kind: 'survey', phase: path.length ? 'travel' : 'perform',
+      goal: { x: goal.x, y: goal.y }, direction: goal.direction, targetId: null, path, progress: 0,
+      startedAt: world.worldTimeTick, navigationVersion: world.map.navigationVersion };
+    return;
+  }
   if (store && claimAdventure(world, citizen, store, (goal, kind, targetId) =>
     travel(world, citizen, goal, kind, targetId))) return;
   if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
@@ -120,6 +129,7 @@ function chooseRoute(world, citizen, store, population) {
 
 function perform(world, citizen, store, ticks, population) {
   const action = citizen.action;
+  if (action.kind === 'survey') discoverFrontier(world, citizen.lastKnownSafeTile, action.direction, citizen.id);
   if (action.kind === 'expedition') {
     const expedition = world.expeditions.find(item => item.id === action.targetId);
     if (!expedition.arrivedIds.includes(citizen.id)) expedition.arrivedIds.push(citizen.id);

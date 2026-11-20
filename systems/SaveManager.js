@@ -3,7 +3,8 @@ import { NATIONS } from '../data/nations.js';
 import { monsters } from '../data/combat.js';
 import { technologies } from '../data/technologies.js';
 import { buildings, footprint } from '../data/buildings.js';
-import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
+import { validWorldDimension } from '../engine/Expansion.js';
+import { SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS } from '../data/balance.js';
 
 const VERSION = 1;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -30,19 +31,20 @@ function canonical(value) {
 function validate(world) {
   const map = world?.map;
   const camera = world?.settings?.camera;
-  const validTile = tile => tile && integer(tile.x, 0, SIZE - 1) && integer(tile.y, 0, SIZE - 1);
-  const terrainAt = tile => map.terrain[tile.y * SIZE + tile.x];
+  const validTile = tile => tile && integer(tile.x, 0, map.width - 1) && integer(tile.y, 0, map.height - 1);
+  const terrainAt = tile => map.terrain[tile.y * map.width + tile.x];
   if (typeof world?.seed !== 'string' || !integer(world.worldTimeTick, 0) ||
       !SPEEDS.includes(world.gameSpeed) || !inside(world.tickRemainder, REAL_STEP_MS) ||
       !Array.isArray(world.rngState) || world.rngState.length !== 4 ||
       !world.rngState.every(n => integer(n, 0, 0xffffffff)) || !world.rngState.some(Boolean) ||
-      map?.width !== SIZE || map.height !== SIZE || !integer(map.navigationVersion, 0) ||
-      !Array.isArray(map.terrain) || map.terrain.length !== SIZE ** 2 ||
+      !validWorldDimension(map?.width) || !validWorldDimension(map.height) || !integer(map.navigationVersion, 0) ||
+      !Array.isArray(map.terrain) || map.terrain.length !== map.width * map.height ||
       !map.terrain.every(t => Object.hasOwn(TERRAIN_COST, t)) ||
       !world.idCounters || !entityLists(world).every(key => Array.isArray(world[key])) ||
       world.settlements.length < 1 || world.settlements.length > NATIONS.limit || world.nations.length > NATIONS.limit ||
       !world.settings || (camera && (!['free', 'manualOverride', 'autoEvent', 'followCitizen', 'followNation'].includes(camera.mode) ||
-        !inside(camera.x, SIZE + Number.EPSILON * SIZE) || !inside(camera.y, SIZE + Number.EPSILON * SIZE) ||
+        !Number.isFinite(camera.x) || camera.x < 0 || camera.x > map.width ||
+        !Number.isFinite(camera.y) || camera.y < 0 || camera.y > map.height ||
         !Number.isFinite(camera.zoom) || camera.zoom < MIN_ZOOM || camera.zoom > MAX_ZOOM))) {
     throw new Error('保存データの世界設定が無効です。');
   }
@@ -103,7 +105,7 @@ function validate(world) {
 
   for (const c of world.citizens) {
     const action = c.action;
-    if (!inside(c.x, SIZE) || !inside(c.y, SIZE) || (c.settlementId === null
+    if (!inside(c.x, map.width) || !inside(c.y, map.height) || (c.settlementId === null
           ? c.nationId !== null || (c.alive && c.expeditionId && !expeditions.get(c.expeditionId)?.memberIds.includes(c.id))
           : !settlements.has(c.settlementId) || settlements.get(c.settlementId).nationId !== c.nationId) || typeof c.alive !== 'boolean' || !Object.hasOwn(LIFESPAN_YEARS, c.race) ||
         !c.inventory || !resources.every(key => integer(c.inventory[key], 0)) ||
