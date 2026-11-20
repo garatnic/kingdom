@@ -77,6 +77,20 @@ export class Renderer {
       ctx.fillRect(x - 3, y - 3, 6, 6);
     }
 
+    const nests = new Set();
+    for (const monster of world.monsters) {
+      const home = monster.homeTile;
+      if (!monster.alive || !monster.hasNest || !visible(home) ||
+          !monsters[monster.species].habitat.includes(world.map.terrain[home.y * world.map.width + home.x])) continue;
+      const key = home.x + ',' + home.y;
+      if (nests.has(key)) continue;
+      nests.add(key);
+      ctx.fillStyle = '#443932';
+      ctx.fillRect(home.x * TILE + 6, home.y * TILE + 17, 20, 9);
+      ctx.fillStyle = monsters[monster.species].color;
+      ctx.fillRect(home.x * TILE + 9, home.y * TILE + 19, 14, 2);
+    }
+
     for (const monster of world.monsters.filter(m => m.alive && visible(m))) {
       const x = monster.x * TILE + 16;
       const y = monster.y * TILE + 16;

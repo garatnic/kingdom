@@ -78,13 +78,16 @@ function replenishSpecies(world, species, forbidden) {
   const config = monsters[species];
   const population = world.monsters.filter(m => m.alive && m.species === species);
   for (const parent of population) {
-    if (world.worldTimeTick < (parent.nextBreedAt ?? 0)) continue;
-    const colony = population.filter(m => distance(m, parent) <= 6).length;
+    const home = parent.homeTile;
+    const homeTerrain = world.map.terrain[home.y * world.map.width + home.x];
+    if (world.worldTimeTick < (parent.nextBreedAt ?? 0) || distance(parent, home) > 4 ||
+        !config.habitat.includes(homeTerrain) || findPath(world, home, home) === null) continue;
+    const colony = population.filter(m => distance(m.homeTile, home) <= 6).length;
     if (colony >= 3) continue;
     const candidates = [];
     for (let dy = -2; dy <= 2; dy++) {
       for (let dx = -2; dx <= 2; dx++) {
-        const tile = { x: parent.x + dx, y: parent.y + dy };
+        const tile = { x: home.x + dx, y: home.y + dy };
         if (tile.x < 0 || tile.x >= world.map.width || tile.y < 0 || tile.y >= world.map.height ||
             forbidden.has(tileKey(tile)) ||
             !config.habitat.includes(world.map.terrain[tile.y * world.map.width + tile.x])) continue;
@@ -96,6 +99,9 @@ function replenishSpecies(world, species, forbidden) {
       const newborn = spawnMonster(world, species, candidates.splice(index, 1)[0]);
       if (!newborn) continue;
       newborn.parentMonsterId = parent.id;
+      newborn.homeTile = { ...home };
+      newborn.hasNest = parent.hasNest = true;
+      emitOnce(world, species + '/nest/' + tileKey(home), 'monsterNestFounded', { ...home, species });
       newborn.nextBreedAt = parent.nextBreedAt = world.worldTimeTick + TIME_TICKS_PER_DAY;
       return true;
     }

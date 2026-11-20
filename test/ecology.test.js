@@ -15,6 +15,9 @@ test('a colony reproduces in suitable terrain without ignoring local limits or c
   updateAdventureWorld(world, 12);
   const offspring = world.monsters.find(m => m.parentMonsterId === parent.id);
   assert.ok(offspring);
+  assert.deepEqual(offspring.homeTile, parent.homeTile);
+  assert.equal(offspring.hasNest, true);
+  assert.equal(world.events.filter(e => e.type === 'monsterNestFounded').length, 1);
   assert.ok(Math.abs(offspring.x - 8) <= 2 && Math.abs(offspring.y - 8) <= 2);
   assert.equal(parent.nextBreedAt, 100 + TIME_TICKS_PER_DAY);
   world.worldTimeTick = world.nextMonsterSpawnTick;
