@@ -93,7 +93,18 @@ export function applyGodCommand(world, command) {
   const tile = { x: payload.x, y: payload.y };
   if (!inBounds(world, tile)) return 'OUT_OF_BOUNDS';
   const { value, quantity } = payload;
-  if (kind === 'terrain') {
+  let affectedCitizenIds;
+  if (kind === 'blessing') {
+    if (value !== 'recovery') return 'INVALID_KIND';
+    const affected = world.citizens.filter(c => c.alive && sumDistance(cell(c), tile) <= 3 &&
+      (c.hp < 100 || c.fear > 0));
+    if (!affected.length) return 'NO_TARGET';
+    for (const citizen of affected) {
+      citizen.hp = Math.min(100, citizen.hp + 25);
+      citizen.fear = Math.max(0, citizen.fear - 20);
+    }
+    affectedCitizenIds = affected.map(c => c.id);
+  } else if (kind === 'terrain') {
     const error = editTerrain(world, tile, value);
     if (error) return error;
   } else {
@@ -119,6 +130,9 @@ export function applyGodCommand(world, command) {
       }
     }
   }
-  emitOnce(world, commandId, 'god_intervention', { ...tile, kind, value, quantity: kind === 'terrain' ? 0 : quantity });
+  emitOnce(world, commandId, 'god_intervention', {
+    ...tile, kind, value, quantity: affectedCitizenIds?.length ?? (kind === 'terrain' ? 0 : quantity),
+    ...(affectedCitizenIds && { affectedCitizenIds })
+  });
   return null;
 }

@@ -116,7 +116,9 @@ export function observation(getWorld, getCamera, focus) {
   }
 
   function showEvent(world, event) {
-    const title = event.type === 'civilizationAdvanced' ? civilizationNames[event.civilization] + 'へ進展' : events[event.type] ?? event.type;
+    let title = events[event.type] ?? event.type;
+    if (event.type === 'civilizationAdvanced') title = civilizationNames[event.civilization] + 'へ進展';
+    if (event.type === 'god_intervention' && event.kind === 'blessing') title = '回復の祝福（' + event.quantity + '人）';
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);
     if (!target) { add(body, 'p', label); return; }

@@ -89,3 +89,22 @@ test('three additional races can be created and restored without changing the st
   assert.deepEqual(restored.citizens.slice(-3).map(c => c.race), newRaces);
   assert.ok(restored.citizens.at(-1).traits.magicAffinity >= 0.75);
 });
+
+test('divine blessing heals living residents in range and remains idempotent across saves', async () => {
+  const world = createWorld('intervention');
+  const patient = world.citizens[0];
+  const tile = patient.lastKnownSafeTile;
+  patient.hp = 60;
+  patient.fear = 30;
+  const blessing = command('bless-once', 'blessing', tile, 'recovery');
+  assert.equal(applyGodCommand(world, blessing), null);
+  assert.equal(patient.hp, 85);
+  assert.equal(patient.fear, 10);
+  const event = world.events.find(e => e.sourceTransactionId === 'bless-once');
+  assert.deepEqual(event.affectedCitizenIds, [patient.id]);
+  assert.ok(historyFor(world, 'citizen', patient.id).includes(event));
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(applyGodCommand(restored, blessing), 'DUPLICATE');
+  assert.equal(restored.citizens[0].hp, 85);
+  assert.equal(applyGodCommand(restored, command('empty', 'blessing', { x: 0, y: 0 }, 'recovery')), 'NO_TARGET');
+});

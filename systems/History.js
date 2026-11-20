@@ -23,7 +23,7 @@ export function historyFor(world, kind, id) {
     if (kind === 'world') return eventImportance(e) >= 2;
     if (kind === 'citizen') {
       return e.citizenId === id || e.leaderId === id || e.citizenIds?.includes(id) ||
-        e.parentIds?.includes(id) || e.actorIds?.includes(id);
+        e.parentIds?.includes(id) || e.actorIds?.includes(id) || e.affectedCitizenIds?.includes(id);
     }
     const nation = world.nations.find(n => n.id === id);
     const research = world.researchStates.find(state => state.ownerId === id);

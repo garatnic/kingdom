@@ -222,6 +222,7 @@ get('file').addEventListener('change', async event => {
 });
 
 const godOptions = {
+  blessing: { recovery: '回復（周囲3タイル）' },
   life: Object.fromEntries(Object.entries(citizenRaces).map(([id, race]) => [id, race.label])),
   resource: { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' },
   terrain: { grass: '草原', forest: '森', mountain: '山', water: '水' },
@@ -230,9 +231,10 @@ const godOptions = {
 function showGodOptions() {
   const kind = get('god-kind').value;
   get('god-value').replaceChildren(...Object.entries(godOptions[kind]).map(([id, name]) => new Option(name, id)));
-  get('god-amount').hidden = kind === 'terrain';
-  get('god-quantity').disabled = kind === 'terrain';
-  get('god-quantity').max = { life: 10, resource: 100, monster: 5, terrain: 1 }[kind];
+  const max = { life: 10, resource: 100, monster: 5 }[kind];
+  get('god-amount').hidden = max === undefined;
+  get('god-quantity').disabled = max === undefined;
+  if (max !== undefined) get('god-quantity').max = max;
   if (kind === 'terrain' && get('god-form').parentElement.open) {
     terrainSpeed ??= world.gameSpeed;
     selectSpeed(0);
