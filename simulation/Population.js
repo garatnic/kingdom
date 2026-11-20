@@ -49,10 +49,19 @@ function marry(world, first, second) {
 }
 
 function dailyRelationships(world, citizens) {
-  const adults = citizens.filter(c => c.alive && ageYears(world, c) >= ADULT_AGE);
-  for (const [i, first] of adults.entries()) {
-    for (const second of adults.slice(i + 1)) {
-      if (!first.settlementId || first.settlementId !== second.settlementId || first.race !== second.race) continue;
+  const groups = new Map();
+  const adults = [];
+  for (const citizen of citizens) {
+    if (!citizen.alive || !citizen.settlementId || ageYears(world, citizen) < ADULT_AGE) continue;
+    const key = citizen.settlementId + '/' + citizen.race;
+    if (!groups.has(key)) groups.set(key, []);
+    const group = groups.get(key);
+    adults.push({ citizen, group, index: group.length });
+    group.push(citizen);
+  }
+  for (const { citizen: first, group, index } of adults) {
+    for (let i = index + 1; i < group.length; i++) {
+      const second = group[i];
       first.relationships ??= {};
       second.relationships ??= {};
       const newScore = score => Math.min(100, (score ?? 0) + FAMILY.relationshipPerDay);
