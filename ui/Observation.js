@@ -5,6 +5,8 @@ import { adventurerRanks, gear } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
 import { civilizationNames } from '../data/technologies.js';
 import { calendar } from '../engine/GameLoop.js';
+import { relationLabel } from '../simulation/Nations.js';
+import { activeNations, truceBetween } from '../simulation/War.js';
 import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor } from '../systems/History.js';
 
@@ -142,6 +144,22 @@ export function observation(getWorld, getCamera, focus) {
       const tech = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法', steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅', restoration_1: '治癒術', verdant_1: '豊穣魔法' };
       if (state) add(body, 'p', civilizationNames[state.civilization] ?? state.civilization);
       if (state) add(body, 'p', `解禁研究 ${state.unlockedIds.map(id => tech[id]).join('・') || 'なし'}`);
+      const rivals = nation.fallenAt === undefined ? activeNations(world).filter(other => other.id !== nation.id) : [];
+      if (rivals.length) {
+        add(body, 'h4', '外交');
+        const labels = { friendly: '友好', neutral: '中立', hostile: '敵対' };
+        for (const rival of rivals) {
+          const value = nation.relations[rival.id] ?? 0;
+          const truce = truceBetween(world, nation, rival);
+          const campaign = world.campaigns?.find(c =>
+            ((c.attackerId === nation.id && c.defenderId === rival.id) ||
+              (c.defenderId === nation.id && c.attackerId === rival.id)) &&
+            (c.status === 'marching' || c.status === 'siege'));
+          const status = campaign ? (campaign.status === 'marching' ? ' · 進軍中' : ' · 包囲中') :
+            truce ? ' · 休戦中' : '';
+          add(body, 'p', `${rival.name} ${labels[relationLabel(value)]}（${value}）${status}`);
+        }
+      }
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);
     } else add(body, 'p', '対象がまだありません。');
   }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { advanceFrame } from '../engine/GameLoop.js';
+import { updateNations } from '../simulation/Nations.js';
 import { territoryAt } from '../simulation/Territory.js';
 import { nextId } from '../simulation/Identity.js';
 import { activeNations, truceBetween, updateWar } from '../simulation/War.js';
@@ -123,4 +124,43 @@ test('a defending militia can repel the invading force in a field battle before 
   assert.equal(battle.actorIds.length, 5);
   assert.ok(militia.every(c => c.hp < 100 && c.alive));
   assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
+});
+
+
+test('five nations can handle independent fronts and preserve a fallen nation in the save', async () => {
+  const { world, invader, defender, homeStore } = twoNations();
+  const addNation = (x, y) => {
+    const settlement = { id: nextId(world, 'settlement'), x, y };
+    const nation = { ...invader, id: nextId(world, 'nation'), capitalId: settlement.id,
+      settlementIds: [settlement.id], leaderId: null, relations: {}, policy: {} };
+    settlement.nationId = nation.id;
+    world.settlements.push(settlement);
+    world.nations.push(nation);
+    world.stockpiles.push({ ...structuredClone(homeStore), id: nextId(world, 'stockpile'),
+      settlementId: settlement.id, x, y });
+    return { nation, settlement };
+  };
+  const { nation: east, settlement } = addNation(82, 32);
+  const { nation: west } = addNation(112, 32);
+  const { nation: neutral } = addNation(150, 48);
+  const participants = world.citizens.slice(4, 8);
+  for (const c of participants) Object.assign(c, { nationId: east.id, settlementId: settlement.id, homeBuildingId: null });
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'barracks', settlementId: settlement.id, x: 84, y: 32 });
+  east.relations[west.id] = west.relations[east.id] = -60;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateNations(world, 12);
+  assert.equal(world.campaigns.length, 2);
+  assert.deepEqual(world.campaigns.map(c => c.defenderId), [defender.id, west.id]);
+  participants[0].lastKnownSafeTile = { x: 149, y: 48 };
+  world.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateNations(world, 12);
+  assert.equal(neutral.relations[east.id], -2);
+  assert.ok(world.events.some(e => e.type === 'borderFriction' && e.nationIds.includes(neutral.id)));
+
+  const archived = { ...neutral, id: nextId(world, 'nation'), capitalId: null, settlementIds: [], fallenAt: world.worldTimeTick };
+  world.nations.push(archived);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(activeNations(restored).length, 5);
+  assert.equal(restored.nations.length, 6);
+  assert.deepEqual(restored.campaigns, world.campaigns);
 });

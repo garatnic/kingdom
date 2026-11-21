@@ -44,7 +44,7 @@ function validate(world) {
       !Array.isArray(map.terrain) || map.terrain.length !== map.width * map.height ||
       !map.terrain.every(t => Object.hasOwn(TERRAIN_COST, t)) ||
       !world.idCounters || !entityLists(world).every(key => Array.isArray(world[key])) ||
-      world.settlements.length < 1 || world.settlements.length > NATIONS.limit || world.nations.length > NATIONS.limit ||
+      world.settlements.length < 1 || world.nations.filter(n => n?.fallenAt === undefined).length > NATIONS.limit ||
       !world.settings || (camera && (!['free', 'manualOverride', 'autoEvent', 'followCitizen', 'followNation'].includes(camera.mode) ||
         !Number.isFinite(camera.x) || camera.x < 0 || camera.x > map.width ||
         !Number.isFinite(camera.y) || camera.y < 0 || camera.y > map.height ||
@@ -63,7 +63,7 @@ function validate(world) {
     }
   }
   const settlements = new Map(world.settlements.map(s => [s.id, s]));
-  if (world.territory !== undefined && (!world.territory || Array.isArray(world.territory) ||
+  if (world.territory !== undefined && (!world.territory || Object.getPrototypeOf(world.territory) !== Object.prototype ||
       Object.entries(world.territory).some(([index, id]) => !/^(0|[1-9][0-9]*)$/.test(index) ||
         !integer(Number(index), 0, map.width * map.height - 1) || !settlements.get(id)?.nationId))) {
     throw new Error('保存データの領土が無効です。');
@@ -90,6 +90,8 @@ function validate(world) {
   const people = new Map(world.citizens.map(c => [c.id, c]));
   if (world.campaigns?.some(c => !['marching', 'siege', 'occupied', 'repelled'].includes(c.status) ||
       !nations.has(c.attackerId) || !nations.has(c.defenderId) || !settlements.has(c.settlementId) ||
+      (['marching', 'siege'].includes(c.status) &&
+        [c.attackerId, c.defenderId].some(id => nations.get(id).fallenAt !== undefined)) ||
       !validTile(c) || !integer(c.rations, 0) || !Array.isArray(c.memberIds) || !c.memberIds.every(id => people.has(id)) ||
       !Array.isArray(c.arrivedIds) || !c.arrivedIds.every(id => c.memberIds.includes(id)))) {
     throw new Error('保存データの遠征が無効です。');

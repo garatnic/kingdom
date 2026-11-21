@@ -6,12 +6,11 @@ import { NATIONS } from '../data/nations.js';
 import { available, freeCapacity, resources } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 import { ensureResearch, getResearch } from './Research.js';
-import { findPath } from './path.js';
-import { claimSettlement, initializeTerritory, territoryAt } from './Territory.js';
+import { findPath, reachableTiles } from './path.js';
+import { claimSettlement, initializeTerritory, territoryAt, tileDistance as distance } from './Territory.js';
 
 export { territoryAt } from './Territory.js';
 
-const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const leaderScore = c => 0.4 * c.traits.diligence + 0.3 * c.traits.bravery + 0.3 * 0.5;
 const residents = (world, settlementId) => world.citizens.filter(c => c.alive && c.settlementId === settlementId);
 const depot = (world, settlementId) => world.stockpiles.find(s => s.settlementId === settlementId);
@@ -23,7 +22,7 @@ function settleNation(world, settlement, leader) {
     capitalId: settlement.id, settlementIds: [settlement.id], leaderId: leader.id, createdAt: world.worldTimeTick,
     weights: { food: 1 + leader.traits.diligence * 0.5, defense: 1 + leader.traits.bravery * 0.5,
       research: 1 + leader.traits.curiosity * 0.5 }, relations: {}, policy: {} };
-  for (const other of world.nations) {
+  for (const other of activeNations(world)) {
     nation.relations[other.id] = 0;
     other.relations[nation.id] = 0;
   }
@@ -39,7 +38,7 @@ function settleNation(world, settlement, leader) {
 }
 
 function checkFounding(world, settlement) {
-  if (settlement.nationId || world.nations.length >= NATIONS.limit) return;
+  if (settlement.nationId || activeNations(world).length >= NATIONS.limit) return;
   const people = residents(world, settlement.id);
   const store = depot(world, settlement.id);
   const adults = people.filter(c => ageYears(world, c) >= ADULT_AGE)
@@ -75,27 +74,36 @@ export function relationLabel(value) {
   return value >= NATIONS.friendly ? 'friendly' : value <= NATIONS.hostile ? 'hostile' : 'neutral';
 }
 
+function expeditionPlot(world, tile) {
+  const { width, height, terrain } = world.map;
+  return world.settlements.every(s => distance(s, tile) >= 8) &&
+    [tile, { x: tile.x + 1, y: tile.y }, { x: tile.x, y: tile.y + 1 }, { x: tile.x + 1, y: tile.y + 1 }]
+      .every(p => p.x >= 0 && p.y >= 0 && p.x < width && p.y < height &&
+        terrain[p.y * width + p.x] === 'grass' && !territoryAt(world, p) &&
+        !world.buildings.some(b => footprint(b, p)) && !world.constructionSites.some(s => footprint(s, p)) &&
+        !world.resourceNodes.some(n => distance(n, p) === 0) && !world.stockpiles.some(s => distance(s, p) === 0));
+}
+
 function expeditionTile(world, settlement, start) {
-  const frontier = world.map.frontier;
-  if (frontier && findPath(world, start, frontier) !== null &&
-      world.settlements.every(existing => distance(existing, frontier) >= NATIONS.expeditionMinDistance) &&
-      !world.constructionSites.some(site => footprint(site, frontier))) return frontier;
-  for (let dy = -NATIONS.expeditionSearchDistance; dy <= NATIONS.expeditionSearchDistance; dy++) {
-    for (let dx = -NATIONS.expeditionSearchDistance; dx <= NATIONS.expeditionSearchDistance; dx++) {
-      const tile = { x: settlement.x + dx, y: settlement.y + dy };
+  const { width, height } = world.map;
+  const supplies = ['food', 'wood'].map(key => world.resourceNodes.filter(node =>
+    node.resource === key && !node.dropped && node.quantity > 0 &&
+    Math.abs(distance(node, settlement) - NATIONS.expeditionMinDistance) <=
+      NATIONS.expeditionNodeDistance + NATIONS.expeditionSearchDistance - NATIONS.expeditionMinDistance));
+  if (supplies.some(nodes => !nodes.length)) return null;
+  let connected;
+  for (let y = Math.max(0, settlement.y - NATIONS.expeditionSearchDistance);
+    y < Math.min(height - 1, settlement.y + NATIONS.expeditionSearchDistance + 1); y++) {
+    for (let x = Math.max(0, settlement.x - NATIONS.expeditionSearchDistance);
+      x < Math.min(width - 1, settlement.x + NATIONS.expeditionSearchDistance + 1); x++) {
+      const tile = { x, y };
       const offset = distance(tile, settlement);
-      if (offset < NATIONS.expeditionMinDistance || offset > NATIONS.expeditionSearchDistance ||
-          world.settlements.some(s => distance(s, tile) < 8)) continue;
-      const grass = Array.from({ length: 4 }, (_, i) => ({ x: tile.x + i % 2, y: tile.y + Math.floor(i / 2) }));
-      if (grass.some(p => p.x < 0 || p.y < 0 || p.x >= world.map.width || p.y >= world.map.height ||
-          world.map.terrain[p.y * world.map.width + p.x] !== 'grass' ||
-          world.buildings.some(b => footprint(b, p)) ||
-          world.resourceNodes.some(n => n.x === p.x && n.y === p.y))) continue;
-      if (findPath(world, start, tile) === null) continue;
-      const localSupplies = ['food', 'wood'].every(key => world.resourceNodes.some(node =>
-        node.resource === key && !node.dropped && distance(node, tile) <= NATIONS.expeditionNodeDistance &&
-        (findPath(world, tile, node)?.length ?? Infinity) <= NATIONS.expeditionNodeDistance));
-      if (localSupplies) return tile;
+      if (offset < NATIONS.expeditionMinDistance || offset > NATIONS.expeditionSearchDistance) continue;
+      const nearby = supplies.map(nodes => nodes.filter(node => distance(node, tile) <= NATIONS.expeditionNodeDistance));
+      if (nearby.some(nodes => !nodes.length) || !expeditionPlot(world, tile)) continue;
+      connected ??= reachableTiles(world, start);
+      if (connected[y * width + x] === 1 && nearby.every(nodes => nodes.some(node =>
+        (findPath(world, tile, node)?.length ?? Infinity) <= NATIONS.expeditionNodeDistance))) return tile;
     }
   }
   return null;
@@ -103,7 +111,9 @@ function expeditionTile(world, settlement, start) {
 
 export function startExpedition(world, nation) {
   world.expeditions ??= [];
-  if (world.nations.length >= NATIONS.limit || world.settlements.length >= NATIONS.limit ||
+  const inhabited = new Set(world.citizens.filter(c => c.alive).map(c => c.settlementId));
+  const reservedSlots = world.settlements.filter(s => !s.nationId && inhabited.has(s.id)).length;
+  if (nation.fallenAt !== undefined || activeNations(world).length + reservedSlots >= NATIONS.limit ||
       world.expeditions.some(e => e.status === 'travel')) return null;
   const settlement = world.settlements.find(s => s.id === nation.capitalId);
   const people = residents(world, settlement.id);
@@ -114,7 +124,17 @@ export function startExpedition(world, nation) {
   const pairs = eligible.filter(c => eligible.find(p => p.id === c.partnerId) &&
     people.indexOf(c) < people.findIndex(p => p.id === c.partnerId));
   const ordered = [...pairs.flatMap(c => [c, eligible.find(p => p.id === c.partnerId)]), ...eligible];
-  const team = [...new Set(ordered)].slice(0, NATIONS.expeditionSize);
+  const team = [];
+  const jobsAtHome = new Map();
+  for (const adult of people.filter(c => ageYears(world, c) >= ADULT_AGE)) {
+    jobsAtHome.set(adult.profession, (jobsAtHome.get(adult.profession) ?? 0) + 1);
+  }
+  for (const candidate of new Set(ordered)) {
+    if ((jobsAtHome.get(candidate.profession) ?? 0) < 2) continue;
+    team.push(candidate);
+    jobsAtHome.set(candidate.profession, jobsAtHome.get(candidate.profession) - 1);
+    if (team.length === NATIONS.expeditionSize) break;
+  }
   const store = depot(world, settlement.id);
   if (team.length !== NATIONS.expeditionSize || people.length - team.length < NATIONS.population ||
       !store || Object.entries(NATIONS.supplies).some(([key, value]) => available(store, key) < value)) return null;
@@ -180,24 +200,41 @@ function finishExpedition(world, expedition, failed) {
 }
 
 function updateRelations(world) {
-  const [first, second] = activeNations(world);
-  if (!second || truceBetween(world, first, second)) return;
-  const crossings = world.citizens.filter(c => c.alive && c.nationId &&
-    [first.id, second.id].includes(c.nationId) && territoryAt(world, c.lastKnownSafeTile) ===
-      (c.nationId === first.id ? second.id : first.id));
-  if (!crossings.length) return;
-  const value = Math.max(-100, first.relations[second.id] - crossings.length * 2);
-  if (value === first.relations[second.id]) return;
-  first.relations[second.id] = second.relations[first.id] = value;
-  emitOnce(world, 'border/' + world.worldTimeTick, 'borderFriction', {
-    nationIds: [first.id, second.id], value, ...crossings[0].lastKnownSafeTile });
+  const nations = activeNations(world);
+  if (nations.length < 2) return;
+  const rivalries = new Map();
+  for (const citizen of world.citizens) {
+    if (!citizen.alive || !citizen.nationId) continue;
+    const owner = territoryAt(world, citizen.lastKnownSafeTile);
+    if (!owner || owner === citizen.nationId) continue;
+    const key = [owner, citizen.nationId].sort().join('/');
+    const crossing = rivalries.get(key);
+    if (crossing) crossing.count++;
+    else rivalries.set(key, { count: 1, tile: citizen.lastKnownSafeTile });
+  }
+  for (const [index, first] of nations.entries()) {
+    for (const second of nations.slice(index + 1)) {
+      const key = [first.id, second.id].sort().join('/');
+      const crossing = rivalries.get(key);
+      if (!crossing || truceBetween(world, first, second)) continue;
+      const previous = first.relations[second.id] ?? 0;
+      const value = Math.max(-100, previous - crossing.count * 2);
+      if (value === previous) continue;
+      first.relations[second.id] = second.relations[first.id] = value;
+      emitOnce(world, `border/${world.worldTimeTick}/${key}`, 'borderFriction', {
+        nationIds: [first.id, second.id], value, ...crossing.tile
+      });
+    }
+  }
 }
 
 export function updateNations(world, ticks) {
   for (const expedition of world.expeditions ?? []) {
     if (expedition.status !== 'travel') continue;
-    const failed = expedition.failed || expedition.memberIds.some(id => !world.citizens.find(c => c.id === id)?.alive);
-    if (failed || expedition.arrivedIds.length === expedition.memberIds.length) finishExpedition(world, expedition, failed);
+    const arrived = expedition.arrivedIds.length === expedition.memberIds.length;
+    const failed = expedition.failed || expedition.memberIds.some(id => !world.citizens.find(c => c.id === id)?.alive) ||
+      (arrived && !expeditionPlot(world, expedition));
+    if (failed || arrived) finishExpedition(world, expedition, failed);
   }
   const now = world.worldTimeTick;
   if (Math.floor(now / TIME_TICKS_PER_DAY) === Math.floor((now - ticks) / TIME_TICKS_PER_DAY)) return;
@@ -205,6 +242,7 @@ export function updateNations(world, ticks) {
   for (const nation of activeNations(world)) choosePolicy(world, nation);
   updateRelations(world);
   updateWar(world);
-  const [first] = activeNations(world);
-  if (first && now - first.createdAt >= NATIONS.expeditionAgeDays * TIME_TICKS_PER_DAY) startExpedition(world, first);
+  for (const nation of activeNations(world)) {
+    if (now - nation.createdAt >= NATIONS.expeditionAgeDays * TIME_TICKS_PER_DAY && startExpedition(world, nation)) break;
+  }
 }

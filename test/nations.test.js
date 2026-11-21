@@ -31,6 +31,13 @@ test('an expedition moves four existing citizens and provisions, then permits a 
   const ids = world.citizens.map(c => c.id);
   const expedition = startExpedition(world, world.nations[0]);
   assert.ok(expedition);
+  const source = world.settlements[0];
+  const distance = Math.abs(expedition.x - source.x) + Math.abs(expedition.y - source.y);
+  assert.ok(distance >= 46 && distance <= 54);
+  const settlers = world.citizens.filter(c => c.expeditionId === expedition.id);
+  for (const role of new Set(settlers.map(c => c.profession))) {
+    assert.ok(world.citizens.some(c => c.settlementId === source.id && c.profession === role));
+  }
   assert.equal(world.citizens.filter(c => c.expeditionId === expedition.id).length, 4);
   assert.equal(world.citizens.filter(c => c.nationId).length, 8);
   for (const [key, quantity] of Object.entries(expedition.supplies)) {
