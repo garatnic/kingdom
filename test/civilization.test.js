@@ -99,7 +99,7 @@ test('restoration research heals a resting resident and spends MP once per game 
 
 test('restoration can treat a nearby resting neighbor once per hour', () => {
   const world = createWorld('care');
-  ensureResearch(world, world.settlements[0], ['magic_1', 'restoration_1']);
+  const state = ensureResearch(world, world.settlements[0], ['magic_1', 'restoration_1']);
   const [first, second, patient, distant] = world.citizens;
   for (const citizen of [first, second, patient, distant]) {
     citizen.action = { kind: 'sleep', phase: 'perform' };
@@ -113,6 +113,20 @@ test('restoration can treat a nearby resting neighbor once per hour', () => {
   updateResearch(world, 12);
   assert.equal(patient.hp, 42);
   assert.equal(distant.hp, 30);
+  assert.equal(first.mp, 20);
+  assert.equal(second.mp, 30);
+
+  first.action = { kind: 'idle', phase: 'plan' };
+  second.action = { kind: 'gather', phase: 'perform' };
+  patient.hp = 100;
+  distant.lastKnownSafeTile = { x: 37, y: 32 };
+  world.worldTimeTick += NEED_HOUR_TICKS;
+  updateResearch(world, 12);
+  assert.equal(distant.hp, 30);
+  state.unlockedIds.push('magic_2');
+  world.worldTimeTick += NEED_HOUR_TICKS;
+  updateResearch(world, 12);
+  assert.equal(distant.hp, 42);
   assert.equal(first.mp, 20);
   assert.equal(second.mp, 30);
 });
@@ -189,7 +203,10 @@ test('arcane irrigation upgrades one reachable farm and preserves the research r
   installArcaneIrrigation(saved);
   assert.equal(saved.stockpiles[0].total.stone, 3);
   assert.equal(saved.stockpiles[0].total.manaStone, 5);
-  assert.equal(farmYield(saved, saved.buildings.find(b => b.id === farm.id)), before + 1);
+  const savedFarm = saved.buildings.find(b => b.id === farm.id);
+  assert.equal(farmYield(saved, savedFarm), before + 1);
+  assert.equal(farmYield(saved, savedFarm, { race: 'halfling', profession: 'farmer' }), before + 2);
+  assert.equal(farmYield(saved, savedFarm, { race: 'halfling', profession: 'adventurer' }), before + 1);
   assert.equal(saved.events.filter(event => event.type === 'arcaneIrrigationInstalled').length, 1);
 });
 

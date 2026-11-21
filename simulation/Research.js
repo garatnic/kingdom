@@ -106,16 +106,17 @@ function advanceCivilization(world, owner, state, context) {
 const canReceiveHealing = c => c.action.kind === 'sleep' && c.action.phase === 'perform' &&
   c.hunger < NEEDS.eat && c.hp < NEEDS.recoveryHp;
 
-function restoreResidents(context) {
+function restoreResidents(context, advanced) {
   const patients = context.citizens.filter(canReceiveHealing).sort((a, b) => a.hp - b.hp);
   const treated = new Set();
   for (const caster of context.affinity) {
-    if (caster.mp < TECH.restorationMp || caster.action.kind !== 'sleep' ||
-        caster.action.phase !== 'perform' || caster.hunger >= NEEDS.eat) continue;
+    const resting = caster.action.kind === 'sleep' && caster.action.phase === 'perform';
+    const onCall = advanced && caster.action.kind === 'idle' && caster.fatigue < NEEDS.sleep;
+    if (caster.mp < TECH.restorationMp || (!resting && !onCall) || caster.hunger >= NEEDS.eat) continue;
     const target = canReceiveHealing(caster) && !treated.has(caster.id) ? caster :
       patients.find(patient => !treated.has(patient.id) && patient.settlementId === caster.settlementId &&
         Math.abs(patient.lastKnownSafeTile.x - caster.lastKnownSafeTile.x) +
-        Math.abs(patient.lastKnownSafeTile.y - caster.lastKnownSafeTile.y) <= 3);
+        Math.abs(patient.lastKnownSafeTile.y - caster.lastKnownSafeTile.y) <= (advanced ? 5 : 3));
     if (!target) continue;
     caster.mp -= TECH.restorationMp;
     target.hp = Math.min(100, target.hp + TECH.restorationHp);
@@ -149,7 +150,7 @@ function updateOwner(world, owner, state, context, daily) {
       citizen.skills.magic = Math.max(1, citizen.skills.magic);
       citizen.mp = Math.min(TECH.maxMp, (citizen.mp ?? TECH.maxMp) + TECH.mpRecovery);
     }
-    if (state.unlockedIds.includes('restoration_1')) restoreResidents(context);
+    if (state.unlockedIds.includes('restoration_1')) restoreResidents(context, state.unlockedIds.includes('magic_2'));
   }
   if (daily) advanceCivilization(world, owner, state, context);
 }
