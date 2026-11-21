@@ -1,6 +1,6 @@
 import { ADULT_AGE, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
-import { available, freeCapacity } from './Economy.js';
+import { available, freeCapacity, storeTile } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 import { unlocked } from './Research.js';
 import { findPath } from './path.js';
@@ -37,16 +37,20 @@ function startCampaign(world, attacker, defender) {
   if (available(home, 'food') < provisions + 8 ||
       !world.buildings.some(b => b.kind === 'barracks' && attacker.settlementIds.includes(b.settlementId))) return;
   const eligible = world.citizens.filter(c => c.alive && c.nationId === attacker.id &&
-    c.id !== attacker.leaderId && !c.expeditionId && c.hp >= 60 && c.hunger < 65 &&
+    c.id !== attacker.leaderId && !c.expeditionId && !campaignFor(world, c) && c.hp >= 60 && c.hunger < 65 &&
     ageYears(world, c) >= ADULT_AGE &&
     !world.inTransit.some(s => s.carrierId === c.id) &&
     !world.quests.some(q => (q.claimedBy === c.id || q.escortId === c.id) && q.status === 'claimed'));
   eligible.sort((a, b) => (b.skills.combat + b.traits.bravery) - (a.skills.combat + a.traits.bravery));
-  const team = eligible.filter(c => findPath(world, c.lastKnownSafeTile, goal) !== null).slice(0, WAR.unitCount);
+  const team = [];
+  for (const citizen of eligible) {
+    if (findPath(world, citizen.lastKnownSafeTile, goal) !== null) team.push(citizen);
+    if (team.length === WAR.unitCount) break;
+  }
   if (team.length !== WAR.unitCount) return;
 
   const campaign = { id: nextId(world, 'campaign'), attackerId: attacker.id, defenderId: defender.id,
-    settlementId: target.id, ...goal, memberIds: team.map(c => c.id), arrivedIds: [],
+    settlementId: target.id, supplySettlementId: home.settlementId, ...goal, memberIds: team.map(c => c.id), arrivedIds: [],
     rations: provisions, status: 'marching', beganAt: world.worldTimeTick, siegeDays: 0, occupationDays: 0 };
   world.campaigns ??= [];
   world.campaigns.push(campaign);
@@ -77,7 +81,7 @@ function occupy(world, campaign, attacker, defender) {
 function fightFieldBattle(world, campaign, attackers, defender) {
   const militia = world.citizens.filter(c => c.alive && c.nationId === defender.id &&
     c.settlementId === campaign.settlementId && ageYears(world, c) >= ADULT_AGE && c.hp >= 50 &&
-    !c.expeditionId && !world.quests.some(q => (q.claimedBy === c.id || q.escortId === c.id) && q.status === 'claimed') &&
+    !c.expeditionId && !campaignFor(world, c) && !world.quests.some(q => (q.claimedBy === c.id || q.escortId === c.id) && q.status === 'claimed') &&
     Math.abs(c.lastKnownSafeTile.x - campaign.x) + Math.abs(c.lastKnownSafeTile.y - campaign.y) <= 8);
   if (militia.length < 2) return true;
   const strength = group => group.reduce((sum, c) => {
@@ -119,7 +123,7 @@ function resolveCampaign(world, campaign, attacker, defender) {
   }
 
   const guards = world.citizens.filter(c => c.alive && c.settlementId === campaign.settlementId &&
-    ageYears(world, c) >= ADULT_AGE && c.hp >= 35);
+    ageYears(world, c) >= ADULT_AGE && c.hp >= 35 && !campaignFor(world, c));
   const barracks = world.buildings.some(b => b.kind === 'barracks' && b.settlementId === campaign.settlementId);
   const attack = present.reduce((sum, c) => sum + c.hp / 25 + c.skills.combat, 0);
   const defense = guards.length + (barracks ? 2 : 0);
@@ -135,15 +139,17 @@ function resolveCampaign(world, campaign, attacker, defender) {
 }
 
 function recoverRations(world, campaign, attacker) {
-  const store = world.stockpiles.find(p => p.settlementId === attacker.capitalId);
-  const returned = Math.min(campaign.rations, Math.max(0, freeCapacity(store)));
-  store.total.food += returned;
-  campaign.rations -= returned;
-  if (campaign.rations && store.x !== undefined) {
-    world.resourceNodes.push({ id: nextId(world, 'node'), resource: 'food',
-      x: store.x, y: store.y, quantity: campaign.rations, dropped: true });
-    campaign.rations = 0;
+  const capitalStore = world.stockpiles.find(p => p.settlementId === attacker.capitalId);
+  const supplyStore = world.stockpiles.find(p => p.settlementId === campaign.supplySettlementId);
+  const returned = capitalStore ? Math.min(campaign.rations, Math.max(0, freeCapacity(capitalStore))) : 0;
+  if (capitalStore) capitalStore.total.food += returned;
+  const quantity = campaign.rations - returned;
+  if (quantity) {
+    const store = capitalStore ?? supplyStore;
+    const { x, y } = store ? storeTile(world, store) : campaign;
+    world.resourceNodes.push({ id: nextId(world, 'node'), resource: 'food', x, y, quantity, dropped: true });
   }
+  campaign.rations = 0;
 }
 
 function samePair(campaign, first, second) {
@@ -174,17 +180,27 @@ function updateCampaign(world, campaign, attacker, defender) {
 }
 
 export function updateWar(world) {
-  const nations = activeNations(world);
-  const engaged = new Set();
-  for (const campaign of world.campaigns ?? []) {
-    if (campaign.status !== 'marching' && campaign.status !== 'siege') continue;
-    const attacker = nations.find(n => n.id === campaign.attackerId);
-    const defender = nations.find(n => n.id === campaign.defenderId);
-    engaged.add(attacker.id);
-    engaged.add(defender.id);
-    updateCampaign(world, campaign, attacker, defender);
+  const nationsById = new Map(world.nations.map(n => [n.id, n]));
+  const fronts = (world.campaigns ?? []).filter(c => c.status === 'marching' || c.status === 'siege');
+  const outgoing = new Set(fronts.map(c => c.attackerId));
+  const incoming = new Set(fronts.map(c => c.defenderId));
+  const invalid = campaign => nationsById.get(campaign.attackerId).fallenAt !== undefined ||
+    nationsById.get(campaign.defenderId).fallenAt !== undefined ||
+    world.settlements.find(s => s.id === campaign.settlementId)?.nationId !== campaign.defenderId;
+  for (const campaign of fronts) {
+    if (!invalid(campaign)) updateCampaign(world, campaign, nationsById.get(campaign.attackerId), nationsById.get(campaign.defenderId));
   }
-
+  for (const campaign of fronts) {
+    if ((campaign.status !== 'marching' && campaign.status !== 'siege') || !invalid(campaign)) continue;
+    campaign.status = 'repelled';
+    campaign.endedAt = world.worldTimeTick;
+    const attacker = nationsById.get(campaign.attackerId);
+    recoverRations(world, campaign, attacker);
+    emitOnce(world, campaign.id, 'campaignCancelled', {
+      x: campaign.x, y: campaign.y, nationIds: [campaign.attackerId, campaign.defenderId]
+    });
+  }
+  const nations = activeNations(world);
   const opponents = [];
   for (const [index, first] of nations.entries()) {
     for (const second of nations.slice(index + 1)) {
@@ -194,14 +210,16 @@ export function updateWar(world) {
   }
   opponents.sort((a, b) => a.relation - b.relation);
   for (const { first, second } of opponents) {
-    if (engaged.has(first.id) || engaged.has(second.id) || truceBetween(world, first, second)) continue;
+    if (fronts.some(c => samePair(c, first, second)) || truceBetween(world, first, second)) continue;
     const last = world.campaigns?.findLast(c => samePair(c, first, second));
     if (last?.status === 'occupied' && world.worldTimeTick - last.endedAt < WAR.truceDays * TIME_TICKS_PER_DAY) continue;
     const attackers = [first, second].sort((a, b) => b.weights.defense - a.weights.defense);
     for (const candidate of attackers) {
-      if (startCampaign(world, candidate, candidate === first ? second : first)) {
-        engaged.add(first.id);
-        engaged.add(second.id);
+      const defender = candidate === first ? second : first;
+      if (outgoing.has(candidate.id) || incoming.has(defender.id)) continue;
+      if (startCampaign(world, candidate, defender)) {
+        outgoing.add(candidate.id);
+        incoming.add(defender.id);
         break;
       }
     }

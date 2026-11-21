@@ -190,3 +190,24 @@ test('a traveling adventurer eats the quest ration once when hunger rises', asyn
   updateCitizens(restored, 12);
   assert.equal(restored.citizens.find(c => c.id === adventurer.id).hunger, 45);
 });
+
+
+test('a guild can send a second adventurer to hunt a dangerous roaming monster', () => {
+  const world = createWorld('guild-hunt');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const leader = world.citizens.find(c => c.profession === 'adventurer');
+  const escort = world.citizens.find(c => c !== leader);
+  escort.profession = 'adventurer';
+  const tile = { x: store.x + 1, y: store.y };
+  world.map.terrain.fill('grass');
+  const monster = spawnMonster(world, 'goblin', tile);
+  world.buildings.push({ id: 'building:2', kind: 'guild', x: home.x + 5, y: home.y, settlementId: home.id });
+  const quest = issueQuest(world, home, monster);
+  assert.equal(quest.kind, 'clear_monsters');
+  const food = store.total.food;
+  assert.ok(claimAdventure(world, leader, store, () => true));
+  assert.equal(quest.escortId, escort.id);
+  assert.equal(store.total.food, food - 2);
+  assert.ok(world.events.some(e => e.type === 'cooperativeExpedition'));
+});

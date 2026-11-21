@@ -299,7 +299,9 @@ export function claimAdventure(world, citizen, store, travel) {
     quest.stage = 'fight';
     quest.strikeAt = null;
     quest.provision = 1;
-    if (quest.kind === 'clear_nest' && available(store, 'food') >= 1) {
+    const dangerousHunt = monsters[monster.species].attack >= monsters.goblin.attack &&
+      world.buildings.some(b => b.kind === 'guild' && b.settlementId === quest.settlementId);
+    if ((quest.kind === 'clear_nest' || dangerousHunt) && available(store, 'food') >= 1) {
       const escort = world.citizens.find(c => c !== citizen && c.alive && c.settlementId === citizen.settlementId &&
         ageYears(world, c) >= ADULT_AGE && c.profession === 'adventurer' && c.action.kind === 'idle' && c.hp >= 70 &&
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && !c.expeditionId &&

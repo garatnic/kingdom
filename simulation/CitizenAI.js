@@ -33,6 +33,17 @@ function travel(world, citizen, goal, kind, targetId = null) {
   return true;
 }
 
+function interruptForFood(world, citizen) {
+  if (citizen.hunger < 95 || citizen.action.phase !== 'travel' ||
+      !['gather', 'haul', 'explore', 'survey'].includes(citizen.action.kind)) return;
+  const store = world.stockpiles.find(s => s.settlementId === citizen.settlementId);
+  if (!store || available(store, 'food') < 1) return;
+  const { x, y } = citizen;
+  citizen.x = citizen.lastKnownSafeTile.x + 0.5;
+  citizen.y = citizen.lastKnownSafeTile.y + 0.5;
+  if (!travel(world, citizen, storeTile(world, store), 'eat', store.id)) Object.assign(citizen, { x, y });
+}
+
 function constructionRoute(world, citizen, store, population) {
   const origin = storeTile(world, store);
   const shipment = world.inTransit.find(item => item.carrierId === citizen.id);
@@ -194,30 +205,33 @@ function updateDistantSettlements(world, camera, population) {
         worker.decisionAt = Math.max(worker.decisionAt, world.worldTimeTick + DECISION_TICKS);
       }
     }
-    const site = world.constructionSites.find(s => s.settlementId === settlement.id);
+    let site = world.constructionSites.find(s => s.settlementId === settlement.id);
     const constructionBusy = site && (world.inTransit.some(s => s.destinationId === site.id) ||
       world.citizens.some(c => c.alive && c.settlementId === settlement.id &&
         ['build', 'pickUpMaterials', 'deliverMaterials', 'recoverMaterials'].includes(c.action.kind)));
-    if (site && !constructionBusy) {
+    if (!constructionBusy) {
       const builders = locals.filter(c => c.profession === 'builder' && c.hp > COMBAT.retreatHp &&
-        c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep);
-      const work = builders.length && workTile(world, origin, site);
-      if (work) {
+        c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep &&
+        !world.inTransit.some(item => item.carrierId === c.id));
+      if (builders.length) {
         connected ??= reachableTiles(world, origin);
         const builder = builders.find(c => {
           const { x, y } = c.lastKnownSafeTile;
           return connected[y * world.map.width + x] === 1;
         });
         if (builder) {
-          if (materialsDelivered(site)) {
-            buildAtSite(world, site, NEED_HOUR_TICKS / 2);
-          } else {
-            reserveMaterials(world, site, store);
-            const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
-            const shipment = reservation && pickUpMaterials(world, reservation, builder);
-            if (shipment) deliverMaterials(world, shipment, builder);
+          site ??= planSettlementConstruction(world, settlement, store, origin, residents);
+          if (site && workTile(world, origin, site)) {
+            if (materialsDelivered(site)) {
+              buildAtSite(world, site, NEED_HOUR_TICKS / 2);
+            } else {
+              reserveMaterials(world, site, store);
+              const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
+              const shipment = reservation && pickUpMaterials(world, reservation, builder);
+              if (shipment) deliverMaterials(world, shipment, builder);
+            }
+            builder.decisionAt = Math.max(builder.decisionAt, world.worldTimeTick + DECISION_TICKS);
           }
-          builder.decisionAt = Math.max(builder.decisionAt, world.worldTimeTick + DECISION_TICKS);
         }
       }
     }
@@ -320,6 +334,7 @@ export function updateCitizens(world, ticks, camera) {
         }
       }
       updateNeeds(world, citizen, ticks);
+      interruptForFood(world, citizen);
     }
     updateDistantSettlements(world, camera, population);
   }
@@ -338,6 +353,11 @@ export function updateCitizens(world, ticks, camera) {
       }
     }
     const store = world.stockpiles.find(s => s.settlementId === citizen.settlementId);
+    if (citizen.action.kind === 'warMarch' && !invasionOrder(world, citizen)) {
+      citizen.x = citizen.lastKnownSafeTile.x + 0.5;
+      citizen.y = citizen.lastKnownSafeTile.y + 0.5;
+      citizen.action = idle(world.worldTimeTick);
+    }
     if (citizen.action.phase === 'travel' &&
         citizen.action.navigationVersion !== world.map.navigationVersion) {
       const safe = citizen.lastKnownSafeTile;

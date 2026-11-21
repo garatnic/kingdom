@@ -147,6 +147,29 @@ test('five nations can handle independent fronts and preserve a fallen nation in
   for (const c of participants) Object.assign(c, { nationId: east.id, settlementId: settlement.id, homeBuildingId: null });
   world.buildings.push({ id: nextId(world, 'building'), kind: 'barracks', settlementId: settlement.id, x: 84, y: 32 });
   east.relations[west.id] = west.relations[east.id] = -60;
+  const multi = structuredClone(world);
+  const [multiInvader, multiDefender, multiEast, multiWest] = multi.nations;
+  multiEast.relations[multiWest.id] = multiWest.relations[multiEast.id] = 0;
+  multiInvader.relations[multiEast.id] = multiEast.relations[multiInvader.id] = -60;
+  updateWar(multi);
+  assert.deepEqual(multi.campaigns.map(c => [c.attackerId, c.defenderId]),
+    [[multiInvader.id, multiDefender.id], [multiEast.id, multiInvader.id]]);
+  assert.equal(new Set(multi.campaigns.flatMap(c => c.memberIds)).size, 6);
+  const activeSave = await readSnapshot(JSON.stringify(await createSnapshot(multi)));
+  const [outbound, incoming] = activeSave.campaigns;
+  incoming.status = 'siege';
+  incoming.occupationDays = 2;
+  for (const c of activeSave.citizens.filter(c => incoming.memberIds.includes(c.id))) {
+    c.lastKnownSafeTile = { x: incoming.x, y: incoming.y };
+    c.skills.combat = 10;
+    incoming.arrivedIds.push(c.id);
+  }
+  updateWar(activeSave);
+  assert.equal(incoming.status, 'occupied');
+  assert.equal(outbound.status, 'repelled');
+  assert.equal(outbound.rations, 0);
+  assert.ok(activeSave.events.some(e => e.type === 'campaignCancelled'));
+  await readSnapshot(JSON.stringify(await createSnapshot(activeSave)));
   world.worldTimeTick = TIME_TICKS_PER_DAY;
   updateNations(world, 12);
   assert.equal(world.campaigns.length, 2);

@@ -170,10 +170,13 @@ test('distant construction delivers one reservation and resumes without double c
   assert.deepEqual(site.delivered, { wood: 2 });
   assert.equal(world.inTransit.length, 0);
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
-  for (let hour = 2; hour <= 4; hour++) {
+  for (let hour = 2; hour <= 3; hour++) {
     restored.worldTimeTick = NEED_HOUR_TICKS * hour;
     updateCitizens(restored, 12, far);
   }
   assert.equal(restored.stockpiles[0].total.wood, wood - 2);
   assert.ok(restored.buildings.some(b => b.kind === 'farm'));
+  restored.worldTimeTick = NEED_HOUR_TICKS * 4;
+  updateCitizens(restored, 12, far);
+  assert.ok(restored.constructionSites.some(s => s.id !== site.id));
 });
