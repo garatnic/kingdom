@@ -151,3 +151,23 @@ test('an idle adventurer helps harvest during a food warning and keeps the profe
   assert.equal(helper.action.kind, 'farm');
   assert.equal(helper.profession, 'adventurer');
 });
+
+test('a farmer shares surplus food during a shortage with the most urgent adjacent neighbor', async () => {
+  const { shareEmergencyMeals } = await import('../simulation/Needs.js');
+  const world = createWorld('shared-food');
+  const [home] = world.settlements;
+  const [farmer, hungry, urgent] = world.citizens;
+  world.citizens = [farmer, hungry, urgent];
+  farmer.profession = 'farmer';
+  farmer.inventory.food = 2;
+  hungry.hunger = 95;
+  urgent.hunger = 98;
+  farmer.lastKnownSafeTile = hungry.lastKnownSafeTile = urgent.lastKnownSafeTile = { x: 10, y: 10 };
+  shareEmergencyMeals(world);
+  assert.equal(farmer.inventory.food, 2);
+  home.foodWarning = true;
+  shareEmergencyMeals(world);
+  assert.equal(farmer.inventory.food, 1);
+  assert.equal(urgent.hunger, 58);
+  assert.equal(hungry.hunger, 95);
+});

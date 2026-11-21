@@ -4,7 +4,7 @@ import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
 import { findPath, reachableTiles } from './path.js';
 import { available, deposit, freeCapacity, gatherForStore, harvest, renewNodes, resources, storageRoom, storeTile } from './Economy.js';
-import { eat, updateNeeds } from './Needs.js';
+import { eat, shareEmergencyMeals, updateNeeds } from './Needs.js';
 import { COMBAT } from '../data/combat.js';
 import { FARM_HARVEST_TICKS, FARM_YIELD } from '../data/buildings.js';
 import {
@@ -373,6 +373,7 @@ export function updateCitizens(world, ticks, camera) {
   }
   if (Math.floor(world.worldTimeTick / NEED_HOUR_TICKS) >
       Math.floor((world.worldTimeTick - ticks) / NEED_HOUR_TICKS)) {
+    shareEmergencyMeals(world);
     for (const citizen of world.citizens) {
       if (!citizen.alive) continue;
       if (citizen.hunger >= NEEDS.eat - FOOD_HUNGER_PER_HOUR && citizen.inventory.food > 0) {
