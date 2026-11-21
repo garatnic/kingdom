@@ -1,3 +1,4 @@
+import { territoryAt } from '../simulation/Territory.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
@@ -110,6 +111,7 @@ test('a completed building cannot sever the only land connection', () => {
   for (let y = 8; y <= 9; y++) {
     for (let x = 4; x <= 12; x++) world.map.terrain[y * world.map.width + x] = 'grass';
   }
+  Object.assign(world.buildings[0], { x: 2, y: 8 });
   const shore = { x: 12, y: 8 };
   const base = { x: 4, y: 8 };
   assert.ok(findPath(world, base, shore));
@@ -183,7 +185,7 @@ test('mature settlements can extend housing into forest without building on depo
 });
 
 
-test('large towns search outer districts when inner plots cannot fit a house', () => {
+test('settlements extend construction from existing buildings beyond the old center radius', () => {
   const world = createWorld('outer-district');
   const [settlement] = world.settlements;
   const [store] = world.stockpiles;
@@ -196,7 +198,32 @@ test('large towns search outer districts when inner plots cannot fit a house', (
     for (let dx = 0; dx < 2; dx++) world.map.terrain[(y + dy) * world.map.width + x + dx] = 'forest';
   }
   world.buildings.push({ ...world.buildings[0], kind: 'farm', x: settlement.x + 3, y: settlement.y + 2 });
+  assert.equal(planSettlementConstruction(world, settlement, store, store, 100), null);
+  world.buildings.push({ ...world.buildings[0], kind: 'farm', x: x - 6, y });
   const site = planSettlementConstruction(world, settlement, store, store, 100);
   assert.equal(site.kind, 'house');
   assert.deepEqual([site.x, site.y], [x, y]);
+});
+
+
+test('finished buildings extend borders without taking an existing foreign claim', () => {
+  const world = createWorld('border-growth');
+  const [home] = world.settlements;
+  const foreign = { id: 'settlement:2', nationId: 'nation:2', x: 46, y: 32 };
+  home.nationId = 'nation:1';
+  world.settlements.push(foreign);
+  world.nations.push({ id: home.nationId }, { id: foreign.nationId });
+  world.map.terrain.fill('grass');
+  const neutral = { x: 41, y: 28 };
+  const contested = { x: 42, y: 31 };
+  assert.equal(territoryAt(world, neutral), null);
+  assert.equal(territoryAt(world, contested), foreign.nationId);
+  assert.equal(planSite(world, home, 'farm', 40, 32), null);
+  const site = planSite(world, home, 'farm', 38, 30);
+  assert.ok(site);
+  assert.equal(territoryAt(world, neutral), null);
+  site.delivered.wood = 2;
+  assert.ok(buildAtSite(world, site, workTicks('farm')));
+  assert.equal(territoryAt(world, neutral), home.nationId);
+  assert.equal(territoryAt(world, contested), foreign.nationId);
 });

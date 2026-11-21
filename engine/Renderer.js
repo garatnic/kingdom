@@ -2,6 +2,7 @@ import { monsters } from '../data/combat.js';
 import { NEED_HOUR_TICKS, TILE, citizenRaces } from '../data/balance.js';
 
 const colors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
+const borderColors = ['#eca779', '#87cde3', '#e6d387', '#d6a0e7', '#b0da9f'];
 const resourceColors = { food: '#d88479', wood: '#99bb72', stone: '#bbc5c1', iron: '#db926b', manaStone: '#c6a7e8' };
 
 export class Renderer {
@@ -32,10 +33,28 @@ export class Renderer {
     ctx.fillRect(0, 0, width, height);
     ctx.translate(-left * scale, -top * scale);
     ctx.scale(scale / TILE, scale / TILE);
+    const owners = new Map(world.settlements.map(s => [s.id, s.nationId]));
+    const { territory, map } = world;
+    const nationAt = (x, y) => x < 0 || x >= map.width || y < 0 || y >= map.height
+      ? null : owners.get(territory?.[y * map.width + x]) ?? null;
     for (let y = Math.max(0, Math.floor(top)); y < Math.min(world.map.height, bottom); y++) {
       for (let x = Math.max(0, Math.floor(left)); x < Math.min(world.map.width, right); x++) {
         const terrain = world.map.terrain[y * world.map.width + x];
         this.tile(x, y, terrain);
+      }
+    }
+
+    if (territory) {
+      for (let y = Math.max(0, Math.floor(top)); y < Math.min(map.height, bottom); y++) {
+        for (let x = Math.max(0, Math.floor(left)); x < Math.min(map.width, right); x++) {
+          const nation = nationAt(x, y);
+          if (!nation) continue;
+          ctx.fillStyle = borderColors[(Number(nation.split(':')[1]) - 1) % borderColors.length];
+          if (nationAt(x - 1, y) !== nation) ctx.fillRect(x * TILE, y * TILE, 2, TILE);
+          if (nationAt(x + 1, y) !== nation) ctx.fillRect((x + 1) * TILE - 2, y * TILE, 2, TILE);
+          if (nationAt(x, y - 1) !== nation) ctx.fillRect(x * TILE, y * TILE, TILE, 2);
+          if (nationAt(x, y + 1) !== nation) ctx.fillRect(x * TILE, (y + 1) * TILE - 2, TILE, 2);
+        }
       }
     }
 

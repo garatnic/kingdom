@@ -3,23 +3,29 @@ import { nextId } from './Identity.js';
 import { available, freeCapacity } from './Economy.js';
 import {
   CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON,
-  FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION, OUTER_DISTRICT_POPULATION, OUTER_DISTRICT_RADIUS, SETTLEMENT_RADIUS
+  FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION
 } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { findPath, reachableTiles } from './path.js';
+import { buildingDistance, claimBuilding, territoryAt } from './Territory.js';
 
-function availableSite(world, kind, x, y, allowForest = false) {
+const BUILD_RADIUS = 6;
+
+function availableSite(world, settlement, kind, x, y, allowForest = false) {
   const type = buildings[kind];
   if (!type || !Number.isInteger(x) || !Number.isInteger(y)) return null;
   const site = { x, y, width: type.width, height: type.height };
+  const local = world.buildings.filter(building => building.settlementId === settlement.id);
+  if (!(local.length ? local : [settlement]).some(anchor => buildingDistance(anchor, site) <= BUILD_RADIUS)) return null;
   for (let dy = 0; dy < type.height; dy++) {
     for (let dx = 0; dx < type.width; dx++) {
       const tile = { x: x + dx, y: y + dy };
       if (tile.x < 0 || tile.x >= world.map.width || tile.y < 0 || tile.y >= world.map.height) return null;
       const terrain = world.map.terrain[tile.y * world.map.width + tile.x];
-      if ((terrain !== 'grass' && !(allowForest && terrain === 'forest')) ||
+      const owner = world.nations.length ? territoryAt(world, tile) : null;
+      if ((owner && owner !== settlement.nationId) || (terrain !== 'grass' && !(allowForest && terrain === 'forest')) ||
           [...world.buildings, ...world.constructionSites].some(b => footprint(b, tile)) ||
           world.resourceNodes.some(n => n.x === tile.x && n.y === tile.y) ||
           world.stockpiles.some(s => s.x === tile.x && s.y === tile.y)) return null;
@@ -29,7 +35,7 @@ function availableSite(world, kind, x, y, allowForest = false) {
 }
 
 export function planSite(world, settlement, kind, x, y, allowForest = false) {
-  const site = availableSite(world, kind, x, y, allowForest);
+  const site = availableSite(world, settlement, kind, x, y, allowForest);
   if (!site) return null;
   Object.assign(site, { id: nextId(world, 'site'), settlementId: settlement.id, kind, delivered: {}, progress: 0 });
   world.constructionSites.push(site);
@@ -96,6 +102,7 @@ export function buildAtSite(world, site, ticks) {
   const building = { id: nextId(world, 'building'), x, y, width, height, kind, settlementId, state: 'active',
     capacity: buildings[kind].capacity ?? 0, completedAt: world.worldTimeTick };
   world.buildings.push(building);
+  claimBuilding(world, building);
   if (kind === 'warehouse') {
     const store = world.stockpiles.find(candidate => candidate.settlementId === settlementId);
     if (store) store.capacity += building.capacity;
@@ -132,7 +139,7 @@ function keepsPathsOpen(world, site) {
     .filter(index => terrain[index] !== 'water');
   if (indices.length < 2) return true;
   const start = { x: indices[0] % width, y: Math.floor(indices[0] / width) };
-  const reachable = reachableTiles(world, start, site);
+  const reachable = reachableTiles(world, start, site, indices);
   return indices.every(index => reachable[index] === 1);
 }
 
@@ -183,24 +190,30 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   if (!kind) return null;
   const allowForest = population >= LARGE_SETTLEMENT_POPULATION && (kind === 'house' || kind === 'warehouse');
   const { width, height } = world.map;
-  const districtRadius = population >= OUTER_DISTRICT_POPULATION ? OUTER_DISTRICT_RADIUS : SETTLEMENT_RADIUS;
-  let connected;
-  for (let radius = 1; radius <= districtRadius; radius++) {
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
-        const x = settlement.x + dx;
-        const y = settlement.y + dy;
-        const footprintCandidate = availableSite(world, kind, x, y, allowForest);
-        if (!footprintCandidate || footprint(footprintCandidate, origin)) continue;
-        connected ??= reachableTiles(world, origin);
-        const accessible = perimeter(footprintCandidate).some(tile => tile.x >= 0 && tile.x < width &&
-          tile.y >= 0 && tile.y < height && connected[tile.y * width + tile.x] === 1);
-        if (!accessible || !keepsPathsOpen(world, footprintCandidate)) continue;
-        const site = planSite(world, settlement, kind, x, y, allowForest);
-        if (site) return site;
+  const plots = new Map();
+  const type = buildings[kind];
+  for (const anchor of local.length ? local : [settlement]) {
+    for (let y = Math.max(0, anchor.y - BUILD_RADIUS - type.height + 1);
+      y < Math.min(height, anchor.y + (anchor.height ?? 1) + BUILD_RADIUS); y++) {
+      for (let x = Math.max(0, anchor.x - BUILD_RADIUS - type.width + 1);
+        x < Math.min(width, anchor.x + (anchor.width ?? 1) + BUILD_RADIUS); x++) {
+        if (buildingDistance(anchor, { x, y, width: type.width, height: type.height }) <= BUILD_RADIUS) {
+          plots.set(y * width + x, { x, y });
+        }
       }
     }
+  }
+  const rank = ({ x, y }) => Math.max(Math.abs(x - settlement.x), Math.abs(y - settlement.y));
+  const candidates = [...plots.values()].sort((a, b) => rank(a) - rank(b) || a.y - b.y || a.x - b.x);
+  let connected;
+  for (const { x, y } of candidates) {
+    const candidate = availableSite(world, settlement, kind, x, y, allowForest);
+    if (!candidate || footprint(candidate, origin)) continue;
+    connected ??= reachableTiles(world, origin);
+    const accessible = perimeter(candidate).some(tile => tile.x >= 0 && tile.x < width &&
+      tile.y >= 0 && tile.y < height && connected[tile.y * width + tile.x] === 1);
+    if (!accessible || !keepsPathsOpen(world, candidate)) continue;
+    return planSite(world, settlement, kind, x, y, allowForest);
   }
   return null;
 }

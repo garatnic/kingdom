@@ -1,4 +1,4 @@
-import { OUTER_DISTRICT_POPULATION, OUTER_DISTRICT_RADIUS, SETTLEMENT_RADIUS, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
+import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
@@ -149,8 +149,13 @@ function updateDistantSettlements(world, camera, population) {
     .map(c => c.action.targetId));
   for (const settlement of world.settlements) {
     const residents = population.get(settlement.id) ?? 0;
-    const radius = residents >= OUTER_DISTRICT_POPULATION ? OUTER_DISTRICT_RADIUS : SETTLEMENT_RADIUS;
-    if (residents < 16 || distance(settlement, camera) <= FAR_DISTANCE + radius) continue;
+    if (residents < 16) continue;
+    const buildings = world.buildings.filter(b => b.settlementId === settlement.id);
+    const radius = buildings.reduce((max, b) => Math.max(max, distance(settlement, b) +
+      Math.max(b.width ?? 1, b.height ?? 1) - 1), 12);
+    if (distance(settlement, camera) <= FAR_DISTANCE ||
+        buildings.some(b => distance(b, camera) <= FAR_DISTANCE + 2) ||
+        world.constructionSites.some(s => s.settlementId === settlement.id && distance(s, camera) <= FAR_DISTANCE + 2)) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     if (!store) continue;
     const origin = storeTile(world, store);

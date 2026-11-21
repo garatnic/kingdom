@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { advanceFrame } from '../engine/GameLoop.js';
+import { territoryAt } from '../simulation/Territory.js';
 import { nextId } from '../simulation/Identity.js';
 import { activeNations, truceBetween, updateWar } from '../simulation/War.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
@@ -39,6 +40,7 @@ function twoNations() {
 
 test('hostile nations send real citizens, occupying and inheriting ownership without duplicating stock', async () => {
   const { world, invader, defender, away, homeStore } = twoNations();
+  assert.equal(territoryAt(world, away), defender.id);
   updateWar(world);
   assert.equal(homeStore.total.food, 28);
   assert.equal(world.campaigns[0].memberIds.length, 3);
@@ -50,6 +52,7 @@ test('hostile nations send real citizens, occupying and inheriting ownership wit
   assert.equal(world.campaigns[0].status, 'occupied');
   assert.deepEqual(activeNations(world).map(n => n.id), [invader.id]);
   assert.equal(away.nationId, invader.id);
+  assert.equal(territoryAt(world, away), invader.id);
   assert.equal(defender.capitalId, null);
   assert.equal(world.stockpiles.length, 2);
   assert.equal(world.citizens.length, 12);

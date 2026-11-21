@@ -63,6 +63,11 @@ function validate(world) {
     }
   }
   const settlements = new Map(world.settlements.map(s => [s.id, s]));
+  if (world.territory !== undefined && (!world.territory || Array.isArray(world.territory) ||
+      Object.entries(world.territory).some(([index, id]) => !/^(0|[1-9][0-9]*)$/.test(index) ||
+        !integer(Number(index), 0, map.width * map.height - 1) || !settlements.get(id)?.nationId))) {
+    throw new Error('保存データの領土が無効です。');
+  }
   const nations = new Map(world.nations.map(n => [n.id, n]));
   const expeditions = new Map((world.expeditions ?? []).map(e => [e.id, e]));
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&

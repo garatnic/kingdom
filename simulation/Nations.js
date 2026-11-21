@@ -7,6 +7,9 @@ import { available, freeCapacity, resources } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 import { ensureResearch, getResearch } from './Research.js';
 import { findPath } from './path.js';
+import { claimSettlement, initializeTerritory, territoryAt } from './Territory.js';
+
+export { territoryAt } from './Territory.js';
 
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const leaderScore = c => 0.4 * c.traits.diligence + 0.3 * c.traits.bravery + 0.3 * 0.5;
@@ -24,9 +27,11 @@ function settleNation(world, settlement, leader) {
     nation.relations[other.id] = 0;
     other.relations[nation.id] = 0;
   }
+  initializeTerritory(world);
   world.nations.push(nation);
   settlement.nationId = settlement.researchOwnerId = nation.id;
   state.ownerId = nation.id;
+  claimSettlement(world, settlement);
   for (const citizen of world.citizens.filter(c => c.settlementId === settlement.id)) citizen.nationId = nation.id;
   emitOnce(world, nation.id, 'founding', { nationId: nation.id, settlementId: settlement.id,
     leaderId: leader.id, x: settlement.x, y: settlement.y });
@@ -68,13 +73,6 @@ function choosePolicy(world, nation) {
 
 export function relationLabel(value) {
   return value >= NATIONS.friendly ? 'friendly' : value <= NATIONS.hostile ? 'hostile' : 'neutral';
-}
-
-export function territoryAt(world, tile) {
-  const seats = world.settlements.filter(s => s.nationId && distance(s, tile) <= NATIONS.territoryRadius);
-  seats.sort((a, b) => distance(a, tile) - distance(b, tile) ||
-    Number(a.nationId.split(':')[1]) - Number(b.nationId.split(':')[1]));
-  return seats[0]?.nationId ?? null;
 }
 
 function expeditionTile(world, settlement, start) {

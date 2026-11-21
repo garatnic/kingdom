@@ -86,7 +86,7 @@ export function findPath(world, start, goal) {
   return null;
 }
 
-export function reachableTiles(world, start, extraBlock) {
+export function reachableTiles(world, start, extraBlock, targets) {
   const { width, height, terrain } = world.map;
   const inside = (x, y) => x >= 0 && x < width && y >= 0 && y < height;
   const seen = new Uint8Array(width * height);
@@ -104,7 +104,9 @@ export function reachableTiles(world, start, extraBlock) {
   let end = 1;
   queue[0] = origin;
   seen[origin] = 1;
-  for (let i = 0; i < end; i++) {
+  const pending = targets && new Set(targets);
+  pending?.delete(origin);
+  for (let i = 0; i < end && pending?.size !== 0; i++) {
     const current = queue[i];
     const x = current % width;
     const y = Math.floor(current / width);
@@ -115,6 +117,7 @@ export function reachableTiles(world, start, extraBlock) {
       const next = ny * width + nx;
       if (seen[next] || terrain[next] === 'water') continue;
       seen[next] = 1;
+      pending?.delete(next);
       queue[end++] = next;
     }
   }
