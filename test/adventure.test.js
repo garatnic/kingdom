@@ -278,7 +278,7 @@ for (const steel of [false, true]) {
       const { ensureResearch } = await import('../simulation/Research.js');
       ensureResearch(world, home, ['steel_1']);
       world.map.terrain[source.y * world.map.width + source.x] = 'mountain';
-      world.map.terrain[source.y * world.map.width + source.x + 1] = 'mountain';
+      world.map.terrain[source.y * world.map.width + source.x + 3] = 'mountain';
     }
     updateAdventureWorld(world, 12);
     const quest = world.quests.find(q => q.kind === 'survey_resources');
@@ -311,7 +311,7 @@ for (const steel of [false, true]) {
     assert.equal(discoveries.length, Number(steel));
     if (steel) {
       const vein = restored.resourceNodes.find(n => n.id === restoredQuest.discoveredNodeId);
-      assert.deepEqual([vein.resource, vein.quantity, vein.x, vein.y], ['manaStone', 5, source.x + 1, source.y]);
+      assert.deepEqual([vein.resource, vein.quantity, vein.x, vein.y], ['manaStone', 5, source.x + 3, source.y]);
       assert.equal(depot.total.manaStone, 0);
       assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(restored))), restored);
     }

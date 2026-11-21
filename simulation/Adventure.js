@@ -11,6 +11,8 @@ import { recordDeath } from './Population.js';
 import { campaignFor } from './War.js';
 import { findPath, reachableTiles } from './path.js';
 
+const manaSurvey = { radius: 4, reserve: 5, quantity: 5 };
+
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const tileOf = citizen => citizen.lastKnownSafeTile;
 const tileKey = ({ x, y }) => x + ',' + y;
@@ -172,12 +174,19 @@ function manaProspect(world, node, store, settlementId) {
   const { map } = world;
   const terrain = (x, y) => map.terrain[y * map.width + x];
   if (node.resource !== 'stone' || terrain(node.x, node.y) !== 'mountain' ||
-      available(store, 'manaStone') >= 5 || !unlocked(world, settlementId, 'steel_1') ||
+      available(store, 'manaStone') >= manaSurvey.reserve || !unlocked(world, settlementId, 'steel_1') ||
       world.quests.some(q => q.targetId === node.id && q.discoveredNodeId)) return null;
 
   const occupied = [...world.resourceNodes, ...world.stockpiles];
-  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-    const tile = { x: node.x + dx, y: node.y + dy };
+  const nearby = [];
+  for (let dy = -manaSurvey.radius; dy <= manaSurvey.radius; dy++) {
+    const reach = manaSurvey.radius - Math.abs(dy);
+    for (let dx = -reach; dx <= reach; dx++) {
+      if (dx || dy) nearby.push({ x: node.x + dx, y: node.y + dy });
+    }
+  }
+  nearby.sort((a, b) => distance(node, a) - distance(node, b));
+  for (const tile of nearby) {
     if (tile.x < 0 || tile.y < 0 || tile.x >= map.surveyedWidth || tile.y >= map.surveyedHeight ||
         terrain(tile.x, tile.y) !== 'mountain' || occupied.some(other => distance(tile, other) === 0) ||
         world.constructionSites.some(site => tile.x >= site.x && tile.x < site.x + site.width &&
@@ -260,7 +269,7 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
     });
     const prospect = manaProspect(world, node, store, quest.settlementId);
     if (prospect) {
-      const vein = { id: nextId(world, 'node'), ...prospect, resource: 'manaStone', quantity: 5 };
+      const vein = { id: nextId(world, 'node'), ...prospect, resource: 'manaStone', quantity: manaSurvey.quantity };
       world.resourceNodes.push(vein);
       quest.discoveredNodeId = vein.id;
       emit(world, 'manaVeinDiscovered', quest, vein, { actorIds: actors, quantity: vein.quantity });
