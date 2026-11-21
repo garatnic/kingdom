@@ -377,3 +377,25 @@ test('a guild with two adults promotes an open notice after a monster forms a ne
   assert.equal(quest.kind, 'clear_nest');
   assert.deepEqual(quest.nestTile, target.homeTile);
 });
+
+test('an arcane smithy commission protects mana reserves and persists its equipment', async () => {
+  const world = createWorld('arcane-equipment');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const adventurer = world.citizens.find(c => c.profession === 'adventurer');
+  adventurer.skills.combat = 5;
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'smithy', settlementId: home.id,
+    x: home.x + 4, y: home.y, width: 1, height: 1 });
+  ensureResearch(world, home, ['steel_1', 'magic_2']);
+  Object.assign(store.total, { iron: 8, manaStone: 5 });
+  commissionGear(world, adventurer, store);
+  assert.equal(adventurer.gearId, 'steel');
+  store.total.manaStone++;
+  commissionGear(world, adventurer, store);
+  commissionGear(world, adventurer, store);
+  assert.equal(adventurer.gearId, 'arcane');
+  assert.equal(store.total.iron, 2);
+  assert.equal(store.total.manaStone, 5);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(restored.citizens.find(c => c.id === adventurer.id).gearId, 'arcane');
+});

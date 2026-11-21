@@ -40,8 +40,10 @@ export function commissionGear(world, citizen, store) {
     if ((gear[citizen.gearId]?.attack ?? 0) >= item.attack ||
         citizen.skills.combat < item.requiredLevel ||
         !unlocked(world, citizen.settlementId, item.technology) ||
-        available(store, 'iron') < item.iron) continue;
+        available(store, 'iron') < item.iron ||
+        (item.manaStone && available(store, 'manaStone') < item.manaStone + item.manaStoneReserve)) continue;
     store.total.iron -= item.iron;
+    if (item.manaStone) store.total.manaStone -= item.manaStone;
     citizen.gearId = id;
     emitOnce(world, citizen.id + '/' + id, 'adventurerEquipped', { citizenId: citizen.id, gearId: id,
       ...citizen.lastKnownSafeTile });

@@ -757,7 +757,9 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
         const weapon = unlocked(world, citizen.settlementId, 'weapons_1') ? TECH.weaponBonus : 0;
         const steel = !quest.casting && unlocked(world, citizen.settlementId, 'steel_1') ? TECH.steelWeaponBonus : 0;
         const arcane = quest.casting && unlocked(world, citizen.settlementId, 'magic_2') ? TECH.arcaneSpellBonus : 0;
-        const attack = quest.casting ? TECH.spellAttack + arcane : COMBAT.attack + citizen.skills.combat + weapon + steel + (gear[citizen.gearId]?.attack ?? 0);
+        const equipment = gear[citizen.gearId];
+        const attack = quest.casting ? TECH.spellAttack + arcane + (equipment?.spellAttack ?? 0)
+          : COMBAT.attack + citizen.skills.combat + weapon + steel + (equipment?.attack ?? 0);
         if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
           const support = escort && !quest.escortRetreated && escort.hp > COMBAT.retreatHp &&
             distance(tileOf(escort), monster) <= COMBAT.rangedDistance;

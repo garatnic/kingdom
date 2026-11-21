@@ -15,6 +15,8 @@ export const COMBAT = {
 };
 
 export const gear = {
+  arcane: { label: '魔導装備', attack: 4, defense: 3, spellAttack: 3, iron: 3,
+    manaStone: 1, manaStoneReserve: 5, requiredLevel: 5, technology: 'magic_2' },
   steel: { label: '鋼鉄装備', attack: 3, defense: 2, iron: 3, requiredLevel: 5, technology: 'steel_1' },
   iron: { label: '鉄製装備', attack: 1, defense: 1, iron: 2, requiredLevel: 2, technology: 'weapons_1' }
 };
