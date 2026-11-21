@@ -32,7 +32,7 @@ const eventGroups = {
 const eventNumber = event => Number(event.id.split(':')[1]);
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
-  idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
+  idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', forage: '非常食を採集', haul: '運搬',
   farm: '収穫', build: '建築', pickUpMaterials: '資材引取', deliverMaterials: '資材搬入',
   recoverMaterials: '資材回収', adventure: '冒険', expedition: '開拓'
 };

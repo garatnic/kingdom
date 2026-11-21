@@ -112,3 +112,23 @@ test('urban farmers choose the nearby ripe field over an older distant field', a
   assert.equal(farmer.action.kind, 'farm');
   assert.equal(farmer.action.targetId, 'building:3');
 });
+
+test('a critically hungry resident scavenges nearby food when the depot is empty', async () => {
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const { GATHER_TICKS } = await import('../data/balance.js');
+  const world = createWorld('famine-foraging');
+  const [citizen] = world.citizens;
+  const [store] = world.stockpiles;
+  world.citizens = [citizen];
+  world.map.terrain.fill('grass');
+  store.total.food = 0;
+  const source = { id: 'node:' + world.idCounters.node++, resource: 'food', quantity: 2, x: store.x + 2, y: store.y, dropped: true };
+  world.resourceNodes.push(source);
+  Object.assign(citizen, { x: source.x + 0.5, y: source.y + 0.5, lastKnownSafeTile: { x: source.x, y: source.y },
+    profession: 'builder', hunger: 95, decisionAt: 0 });
+  world.worldTimeTick = GATHER_TICKS;
+  updateCitizens(world, GATHER_TICKS);
+  assert.equal(source.quantity, 0);
+  assert.equal(citizen.hunger, 55);
+  assert.equal(citizen.inventory.food, 1);
+});

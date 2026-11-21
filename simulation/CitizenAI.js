@@ -45,6 +45,12 @@ function interruptForFood(world, citizen) {
   if (!travel(world, citizen, storeTile(world, store), 'eat', store.id)) Object.assign(citizen, { x, y });
 }
 
+function takeAbandonedCargo(shipment, citizen) {
+  shipment.carrierId = citizen.id;
+  delete shipment.x;
+  delete shipment.y;
+}
+
 function constructionRoute(world, citizen, store, population) {
   const origin = storeTile(world, store);
   const shipment = world.inTransit.find(item => item.carrierId === citizen.id);
@@ -93,6 +99,14 @@ function chooseRoute(world, citizen, store, population) {
   }
   if (store && citizen.hunger >= NEEDS.eat && available(store, 'food') > 0 &&
       travel(world, citizen, storeTile(world, store), 'eat', store.id)) return;
+  if (store && !campaign && citizen.hunger >= 95 && citizen.inventory.food === 0) {
+    const origin = tileOf(citizen);
+    const food = world.resourceNodes.filter(node => node.resource === 'food' && node.quantity > 0 &&
+      tileDistance(origin, node) <= 8 && !isQuestCargo(world, node));
+    food.sort((a, b) => tileDistance(origin, a) - tileDistance(origin, b));
+    if (food.some(node => travel(world, citizen, node, 'forage', node.id))) return;
+  }
+
   if (citizen.fatigue >= NEEDS.sleep || (citizen.hp <= COMBAT.retreatHp && citizen.hunger < NEEDS.eat)) {
     citizen.action = { ...idle(world.worldTimeTick), kind: 'sleep', phase: 'perform' };
     return;
@@ -186,7 +200,7 @@ function updateDistantSettlements(world, camera, population) {
     const locals = world.citizens.filter(c => c.alive && c.hp > 0 && c.settlementId === settlement.id &&
       c.action.kind === 'idle' && distance(c.lastKnownSafeTile, origin) <= 8 &&
       !c.expeditionId && !campaignFor(world, c) && !assignedAdventure(world, c));
-    const hungry = locals.filter(c => c.hunger >= NEEDS.eat);
+    const hungry = locals.filter(c => c.hunger >= NEEDS.eat).sort((a, b) => b.hunger - a.hunger || a.hp - b.hp);
     let connected;
     if (hungry.length && available(store, 'food') > 0) {
       connected = reachableTiles(world, origin);
@@ -231,9 +245,8 @@ function updateDistantSettlements(world, camera, population) {
       }
     }
     let site = world.constructionSites.find(s => s.settlementId === settlement.id);
-    const constructionBusy = site && (world.inTransit.some(s => s.destinationId === site.id) ||
-      world.citizens.some(c => c.alive && c.settlementId === settlement.id &&
-        ['build', 'pickUpMaterials', 'deliverMaterials', 'recoverMaterials'].includes(c.action.kind)));
+    const constructionBusy = site && world.citizens.some(c => c.alive && c.settlementId === settlement.id &&
+        ['build', 'pickUpMaterials', 'deliverMaterials', 'recoverMaterials'].includes(c.action.kind));
     if (!constructionBusy) {
       const builders = ready.filter(c => c.profession === 'builder' && c.hp > COMBAT.retreatHp &&
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep &&
@@ -250,9 +263,13 @@ function updateDistantSettlements(world, camera, population) {
             if (materialsDelivered(site)) {
               buildAtSite(world, site, NEED_HOUR_TICKS / 2);
             } else {
+              const abandoned = world.inTransit.find(item => item.destinationId === site.id &&
+                item.carrierId === null && distance(item, origin) <= 8 &&
+                connected[item.y * world.map.width + item.x] === 1);
               reserveMaterials(world, site, store);
               const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
-              const shipment = reservation && pickUpMaterials(world, reservation, builder);
+              const shipment = abandoned ?? (reservation && pickUpMaterials(world, reservation, builder));
+              if (abandoned) takeAbandonedCargo(abandoned, builder);
               if (shipment) deliverMaterials(world, shipment, builder);
             }
             builder.decisionAt = Math.max(builder.decisionAt, world.worldTimeTick + DECISION_TICKS);
@@ -303,11 +320,15 @@ function perform(world, citizen, store, ticks, population) {
     }
     return;
   }
-  if (action.kind === 'gather') {
+  if (action.kind === 'gather' || action.kind === 'forage') {
     action.progress += ticks;
     if (action.progress < GATHER_TICKS) return;
     const node = world.resourceNodes.find(n => n.id === action.targetId);
-    if (node && !isQuestCargo(world, node)) harvest(world, citizen, node);
+    if (node && !isQuestCargo(world, node) && harvest(world, citizen, node) &&
+        action.kind === 'forage' && citizen.hunger >= NEEDS.eat) {
+      citizen.inventory.food--;
+      citizen.hunger = Math.max(0, citizen.hunger - FOOD_HUNGER_RESTORED);
+    }
     if (store && node && citizen.inventory[node.resource] && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
   }
   if (action.kind === 'farm') {
@@ -327,11 +348,7 @@ function perform(world, citizen, store, ticks, population) {
   }
   if (action.kind === 'recoverMaterials') {
     const shipment = world.inTransit.find(item => item.id === action.targetId && item.carrierId === null);
-    if (shipment) {
-      shipment.carrierId = citizen.id;
-      delete shipment.x;
-      delete shipment.y;
-    }
+    if (shipment) takeAbandonedCargo(shipment, citizen);
   }
   if (action.kind === 'deliverMaterials') {
     deliverMaterials(world, world.inTransit.find(item => item.id === action.targetId), citizen);
