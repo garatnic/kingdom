@@ -211,3 +211,40 @@ test('existing overlapping borders keep their old nearest-center owner when migr
   assert.equal(territoryAt(world, { x: 37, y: 32 }), invader.id);
   assert.equal(territoryAt(world, { x: 38, y: 32 }), defender.id);
 });
+
+test('food aid survives reload, delivers once and returns if the destination changes hands', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const awayStore = world.stockpiles[1];
+  awayStore.total.food = 0;
+  away.foodWarning = true;
+  updateFoodAid(world);
+  assert.equal(away.foodAid, undefined);
+  away.nationId = invader.id;
+  invader.settlementIds.push(away.id);
+  defender.settlementIds = [];
+  defender.capitalId = null;
+  defender.fallenAt = 0;
+  for (const citizen of world.citizens.slice(-2)) citizen.nationId = invader.id;
+  updateFoodAid(world);
+  assert.equal(homeStore.total.food, 46);
+  assert.equal(away.foodAid.food, 6);
+  assert.equal(awayStore.total.food, 0);
+
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(restored);
+  updateFoodAid(restored);
+  assert.equal(restored.stockpiles[1].total.food, 6);
+  assert.equal(restored.events.filter(e => e.type === 'foodAidDelivered').length, 1);
+
+  away.nationId = defender.id;
+  world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
+  assert.equal(away.foodAid.returning, true);
+  world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
+  assert.equal(awayStore.total.food, 0);
+  assert.equal(homeStore.total.food, 52);
+  assert.equal(away.foodAid, undefined);
+});

@@ -7,6 +7,7 @@ import { updateAdventureWorld } from '../simulation/Adventure.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
 import { updateNations } from '../simulation/Nations.js';
 import { updateResearch } from '../simulation/Research.js';
+import { updateFoodAid } from '../simulation/FoodAid.js';
 import { recordSettlements } from '../simulation/SettlementRecords.js';
 import { updatePopulation } from '../simulation/Population.js';
 
@@ -27,6 +28,7 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
       updateResearch(world, TICKS_PER_STEP_AT_1X);
       if (world.worldTimeTick % TIME_TICKS_PER_DAY === 0) {
         recordSettlements(world);
+        updateFoodAid(world);
         trimHistory(world);
       }
     }

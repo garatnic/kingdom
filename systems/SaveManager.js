@@ -75,6 +75,10 @@ function validate(world) {
     !world.buildings.some(building => footprint(building, tile));
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
+        (s.foodAid === undefined || (s.foodAid && s.foodAid.sourceId !== s.id &&
+          settlements.has(s.foodAid.sourceId) && nations.has(s.foodAid.nationId) &&
+          integer(s.foodAid.food, 1) && integer(s.foodAid.travelDays, 1, map.width * map.height) &&
+          integer(s.foodAid.arrivalDay, 1) && typeof s.foodAid.returning === 'boolean')) &&
         (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&
           s.dailyRecords.every((r, i, records) => r && integer(r.day, (records[i - 1]?.day ?? 0) + 1,
               Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY)) &&
