@@ -1,4 +1,4 @@
-import { SIZE, START_REGION_SIZE, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { INITIAL_IRON_NODE_MIN_QTY, INITIAL_MANA_NODE_MIN_QTY, SIZE, START_REGION_SIZE, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { nextId } from '../simulation/Identity.js';
 import { findPath, reachableTiles } from '../simulation/path.js';
@@ -101,12 +101,19 @@ export function discoverFrontier(world, tile, direction, citizenId) {
       if (reachable[index] === 1 && !occupied.has(index)) candidates.push({ x, y });
     }
   }
-  for (const [resource, distance, quantity] of [['food', 6, 12], ['wood', 14, 20], ['stone', 22, 30]]) {
+  const discoveries = [
+    ['food', 6, 12], ['wood', 14, 20], ['stone', 22, 30],
+    ['iron', 10, INITIAL_IRON_NODE_MIN_QTY], ['manaStone', 24, INITIAL_MANA_NODE_MIN_QTY]
+  ];
+  for (const [resource, distance, quantity] of discoveries) {
     const target = { x: tile.x + (east ? distance : 0), y: tile.y + (east ? 0 : distance) };
     const cost = point => Math.abs(point.x - target.x) + Math.abs(point.y - target.y);
     candidates.sort((a, b) => cost(a) - cost(b));
-    const point = candidates.shift();
-    if (point) world.resourceNodes.push({ id: nextId(world, 'node'), resource, ...point, quantity });
+    const ore = resource === 'iron' || resource === 'manaStone';
+    const index = ore ? candidates.findIndex(point => map.terrain[point.y * map.width + point.x] === 'mountain') : 0;
+    if (index < 0 || !candidates.length) continue;
+    const [point] = candidates.splice(index, 1);
+    world.resourceNodes.push({ id: nextId(world, 'node'), resource, ...point, quantity });
   }
   Object.assign(map, { surveyedWidth: width, surveyedHeight: height, nextSurveyTick: world.worldTimeTick + RETRY_TICKS });
   emitOnce(world, `frontier/${width}/${height}`, 'frontierDiscovered', { ...tile, citizenId, width, height });

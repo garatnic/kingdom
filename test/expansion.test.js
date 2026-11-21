@@ -39,3 +39,30 @@ test('adventurers discover resources within the fixed map and can save after sur
   assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
   assert.equal(discoverFrontier(world, discovery, discovery.width > 64 ? 'east' : 'south', discovery.citizenId), false);
 });
+
+test('frontier surveys reveal reachable ore and old exhausted iron workings reopen', async () => {
+  const { NODE_RENEWAL_TICKS } = await import('../data/balance.js');
+  const { renewNodes } = await import('../simulation/Economy.js');
+  const world = createWorld('ore-frontier');
+  world.map.terrain.fill('mountain');
+  const tile = { x: world.map.surveyedWidth - 1, y: 32 };
+  assert.equal(discoverFrontier(world, tile, 'east', world.citizens[0].id), true);
+  for (const resource of ['iron', 'manaStone']) {
+    const found = world.resourceNodes.find(n => n.x > tile.x && n.resource === resource);
+    assert.ok(found && findPath(world, tile, found));
+  }
+
+  const iron = world.resourceNodes.find(n => n.resource === 'iron');
+  const quantity = iron.quantity;
+  iron.quantity = 0;
+  renewNodes(world);
+  assert.equal(iron.quantity, 0);
+  assert.equal(iron.renewAt, NODE_RENEWAL_TICKS.iron);
+
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick = NODE_RENEWAL_TICKS.iron;
+  renewNodes(restored);
+  const reopened = restored.resourceNodes.find(n => n.id === iron.id);
+  assert.equal(reopened.quantity, quantity);
+  assert.equal(reopened.renewAt, undefined);
+});
