@@ -2,7 +2,7 @@ import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { nextId } from './Identity.js';
 import { available, freeCapacity } from './Economy.js';
 import {
-  CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON,
+  citizenRaces, CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON,
   FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION
 } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
@@ -91,11 +91,12 @@ export function materialsDelivered(site) {
   return Object.entries(buildings[site.kind].cost).every(([key, qty]) => site.delivered[key] === qty);
 }
 
-export function buildAtSite(world, site, ticks) {
+export function buildAtSite(world, site, ticks, worker) {
   if (!world.constructionSites.includes(site) || !materialsDelivered(site) ||
       !Number.isSafeInteger(ticks) || ticks <= 0) return null;
   const percent = unlocked(world, site.settlementId, 'building_1') ? TECH.buildingWorkPercent : 100;
-  const preciseTicks = ticks * percent + (site.workRemainder ?? 0);
+  const aptitude = worker?.profession === 'builder' ? citizenRaces[worker.race]?.buildingWorkBonus ?? 0 : 0;
+  const preciseTicks = ticks * (percent + aptitude) + (site.workRemainder ?? 0);
   site.workRemainder = preciseTicks % 100;
   site.progress = Math.min(site.progress + Math.floor(preciseTicks / 100), workTicks(site.kind));
   if (site.progress < workTicks(site.kind) || world.monsters.some(m => m.alive && footprint(site, m)) ||

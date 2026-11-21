@@ -285,7 +285,7 @@ function updateDistantSettlements(world, camera, population) {
           site ??= planSettlementConstruction(world, settlement, store, origin, residents);
           if (site && workTile(world, origin, site)) {
             if (materialsDelivered(site)) {
-              buildAtSite(world, site, NEED_HOUR_TICKS / 2);
+              buildAtSite(world, site, NEED_HOUR_TICKS / 2, builder);
             } else {
               const abandoned = world.inTransit.find(item => item.destinationId === site.id &&
                 item.carrierId === null && distance(item, origin) <= 8 &&
@@ -366,7 +366,7 @@ function perform(world, citizen, store, ticks, population) {
   }
   if (action.kind === 'build') {
     const site = world.constructionSites.find(s => s.id === action.targetId);
-    if (site && !buildAtSite(world, site, ticks)) return;
+    if (site && !buildAtSite(world, site, ticks, citizen)) return;
   }
   if (action.kind === 'pickUpMaterials') {
     pickUpMaterials(world, world.reservations.find(r => r.id === action.targetId), citizen);

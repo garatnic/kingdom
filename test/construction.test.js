@@ -39,7 +39,11 @@ test('building materials are counted once across reserve, transport, site and co
   assert.equal(siteAfter.delivered.wood + world.stockpiles[0].total.wood, 20);
   const stone = pickUpMaterials(world, world.reservations[1], workerAfter);
   assert.equal(deliverMaterials(world, stone, workerAfter), true);
-  assert.equal(buildAtSite(world, siteAfter, workTicks('house') - 1), null);
+  workerAfter.race = 'orc';
+  workerAfter.profession = 'builder';
+  assert.equal(buildAtSite(world, siteAfter, 100, workerAfter), null);
+  assert.equal(siteAfter.progress, 110);
+  assert.equal(buildAtSite(world, siteAfter, workTicks('house') - 111), null);
   assert.ok(buildAtSite(world, siteAfter, 1));
   assert.equal(buildAtSite(world, siteAfter, 1), null);
   assert.equal(world.constructionSites.length, 0);
