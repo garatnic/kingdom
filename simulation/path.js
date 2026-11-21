@@ -37,10 +37,12 @@ function pop(heap) {
   return result;
 }
 
-export function findPath(world, start, goal) {
+export function findPath(world, start, goal, bounds) {
   const { width, height, terrain } = world.map;
+  const limitX = bounds?.width ?? width;
+  const limitY = bounds?.height ?? height;
   const inBounds = ({ x, y }) => Number.isInteger(x) && Number.isInteger(y) &&
-    x >= 0 && x < width && y >= 0 && y < height;
+    x >= 0 && x < limitX && y >= 0 && y < limitY;
   if (!inBounds(start) || !inBounds(goal)) return null;
 
   const index = ({ x, y }) => y * width + x;
@@ -89,7 +91,7 @@ export function findPath(world, start, goal) {
     for (const [dx, dy] of verticalFirst) {
       const nx = x + dx;
       const ny = y + dy;
-      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      if (nx < 0 || nx >= limitX || ny < 0 || ny >= limitY) continue;
       const tile = ny * width + nx;
       const cost = next.cost + TERRAIN_COST[terrain[tile]];
       const seen = visited[tile] === stamp;
@@ -106,9 +108,11 @@ export function findPath(world, start, goal) {
   return null;
 }
 
-export function reachableTiles(world, start, extraBlock, targets) {
+export function reachableTiles(world, start, extraBlock, targets, bounds) {
   const { width, height, terrain } = world.map;
-  const inside = (x, y) => x >= 0 && x < width && y >= 0 && y < height;
+  const limitX = bounds?.width ?? width;
+  const limitY = bounds?.height ?? height;
+  const inside = (x, y) => x >= 0 && x < limitX && y >= 0 && y < limitY;
   const seen = new Uint8Array(width * height);
   if (!Number.isInteger(start.x) || !Number.isInteger(start.y) || !inside(start.x, start.y)) return seen;
   for (const b of extraBlock ? [...world.buildings, extraBlock] : world.buildings) {

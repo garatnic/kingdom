@@ -1,5 +1,5 @@
 import { citizenRaces, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, LARGE_SETTLEMENT_POPULATION, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
-import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
+import { discoverFrontier, surveyBounds, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
 import { findPath, reachableTiles } from './path.js';
@@ -433,7 +433,8 @@ export function updateCitizens(world, ticks, camera) {
       const safe = citizen.lastKnownSafeTile;
       citizen.x = safe.x + 0.5;
       citizen.y = safe.y + 0.5;
-      const path = findPath(world, safe, citizen.action.goal);
+      const bounds = citizen.action.kind === 'survey' ? surveyBounds(world.map) : undefined;
+      const path = findPath(world, safe, citizen.action.goal, bounds);
       delete citizen.action.deferredMovement;
       if (path?.length) {
         Object.assign(citizen.action, { path, progress: 0, navigationVersion: world.map.navigationVersion });

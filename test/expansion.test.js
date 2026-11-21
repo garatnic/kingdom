@@ -83,3 +83,17 @@ test('surveys advance the shorter discovered axis and can fall back around a blo
   }
   assert.equal(surveyRoute(world, scout).goal.direction, 'east');
 });
+
+test('scouts cannot bypass a surveyed barrier by crossing the unrevealed map', () => {
+  const world = createWorld('hidden-detour');
+  const { map } = world;
+  map.terrain.fill('grass');
+  world.worldTimeTick = 2 * TIME_TICKS_PER_DAY;
+  const scout = world.citizens.find(c => c.profession === 'adventurer');
+  scout.lastKnownSafeTile = { x: 10, y: 10 };
+  for (let i = 0; i < 64; i++) {
+    map.terrain[50 * map.width + i] = map.terrain[i * map.width + 50] = 'water';
+  }
+  assert.equal(surveyRoute(world, scout), null);
+  assert.ok(map.nextSurveyTick > world.worldTimeTick);
+});

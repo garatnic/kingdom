@@ -53,6 +53,10 @@ export function migrateFixedMap(world) {
   });
 }
 
+export function surveyBounds(map) {
+  return { width: map.surveyedWidth, height: map.surveyedHeight };
+}
+
 export function surveyRoute(world, citizen) {
   const { map, worldTimeTick } = world;
   if (worldTimeTick < (map.nextSurveyTick ?? MIN_EXPANSION_TICK) ||
@@ -72,9 +76,10 @@ export function surveyRoute(world, citizen) {
   const preferred = map.surveyedWidth <= map.surveyedHeight ? 'east' : 'south';
   candidates.sort((a, b) => Number(b.direction === preferred) - Number(a.direction === preferred) ||
     cost(a) - cost(b));
-  const reachable = reachableTiles(world, origin);
+  const bounds = surveyBounds(map);
+  const reachable = reachableTiles(world, origin, undefined, undefined, bounds);
   const goal = candidates.find(tile => reachable[tile.y * map.width + tile.x] === 1);
-  if (goal) return { goal, path: findPath(world, origin, goal) };
+  if (goal) return { goal, path: findPath(world, origin, goal, bounds) };
   map.nextSurveyTick = worldTimeTick + RETRY_TICKS;
   return null;
 }
