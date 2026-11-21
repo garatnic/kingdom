@@ -1,5 +1,7 @@
-import { footprint } from '../data/buildings.js';
 import { TERRAIN_COST } from '../data/balance.js';
+
+const verticalFirst = [[0, -1], [-1, 0], [1, 0], [0, 1]];
+const horizontalFirst = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
 function earlier(a, b) {
   return a.score < b.score || (a.score === b.score && a.order < b.order);
@@ -45,7 +47,7 @@ export function findPath(world, start, goal) {
   const blocked = new Set();
   for (const building of world.buildings) {
     for (let y = building.y; y < building.y + (building.height ?? 1); y++) {
-      for (let x = building.x; footprint(building, { x, y }); x++) blocked.add(index({ x, y }));
+      for (let x = building.x; x < building.x + (building.width ?? 1); x++) blocked.add(y * width + x);
     }
   }
   if (blocked.has(destination) || !Number.isFinite(TERRAIN_COST[terrain[destination]])) return null;
@@ -68,10 +70,12 @@ export function findPath(world, start, goal) {
     }
     const x = current % width;
     const y = Math.floor(current / width);
-    for (const neighbor of [{ x, y: y - 1 }, { x: x - 1, y }, { x: x + 1, y }, { x, y: y + 1 }]) {
-      if (!inBounds(neighbor)) continue;
-      const tile = index(neighbor);
-      const cost = costs.get(current) + TERRAIN_COST[terrain[tile]];
+    for (const [dx, dy] of verticalFirst) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      const tile = ny * width + nx;
+      const cost = next.cost + TERRAIN_COST[terrain[tile]];
       if (blocked.has(tile) || !(cost < (costs.get(tile) ?? Infinity))) continue;
       costs.set(tile, cost);
       previous.set(tile, current);
@@ -84,30 +88,34 @@ export function findPath(world, start, goal) {
 
 export function reachableTiles(world, start, extraBlock) {
   const { width, height, terrain } = world.map;
-  const inside = ({ x, y }) => x >= 0 && x < width && y >= 0 && y < height;
-  const index = ({ x, y }) => y * width + x;
+  const inside = (x, y) => x >= 0 && x < width && y >= 0 && y < height;
   const seen = new Uint8Array(width * height);
-  if (!inside(start)) return seen;
+  if (!Number.isInteger(start.x) || !Number.isInteger(start.y) || !inside(start.x, start.y)) return seen;
   for (const b of extraBlock ? [...world.buildings, extraBlock] : world.buildings) {
     for (let y = b.y; y < b.y + (b.height ?? 1); y++) {
       for (let x = b.x; x < b.x + (b.width ?? 1); x++) {
-        if (inside({ x, y })) seen[y * width + x] = 2;
+        if (inside(x, y)) seen[y * width + x] = 2;
       }
     }
   }
-  if (seen[index(start)] || terrain[index(start)] === 'water') return seen;
-  const queue = [index(start)];
-  seen[index(start)] = 1;
-  for (let i = 0; i < queue.length; i++) {
+  const origin = start.y * width + start.x;
+  if (seen[origin] || terrain[origin] === 'water') return seen;
+  const queue = new Uint32Array(width * height);
+  let end = 1;
+  queue[0] = origin;
+  seen[origin] = 1;
+  for (let i = 0; i < end; i++) {
     const current = queue[i];
     const x = current % width;
     const y = Math.floor(current / width);
-    for (const tile of [{ x: x - 1, y }, { x: x + 1, y }, { x, y: y - 1 }, { x, y: y + 1 }]) {
-      if (!inside(tile)) continue;
-      const next = index(tile);
+    for (const [dx, dy] of horizontalFirst) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!inside(nx, ny)) continue;
+      const next = ny * width + nx;
       if (seen[next] || terrain[next] === 'water') continue;
       seen[next] = 1;
-      queue.push(next);
+      queue[end++] = next;
     }
   }
   return seen;
