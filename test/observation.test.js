@@ -173,3 +173,15 @@ test('frost pauses wild food regeneration through save and leaves dropped food u
   assert.ok(savedWild.quantity > 0);
   assert.equal(dropped.quantity, 3);
 });
+
+test('frost is recorded in the history of the nation that owns the affected tile', () => {
+  const world = createWorld('frost-territory');
+  const wild = world.resourceNodes.find(node => node.resource === 'food');
+  const settlement = world.settlements[0];
+  settlement.nationId = 'nation:1';
+  world.territory = { [wild.y * world.map.width + wild.x]: settlement.id };
+  assert.equal(applyGodCommand(world, command('national-frost', 'disaster', wild, 'frost')), null);
+  const event = historyFor(world, 'nation', settlement.nationId).find(entry => entry.value === 'frost');
+  assert.ok(event?.affectedNodeIds.includes(wild.id));
+  assert.equal(historyFor(world, 'nation', 'nation:2').length, 0);
+});

@@ -5,6 +5,7 @@ import { monsters } from '../data/combat.js';
 import { createAdult } from '../simulation/CreateAdult.js';
 import { spawnMonster } from '../simulation/Adventure.js';
 import { resources } from '../simulation/Economy.js';
+import { territoryAt } from '../simulation/Territory.js';
 import { nextId } from '../simulation/Identity.js';
 import { reachableTiles } from '../simulation/path.js';
 import { emitOnce } from './History.js';
@@ -158,7 +159,10 @@ export function applyGodCommand(world, command) {
     ...tile, kind, value, quantity: affectedCitizenIds?.length ?? affectedFarms?.length ?? affectedFoodNodes?.length ?? (kind === 'terrain' ? 0 : quantity),
     ...(terrainChange && { terrainChange }),
     ...(affectedCitizenIds && { affectedCitizenIds }),
-    ...(affectedFoodNodes && { affectedNodeIds: affectedFoodNodes.map(node => node.id) }),
+    ...(affectedFoodNodes && {
+      affectedNodeIds: affectedFoodNodes.map(node => node.id),
+      nationIds: [...new Set(affectedFoodNodes.map(node => territoryAt(world, node)).filter(Boolean))]
+    }),
     ...(affectedFarms && {
       affectedBuildingIds: affectedFarms.map(b => b.id),
       nationIds: [...new Set(world.settlements.filter(s =>
