@@ -1,3 +1,6 @@
+import { ADULT_AGE, NEEDS } from '../data/balance.js';
+import { ageYears } from './Identity.js';
+import { workTile } from './Construction.js';
 import { COMBAT, gear } from '../data/combat.js';
 import { emitOnce } from '../systems/History.js';
 import { available } from './Economy.js';
@@ -16,7 +19,7 @@ export function trainCombat(world, citizen, quest, experience) {
     points -= threshold;
     citizen.skills.combat++;
     emitOnce(world, citizen.id + '/' + citizen.skills.combat, 'combatLevelUp', {
-      citizenId: citizen.id, questId: quest.id, level: citizen.skills.combat, ...citizen.lastKnownSafeTile
+      citizenId: citizen.id, ...(quest ? { questId: quest.id } : {}), level: citizen.skills.combat, ...citizen.lastKnownSafeTile
     });
   }
   citizen.combatXp = citizen.skills.combat < COMBAT.maxLevel ? points : 0;
@@ -48,5 +51,36 @@ export function commissionGear(world, citizen, store, only = null) {
     emitOnce(world, citizen.id + '/' + id, 'adventurerEquipped', { citizenId: citizen.id, gearId: id,
       ...citizen.lastKnownSafeTile });
     return;
+  }
+}
+
+export function trainGuildApprentices(world) {
+  const led = new Set();
+  const assigned = new Set(world.quests.filter(q => q.status === 'claimed')
+    .flatMap(q => [q.claimedBy, q.escortId]));
+  for (const guild of world.buildings) {
+    const id = guild.settlementId;
+    if (guild.kind !== 'guild' || led.has(id) ||
+        world.settlements.find(s => s.id === id)?.foodWarning) continue;
+    const local = world.citizens.filter(c => c.alive && c.settlementId === id && c.profession === 'adventurer' &&
+      ageYears(world, c) >= ADULT_AGE && c.hp > COMBAT.retreatHp && c.hunger < NEEDS.eat &&
+      c.fatigue < NEEDS.sleep && c.action.kind === 'idle' && !assigned.has(c.id) && !c.expeditionId &&
+      Math.abs(c.lastKnownSafeTile.x - guild.x) + Math.abs(c.lastKnownSafeTile.y - guild.y) <= 8);
+    const mentor = local.find(c => c.skills.combat >= 2 && (c.adventuresCompleted ?? 0) >= 5 &&
+      workTile(world, c.lastKnownSafeTile, guild));
+    if (!mentor) continue;
+    const apprentice = local.find(c => c.skills.combat < Math.min(mentor.skills.combat, 4) &&
+      workTile(world, c.lastKnownSafeTile, guild));
+    if (!apprentice) continue;
+
+    const previousLevel = apprentice.skills.combat;
+    trainCombat(world, apprentice, null, 4);
+    if (apprentice.skills.combat > previousLevel) {
+      emitOnce(world, apprentice.id + '/' + apprentice.skills.combat, 'guildApprenticeAdvanced', {
+        citizenId: apprentice.id, actorIds: [mentor.id, apprentice.id], settlementId: id,
+        level: apprentice.skills.combat, x: guild.x, y: guild.y
+      });
+    }
+    led.add(id);
   }
 }

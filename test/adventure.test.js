@@ -400,3 +400,31 @@ test('an arcane smithy commission protects mana reserves and persists its equipm
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   assert.equal(restored.citizens.find(c => c.id === adventurer.id).gearId, 'arcane');
 });
+
+test('an experienced adventurer can train an idle adult apprentice in the guild', async () => {
+  const { trainGuildApprentices } = await import('../simulation/AdventurerGrowth.js');
+  const world = createWorld('guild-training');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const point = { x: home.x + 5, y: home.y + 4 };
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'guild', settlementId: home.id,
+    ...point, width: 1, height: 1 });
+  const [mentor, apprentice] = world.citizens;
+  for (const citizen of [mentor, apprentice]) {
+    citizen.profession = 'adventurer';
+    citizen.lastKnownSafeTile = { x: point.x - 1, y: point.y };
+  }
+  mentor.skills.combat = 3;
+  mentor.adventuresCompleted = 5;
+  apprentice.skills.combat = 1;
+  apprentice.combatXp = 38;
+  home.foodWarning = true;
+  trainGuildApprentices(world);
+  assert.equal(apprentice.combatXp, 38);
+  home.foodWarning = false;
+  trainGuildApprentices(world);
+  assert.equal(apprentice.skills.combat, 2);
+  assert.equal(apprentice.combatXp, 2);
+  const lesson = world.events.find(event => event.type === 'guildApprenticeAdvanced');
+  assert.deepEqual(lesson.actorIds, [mentor.id, apprentice.id]);
+});

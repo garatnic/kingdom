@@ -3,6 +3,7 @@ import {
   TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR, TIME_TICKS_PER_MINUTE, SEASONS, SPEEDS
 } from '../data/balance.js';
 import { trimHistory } from '../systems/History.js';
+import { trainGuildApprentices } from '../simulation/AdventurerGrowth.js';
 import { updateAdventureWorld } from '../simulation/Adventure.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
 import { updateNations } from '../simulation/Nations.js';
@@ -30,6 +31,7 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
       updateNations(world, TICKS_PER_STEP_AT_1X);
       updateResearch(world, TICKS_PER_STEP_AT_1X);
       if (world.worldTimeTick % TIME_TICKS_PER_DAY === 0) {
+        trainGuildApprentices(world);
         produceMiningTools(world);
         prepareArcaneGear(world);
         installArcaneIrrigation(world);
