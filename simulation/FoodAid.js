@@ -39,7 +39,7 @@ export function updateFoodAid(world) {
     if (aid.food && !aid.returning) {
       aid.returning = true;
       aid.arrivalDay = day + aid.travelDays;
-    } else if (aid.food) {
+    } else if (aid.food && route(to, from)) {
       const returned = Math.min(aid.food, storageRoom(from, 'food'));
       from.total.food += returned;
       aid.food -= returned;

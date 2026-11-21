@@ -272,7 +272,7 @@ for (const steel of [false, true]) {
     world.buildings.push({ id: 'building:2', kind: 'guild', x: home.x + 5, y: home.y, settlementId: home.id });
     world.idCounters.building = 3;
     const source = { id: 'node:' + world.idCounters.node++, resource: steel ? 'stone' : 'wood',
-      quantity: 12, x: store.x + 12, y: store.y };
+      quantity: 12, x: store.x + (steel ? 8 : 12), y: store.y };
     world.resourceNodes.push(source);
     if (steel) {
       const { ensureResearch } = await import('../simulation/Research.js');

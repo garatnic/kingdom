@@ -242,7 +242,25 @@ test('food aid survives reload, delivers once and returns if the destination cha
   world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
   updateFoodAid(world);
   assert.equal(away.foodAid.returning, true);
+  const barrier = [];
+  for (let y = 0; y < world.map.height; y++) {
+    const index = y * world.map.width + 22;
+    barrier.push(world.map.terrain[index]);
+    world.map.terrain[index] = 'water';
+  }
   world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
+  assert.equal(homeStore.total.food, 46);
+  assert.equal(away.foodAid.food, 6);
+  for (let y = 0; y < world.map.height; y++) world.map.terrain[y * world.map.width + 22] = barrier[y];
+  const capacity = homeStore.capacity;
+  homeStore.capacity = Object.values(homeStore.total).reduce((sum, quantity) => sum + quantity, 0);
+  world.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
+  assert.equal(away.foodAid.food, 6);
+  homeStore.capacity = capacity;
+  world.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
   updateFoodAid(world);
   assert.equal(awayStore.total.food, 0);
   assert.equal(homeStore.total.food, 52);

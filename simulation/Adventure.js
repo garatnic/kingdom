@@ -195,10 +195,11 @@ function offerSurvey(world, settlement, store, origin) {
   const surveyed = new Set(world.quests.filter(q => q.kind === 'survey_resources' &&
     (activeQuest(q) || (q.status === 'completed' && q.settlementId === settlement.id))).map(q => q.targetId));
   const destinations = world.resourceNodes.filter(node => !node.dropped && node.quantity > 0 &&
-    distance(origin, node) >= 12 && distance(origin, node) <= 24 && !surveyed.has(node.id));
+    distance(origin, node) <= 24 && !surveyed.has(node.id));
   destinations.sort((a, b) => distance(origin, a) - distance(origin, b));
   const target = destinations.find(node => manaProspect(world, node, store, settlement.id) &&
-    findPath(world, origin, node) !== null) ?? destinations.find(node => findPath(world, origin, node) !== null);
+    findPath(world, origin, node) !== null) ?? destinations.find(node =>
+    distance(origin, node) >= 12 && findPath(world, origin, node) !== null);
   if (!target) return;
   world.quests.push({ id: nextId(world, 'quest'), kind: 'survey_resources', settlementId: settlement.id,
     targetId: target.id, status: 'open', claimedBy: null, createdAt: world.worldTimeTick,
