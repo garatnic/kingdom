@@ -81,3 +81,22 @@ test('a dangerous monster near a settlement is recorded once per day', () => {
   assert.equal(threats[0].settlementId, home.id);
   assert.equal(threats[0].monsterId, goblin.id);
 });
+
+test('a new colony at a cleared site is recorded as a separate founding', () => {
+  const world = createWorld('recolonization');
+  world.map.terrain.fill('forest');
+  const site = { x: 8, y: 8 };
+  for (let generation = 0; generation < 2; generation++) {
+    const parent = spawnMonster(world, 'slime', site);
+    assert.ok(parent);
+    parent.moveAt = Number.MAX_SAFE_INTEGER;
+    world.worldTimeTick = world.nextMonsterSpawnTick = (generation + 1) * TIME_TICKS_PER_DAY;
+    updateAdventureWorld(world, 12);
+    const colony = world.monsters.filter(m => m.alive && m.species === 'slime' &&
+      m.homeTile.x === site.x && m.homeTile.y === site.y);
+    assert.equal(colony.length, 2);
+    for (const member of colony) Object.assign(member, { alive: false, hp: 0, diedAt: world.worldTimeTick });
+  }
+  assert.equal(world.events.filter(e => e.type === 'monsterNestFounded' &&
+    e.species === 'slime' && e.x === site.x && e.y === site.y).length, 2);
+});

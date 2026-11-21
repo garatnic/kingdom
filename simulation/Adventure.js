@@ -103,8 +103,9 @@ function replenishSpecies(world, species, forbidden) {
       if (!newborn) continue;
       newborn.parentMonsterId = parent.id;
       newborn.homeTile = { ...home };
+      const founded = !population.some(member => member.hasNest && sameNest(member, parent));
       newborn.hasNest = parent.hasNest = true;
-      emitOnce(world, species + '/nest/' + tileKey(home), 'monsterNestFounded', { ...home, species });
+      if (founded) emitOnce(world, newborn.id, 'monsterNestFounded', { ...home, species });
       newborn.nextBreedAt = parent.nextBreedAt = world.worldTimeTick + TIME_TICKS_PER_DAY;
       return true;
     }
