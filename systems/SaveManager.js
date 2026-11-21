@@ -136,7 +136,8 @@ function validate(world) {
           ? surveyTargets.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&
             Array.isArray(q.surveyVisitors) && new Set(q.surveyVisitors).size === q.surveyVisitors.length &&
             q.surveyVisitors.every(id => [q.claimedBy, q.escortId].includes(id)))) &&
-            (q.surveyQuantity === undefined ? q.status !== 'completed' : integer(q.surveyQuantity, 0))
+            (q.surveyQuantity === undefined ? q.status !== 'completed' : integer(q.surveyQuantity, 0)) &&
+            (q.discoveredNodeId === undefined || (q.status === 'completed' && surveyTargets.has(q.discoveredNodeId)))
           : targets.has(q.targetId)) && settlements.has(q.settlementId) &&
         (q.claimedBy === null || people.has(q.claimedBy)) &&
         (q.escortId === undefined || (people.has(q.escortId) && q.escortId !== q.claimedBy)) &&

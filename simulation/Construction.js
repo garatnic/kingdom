@@ -202,7 +202,8 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
     : undefined;
   const kind = urgent ?? civicFacility ?? facilityOrder.find(type => !local.some(b => b.kind === type) && canAfford(type));
   if (!kind) return null;
-  const allowForest = population >= LARGE_SETTLEMENT_POPULATION && (kind === 'house' || kind === 'warehouse');
+  const allowForest = (kind === 'guild' && civicFacility === kind) ||
+    (population >= LARGE_SETTLEMENT_POPULATION && (kind === 'house' || kind === 'warehouse'));
   const { width, height } = world.map;
   const plots = new Map();
   const type = buildings[kind];

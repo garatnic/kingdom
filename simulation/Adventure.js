@@ -168,6 +168,25 @@ function offerRecovery(world, settlement, store, origin) {
   return true;
 }
 
+function manaProspect(world, node, store, settlementId) {
+  const { map } = world;
+  const terrain = (x, y) => map.terrain[y * map.width + x];
+  if (node.resource !== 'stone' || terrain(node.x, node.y) !== 'mountain' ||
+      available(store, 'manaStone') >= 5 || !unlocked(world, settlementId, 'steel_1') ||
+      world.quests.some(q => q.targetId === node.id && q.discoveredNodeId)) return null;
+
+  const occupied = [...world.resourceNodes, ...world.stockpiles];
+  for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+    const tile = { x: node.x + dx, y: node.y + dy };
+    if (tile.x < 0 || tile.y < 0 || tile.x >= map.surveyedWidth || tile.y >= map.surveyedHeight ||
+        terrain(tile.x, tile.y) !== 'mountain' || occupied.some(other => distance(tile, other) === 0) ||
+        world.constructionSites.some(site => tile.x >= site.x && tile.x < site.x + site.width &&
+          tile.y >= site.y && tile.y < site.y + site.height)) continue;
+    if (findPath(world, node, tile) !== null) return tile;
+  }
+  return null;
+}
+
 function offerSurvey(world, settlement, store, origin) {
   if (!store || settlement.foodWarning || available(store, 'food') < 4 ||
       !world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
@@ -177,8 +196,9 @@ function offerSurvey(world, settlement, store, origin) {
     (activeQuest(q) || (q.status === 'completed' && q.settlementId === settlement.id))).map(q => q.targetId));
   const destinations = world.resourceNodes.filter(node => !node.dropped && node.quantity > 0 &&
     distance(origin, node) >= 12 && distance(origin, node) <= 24 && !surveyed.has(node.id));
-  const target = destinations.sort((a, b) => distance(origin, a) - distance(origin, b))
-    .find(node => findPath(world, origin, node) !== null);
+  destinations.sort((a, b) => distance(origin, a) - distance(origin, b));
+  const target = destinations.find(node => manaProspect(world, node, store, settlement.id) &&
+    findPath(world, origin, node) !== null) ?? destinations.find(node => findPath(world, origin, node) !== null);
   if (!target) return;
   world.quests.push({ id: nextId(world, 'quest'), kind: 'survey_resources', settlementId: settlement.id,
     targetId: target.id, status: 'open', claimedBy: null, createdAt: world.worldTimeTick,
@@ -232,9 +252,19 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
   }
   if (escortAlive && !quest.escortReturned) return true;
   quest.status = quest.retreated || !escortAlive ? 'retreated' : 'completed';
-  if (quest.status === 'completed') emit(world, 'resourceSurveyReturned', quest, node, {
-    actorIds: [citizen.id, quest.escortId], resource: node.resource, quantity: quest.surveyQuantity
-  });
+  if (quest.status === 'completed') {
+    const actors = [citizen.id, quest.escortId];
+    emit(world, 'resourceSurveyReturned', quest, node, {
+      actorIds: actors, resource: node.resource, quantity: quest.surveyQuantity
+    });
+    const prospect = manaProspect(world, node, store, quest.settlementId);
+    if (prospect) {
+      const vein = { id: nextId(world, 'node'), ...prospect, resource: 'manaStone', quantity: 5 };
+      world.resourceNodes.push(vein);
+      quest.discoveredNodeId = vein.id;
+      emit(world, 'manaVeinDiscovered', quest, vein, { actorIds: actors, quantity: vein.quantity });
+    }
+  }
   return false;
 }
 

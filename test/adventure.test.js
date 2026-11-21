@@ -260,45 +260,62 @@ test('guild partners recover abandoned cargo once across save and reload', async
   assert.equal(restored.events.filter(e => e.type === 'supplyRecoveryReturned').length, 1);
 });
 
-test('two guild surveyors report a resource without removing it after a mid-survey save', async () => {
-  const world = createWorld('guild-survey');
-  world.map.terrain.fill('grass');
-  const [home] = world.settlements;
-  const [store] = world.stockpiles;
-  const lead = world.citizens.find(c => c.profession === 'adventurer');
-  world.citizens.find(c => c !== lead).profession = 'adventurer';
-  world.buildings.push({ id: 'building:2', kind: 'guild', x: home.x + 5, y: home.y, settlementId: home.id });
-  world.idCounters.building = 3;
-  world.resourceNodes.push({
-    id: 'node:' + world.idCounters.node++, resource: 'wood', quantity: 12, x: store.x + 12, y: store.y
-  });
-  updateAdventureWorld(world, 12);
-  const quest = world.quests.find(q => q.kind === 'survey_resources');
-  assert.ok(quest);
-  assert.ok(claimAdventure(world, lead, store, () => true));
-  const node = world.resourceNodes.find(n => n.id === quest.targetId);
-  const quantity = node.quantity;
-  const move = person => tile => {
-    person.lastKnownSafeTile = { x: tile.x, y: tile.y };
-    person.x = tile.x + 0.5;
-    person.y = tile.y + 0.5;
-    return true;
-  };
-  move(lead)(node);
-  continueAdventure(world, lead, quest, store, store, move(lead));
-  assert.deepEqual(quest.surveyVisitors, [lead.id]);
+for (const steel of [false, true]) {
+  test(steel ? 'steel-era surveyors reveal one mana vein after a mid-survey save'
+      : 'two guild surveyors report a resource without removing it after a mid-survey save', async () => {
+    const world = createWorld('guild-survey');
+    world.map.terrain.fill('grass');
+    const [home] = world.settlements;
+    const [store] = world.stockpiles;
+    const lead = world.citizens.find(c => c.profession === 'adventurer');
+    world.citizens.find(c => c !== lead).profession = 'adventurer';
+    world.buildings.push({ id: 'building:2', kind: 'guild', x: home.x + 5, y: home.y, settlementId: home.id });
+    world.idCounters.building = 3;
+    const source = { id: 'node:' + world.idCounters.node++, resource: steel ? 'stone' : 'wood',
+      quantity: 12, x: store.x + 12, y: store.y };
+    world.resourceNodes.push(source);
+    if (steel) {
+      const { ensureResearch } = await import('../simulation/Research.js');
+      ensureResearch(world, home, ['steel_1']);
+      world.map.terrain[source.y * world.map.width + source.x] = 'mountain';
+      world.map.terrain[source.y * world.map.width + source.x + 1] = 'mountain';
+    }
+    updateAdventureWorld(world, 12);
+    const quest = world.quests.find(q => q.kind === 'survey_resources');
+    assert.ok(quest);
+    assert.ok(claimAdventure(world, lead, store, () => true));
+    const node = world.resourceNodes.find(n => n.id === quest.targetId);
+    const quantity = node.quantity;
+    const move = person => tile => {
+      person.lastKnownSafeTile = { x: tile.x, y: tile.y };
+      person.x = tile.x + 0.5;
+      person.y = tile.y + 0.5;
+      return true;
+    };
+    move(lead)(node);
+    continueAdventure(world, lead, quest, store, store, move(lead));
+    assert.deepEqual(quest.surveyVisitors, [lead.id]);
 
-  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
-  const restoredQuest = restored.quests.find(q => q.id === quest.id);
-  const depot = restored.stockpiles[0];
-  const team = [restoredQuest.escortId, restoredQuest.claimedBy].map(id => restored.citizens.find(c => c.id === id));
-  for (let i = 0; i < 4; i++) {
-    for (const person of team) continueAdventure(restored, person, restoredQuest, depot, depot, move(person));
-  }
-  assert.equal(restoredQuest.status, 'completed');
-  assert.equal(restored.resourceNodes.find(n => n.id === node.id).quantity, quantity);
-  const reports = restored.events.filter(e => e.type === 'resourceSurveyReturned');
-  assert.equal(reports.length, 1);
-  assert.equal(reports[0].quantity, quantity);
-  assert.deepEqual(reports[0].actorIds, [restoredQuest.claimedBy, restoredQuest.escortId]);
-});
+    const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+    const restoredQuest = restored.quests.find(q => q.id === quest.id);
+    const depot = restored.stockpiles[0];
+    const team = [restoredQuest.escortId, restoredQuest.claimedBy].map(id => restored.citizens.find(c => c.id === id));
+    for (let i = 0; i < 4; i++) {
+      for (const person of team) continueAdventure(restored, person, restoredQuest, depot, depot, move(person));
+    }
+    assert.equal(restoredQuest.status, 'completed');
+    assert.equal(restored.resourceNodes.find(n => n.id === node.id).quantity, quantity);
+    const reports = restored.events.filter(e => e.type === 'resourceSurveyReturned');
+    assert.equal(reports.length, 1);
+    const discoveries = restored.events.filter(e => e.type === 'manaVeinDiscovered');
+    assert.equal(discoveries.length, Number(steel));
+    if (steel) {
+      const vein = restored.resourceNodes.find(n => n.id === restoredQuest.discoveredNodeId);
+      assert.deepEqual([vein.resource, vein.quantity, vein.x, vein.y], ['manaStone', 5, source.x + 1, source.y]);
+      assert.equal(depot.total.manaStone, 0);
+      assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(restored))), restored);
+    }
+    assert.equal(reports[0].quantity, quantity);
+    assert.deepEqual(reports[0].actorIds, [restoredQuest.claimedBy, restoredQuest.escortId]);
+  });
+}

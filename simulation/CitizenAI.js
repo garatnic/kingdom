@@ -30,6 +30,7 @@ function gatherPriority(world, settlementId, distance) {
   for (const quest of world.quests) {
     if (quest.kind === 'survey_resources' && quest.status === 'completed' && quest.settlementId === settlementId) {
       surveyed.add(quest.targetId);
+      if (quest.discoveredNodeId) surveyed.add(quest.discoveredNodeId);
     }
   }
   const score = node => distance(node) - (surveyed.has(node.id) ? SURVEY_DISTANCE_BONUS : 0);

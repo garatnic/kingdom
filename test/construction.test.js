@@ -249,9 +249,11 @@ test('an arcane capital builds the national farm requirement even with a full fo
   world.buildings.push(...[4, 7].map(offset => ({
     id: 'building:' + world.idCounters.building++, kind: 'farm', settlementId: home.id, width: 2, height: 2, x: home.x + offset, y: home.y
   })));
+  world.map.terrain.fill('forest');
   const guild = planSettlementConstruction(world, home, store, store, 20);
   assert.equal(guild.kind, 'guild');
   cancelSite(world, guild);
   world.buildings.push({ ...guild, id: 'building:' + world.idCounters.building++ });
+  world.map.terrain.fill('grass');
   assert.equal(planSettlementConstruction(world, home, store, store, 20).kind, 'farm');
 });
