@@ -273,6 +273,41 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       console.log(JSON.stringify({ seed: 'world-tree', realtimeElapsedMs: Math.round(elapsed), approximateGameMinutes: minutes,
         javascriptExceptions: errors.length, speed: 1, initialFps, finalFps: await measureFps() }));
     }
+    await send('Emulation.clearDeviceMetricsOverride');
+    await send('Page.bringToFront');
+    await evaluate(`(async () => {
+      const { createWorld } = await import('/engine/World.js');
+      const { createAdult } = await import('/simulation/CreateAdult.js');
+      const { createSnapshot } = await import('/systems/SaveManager.js');
+      const world = createWorld('dense-browser-test');
+      world.map.terrain.fill('grass');
+      const settlement = world.settlements[0];
+      for (let i = 0; i < 288; i++) {
+        const tile = { x: 16 + i % 16, y: 24 + Math.floor(i / 16) };
+        world.citizens.push(createAdult(world, 'human', tile, settlement));
+      }
+      const snapshot = await createSnapshot(world);
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([JSON.stringify(snapshot)], 'dense-test.json', { type: 'application/json' }));
+      const file = document.querySelector('#file');
+      file.files = transfer.files;
+      file.dispatchEvent(new Event('change'));
+      return true;
+    })()`);
+    await poll(() => evaluate("document.querySelector('#population').textContent === '住民 300人'"));
+    const denseClock = await evaluate("document.querySelector('#clock').textContent");
+    const denseFps = await evaluate(`new Promise(resolve => {
+      const start = performance.now();
+      let frames = 0;
+      function sample(now) {
+        frames++;
+        if (now - start >= 2000) resolve(Math.round(frames * 1000 / (now - start)));
+        else requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    })`);
+    assert.notEqual(await evaluate("document.querySelector('#clock').textContent"), denseClock);
+    console.log(JSON.stringify({ syntheticPopulation: 300, sampleMs: 2000, observedFps: denseFps }));
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();

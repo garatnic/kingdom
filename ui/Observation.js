@@ -68,6 +68,7 @@ export function observation(getWorld, getCamera, focus) {
   const previousPages = [];
   const body = get('history-body');
   let previousRender = '';
+  let subjectListKey = '';
   let recordsOpenFor = null;
   let observedEvent = '';
   let eventAt = -Infinity;
@@ -86,16 +87,21 @@ export function observation(getWorld, getCamera, focus) {
     const citizenMode = mode === 'citizen' || mode === 'family';
     get('favorite-filter').hidden = !citizenMode;
     const favorites = world.settings.favoriteCitizenIds ?? [];
-    const candidates = citizenMode ? (favoriteOnly.checked ? world.citizens.filter(c => favorites.includes(c.id)) : world.citizens) :
-      mode === 'nation' ? world.nations : mode === 'settlement' ? world.settlements : [];
     search.hidden = mode === 'world';
-    const choices = query ? candidates.filter(entry =>
-      [entry.id, mode === 'settlement' ? settlementName(entry) : entry.name, citizenRaces[entry.race]?.label]
-        .some(value => value?.normalize('NFKC').toLowerCase().includes(query))) : candidates;
-    const selected = subjects.value;
-    subjects.replaceChildren(...choices.map(c => new Option(mode === 'settlement' ? settlementName(c) : c.name, c.id)));
-    subjects.hidden = choices.length === 0;
-    if (choices.some(c => c.id === selected)) subjects.value = selected;
+    const listKey = [mode, query, world.citizens.length, world.nations.length, world.settlements.length,
+      citizenMode && favoriteOnly.checked ? favorites.join(',') : '*'].join('/');
+    if (listKey !== subjectListKey) {
+      subjectListKey = listKey;
+      const candidates = citizenMode ? (favoriteOnly.checked ? world.citizens.filter(c => favorites.includes(c.id)) : world.citizens) :
+        mode === 'nation' ? world.nations : mode === 'settlement' ? world.settlements : [];
+      const choices = query ? candidates.filter(entry =>
+        [entry.id, mode === 'settlement' ? settlementName(entry) : entry.name, citizenRaces[entry.race]?.label]
+          .some(value => value?.normalize('NFKC').toLowerCase().includes(query))) : candidates;
+      const selected = subjects.value;
+      subjects.replaceChildren(...choices.map(c => new Option(mode === 'settlement' ? settlementName(c) : c.name, c.id)));
+      subjects.hidden = choices.length === 0;
+      if (choices.some(c => c.id === selected)) subjects.value = selected;
+    }
     get('follow').hidden = !subjects.value || mode === 'settlement';
     body.replaceChildren();
     eventFilter.hidden = mode !== 'world';
@@ -209,7 +215,7 @@ export function observation(getWorld, getCamera, focus) {
       return;
     }
 
-    if (!choices.length && (query || citizenMode && favoriteOnly.checked)) {
+    if (!subjects.options.length && (query || citizenMode && favoriteOnly.checked)) {
       add(body, 'p', query ? '検索に一致する対象はありません。' : '注目人物はまだいません。');
       return;
     }
@@ -428,6 +434,7 @@ export function observation(getWorld, getCamera, focus) {
       recordsOpenFor = null;
       previousPages.length = 0;
       previousRender = '';
+      subjectListKey = '';
       observedEvent = '';
       eventAt = -Infinity;
       currentEvent = null;
