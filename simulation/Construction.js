@@ -10,15 +10,16 @@ import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { findPath, reachableTiles } from './path.js';
 
-function availableSite(world, kind, x, y) {
+function availableSite(world, kind, x, y, allowForest = false) {
   const type = buildings[kind];
   if (!type || !Number.isInteger(x) || !Number.isInteger(y)) return null;
   const site = { x, y, width: type.width, height: type.height };
   for (let dy = 0; dy < type.height; dy++) {
     for (let dx = 0; dx < type.width; dx++) {
       const tile = { x: x + dx, y: y + dy };
-      if (tile.x < 0 || tile.x >= world.map.width || tile.y < 0 || tile.y >= world.map.height ||
-          world.map.terrain[tile.y * world.map.width + tile.x] !== 'grass' ||
+      if (tile.x < 0 || tile.x >= world.map.width || tile.y < 0 || tile.y >= world.map.height) return null;
+      const terrain = world.map.terrain[tile.y * world.map.width + tile.x];
+      if ((terrain !== 'grass' && !(allowForest && terrain === 'forest')) ||
           [...world.buildings, ...world.constructionSites].some(b => footprint(b, tile)) ||
           world.resourceNodes.some(n => n.x === tile.x && n.y === tile.y) ||
           world.stockpiles.some(s => s.x === tile.x && s.y === tile.y)) return null;
@@ -27,8 +28,8 @@ function availableSite(world, kind, x, y) {
   return site;
 }
 
-export function planSite(world, settlement, kind, x, y) {
-  const site = availableSite(world, kind, x, y);
+export function planSite(world, settlement, kind, x, y, allowForest = false) {
+  const site = availableSite(world, kind, x, y, allowForest);
   if (!site) return null;
   Object.assign(site, { id: nextId(world, 'site'), settlementId: settlement.id, kind, delivered: {}, progress: 0 });
   world.constructionSites.push(site);
@@ -180,16 +181,22 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const kind = urgent ?? facilityOrder.find(type => !local.some(b => b.kind === type) &&
     Object.entries(buildings[type].cost).every(([resource, quantity]) => available(store, resource) >= quantity));
   if (!kind) return null;
+  const allowForest = population >= LARGE_SETTLEMENT_POPULATION && (kind === 'house' || kind === 'warehouse');
+  const { width, height } = world.map;
+  let connected;
   for (let radius = 1; radius <= 12; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
         const x = settlement.x + dx;
         const y = settlement.y + dy;
-        const footprintCandidate = availableSite(world, kind, x, y);
-        if (!footprintCandidate || !workTile(world, origin, footprintCandidate)) continue;
-        if (footprint(footprintCandidate, origin) || !keepsPathsOpen(world, footprintCandidate)) continue;
-        const site = planSite(world, settlement, kind, x, y);
+        const footprintCandidate = availableSite(world, kind, x, y, allowForest);
+        if (!footprintCandidate || footprint(footprintCandidate, origin)) continue;
+        connected ??= reachableTiles(world, origin);
+        const accessible = perimeter(footprintCandidate).some(tile => tile.x >= 0 && tile.x < width &&
+          tile.y >= 0 && tile.y < height && connected[tile.y * width + tile.x] === 1);
+        if (!accessible || !keepsPathsOpen(world, footprintCandidate)) continue;
+        const site = planSite(world, settlement, kind, x, y, allowForest);
         if (site) return site;
       }
     }

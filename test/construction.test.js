@@ -166,3 +166,17 @@ test('growing towns keep room for warehouse materials before the food target fil
   assert.equal(citizen.inventory.food, 15);
   assert.equal(planSettlementConstruction(world, settlement, store, store, 48).kind, 'warehouse');
 });
+
+test('mature settlements can extend housing into forest without building on depots', () => {
+  const world = createWorld('forest-housing');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('forest');
+  store.capacity = 250;
+  store.total.food = 128;
+  world.buildings.push({ ...world.buildings[0], kind: 'farm', x: settlement.x + 4, y: settlement.y + 2 });
+  const site = planSettlementConstruction(world, settlement, store, store, 32);
+  assert.equal(site.kind, 'house');
+  assert.equal(world.map.terrain[site.y * world.map.width + site.x], 'forest');
+  assert.ok(store.x < site.x || store.x >= site.x + site.width || store.y < site.y || store.y >= site.y + site.height);
+});
