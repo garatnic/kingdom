@@ -32,12 +32,23 @@ export function harvest(world, worker, node) {
   if (!worker.alive || !node || worker.settlementId == null ||
       worker.inventory[node.resource] !== 0 || node.quantity <= 0 ||
       worker.lastKnownSafeTile.x !== node.x || worker.lastKnownSafeTile.y !== node.y) return false;
-  const quantity = Math.min(node.quantity, GATHER_BATCH);
+  worker.inventory[node.resource] += extract(world, node, GATHER_BATCH);
+  return true;
+}
+
+function extract(world, node, limit) {
+  const quantity = Math.min(node.quantity, limit);
   node.quantity -= quantity;
-  worker.inventory[node.resource] += quantity;
   if (!node.dropped && node.quantity === 0 && Object.hasOwn(NODE_RENEWAL_TICKS, node.resource)) {
     node.renewAt = world.worldTimeTick + NODE_RENEWAL_TICKS[node.resource];
   }
+  return quantity;
+}
+
+export function gatherForStore(world, node, store, foodTarget) {
+  const room = storageRoom(store, node.resource, foodTarget);
+  if (room <= 0 || node.quantity <= 0) return false;
+  store.total[node.resource] += extract(world, node, Math.min(GATHER_BATCH, room));
   return true;
 }
 

@@ -118,3 +118,31 @@ test('distant meals use only available food and leave isolated residents to indi
   assert.ok(diners[1].hunger < NEEDS.eat);
   assert.ok(diners[2].hunger >= NEEDS.eat);
 });
+
+test('distant timber uses reachable deposits and conserves stock within storage limits', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const world = createWorld('distant-timber');
+  world.map.terrain.fill('grass');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const origin = { x: store.x, y: store.y };
+  for (let i = 0; i < 4; i++) world.citizens.push(createAdult(world, 'human', origin, settlement));
+  for (const citizen of world.citizens) {
+    citizen.profession = citizen === world.citizens.at(-1) ? 'woodcutter' : 'farmer';
+    citizen.decisionAt = NEED_HOUR_TICKS * 2;
+  }
+  const reachable = { id: 'node:900', resource: 'wood', quantity: 3, x: origin.x + 5, y: origin.y };
+  const blocked = { id: 'node:901', resource: 'wood', quantity: 3, x: origin.x + 3, y: origin.y };
+  world.resourceNodes = [blocked, reachable];
+  world.map.terrain[blocked.y * world.map.width + blocked.x] = 'water';
+  store.total.food = 64;
+  store.total.wood = 0;
+  store.total.stone = 0;
+  store.capacity = 65;
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  updateCitizens(world, 12, { x: 110, y: 110 });
+  assert.equal(store.total.wood, 1);
+  assert.equal(reachable.quantity, 2);
+  assert.equal(blocked.quantity, 3);
+});
