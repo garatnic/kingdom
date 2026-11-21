@@ -5,7 +5,7 @@ const importance = {
   constructionCompleted: 2, monsterDefeated: 2, monsterPredation: 2, monsterNestFounded: 2, monsterNestCleared: 3, cooperativeExpedition: 2, borderFriction: 2,
   marriage: 3, birth: 3, migrantArrived: 3, independentExpedition: 3, settlementFounded: 3, god_intervention: 3,
   adventurerRankUp: 3, combatLevelUp: 2, adventurerEquipped: 2,
-  warDeclared: 4, fieldBattle: 4, siegeStarted: 3, territoryOccupied: 4, siegeRepelled: 3, truceAgreed: 4, peaceAgreed: 4, nationFallen: 5, frontierDiscovered: 3, founding: 4, research_unlocked: 4, death: 5, civilizationAdvanced: 5
+  warDeclared: 4, fieldBattle: 4, siegeStarted: 3, territoryOccupied: 4, siegeRepelled: 3, truceAgreed: 4, peaceAgreed: 4, nationFallen: 5, frontierDiscovered: 3, founding: 4, leaderSucceeded: 4, research_unlocked: 4, death: 5, civilizationAdvanced: 5
 };
 
 export const eventImportance = event => event.importance ?? importance[event.type] ?? 0;

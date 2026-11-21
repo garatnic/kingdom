@@ -14,7 +14,7 @@ const events = {
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
   constructionCompleted: '施設が完成', monsterDefeated: '魔物を討伐', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
-  settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国',
+  settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国', leaderSucceeded: '指導者が交代',
   adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
@@ -138,6 +138,7 @@ export function observation(getWorld, getCamera, focus) {
       add(body, 'p', `人口 ${world.citizens.filter(c => c.alive && c.nationId === nation.id).length}人`);
       const leader = world.citizens.find(c => c.id === nation.leaderId);
       if (leader) add(body, 'p', `指導者 ${leader.name}`);
+      else if (nation.fallenAt === undefined) add(body, 'p', '指導者 空席');
       const priorities = { food: '農業', housing: '住宅', defense: '防衛', research: '研究', exploration: '探索' };
       add(body, 'p', `主要方針 ${priorities[nation.policy.primary] ?? '選択中'}`);
       const state = world.researchStates.find(item => item.ownerId === nation.id);
@@ -166,6 +167,10 @@ export function observation(getWorld, getCamera, focus) {
 
   function showEvent(world, event) {
     let title = events[event.type] ?? event.type;
+    if (event.type === 'leaderSucceeded') {
+      const leader = world.citizens.find(c => c.id === event.leaderId);
+      if (leader) title += '（' + leader.name + '）';
+    }
     if (event.type === 'fieldBattle') {
       const winner = world.nations.find(n => n.id === event.winnerId);
       if (winner) title += '（勝利 ' + winner.name + '）';

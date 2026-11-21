@@ -12,6 +12,13 @@ import { claimSettlement, initializeTerritory, territoryAt, tileDistance as dist
 export { territoryAt } from './Territory.js';
 
 const leaderScore = c => 0.4 * c.traits.diligence + 0.3 * c.traits.bravery + 0.3 * 0.5;
+const leaderWeights = leader => ({
+  food: 1 + leader.traits.diligence * 0.5,
+  defense: 1 + leader.traits.bravery * 0.5,
+  research: 1 + leader.traits.curiosity * 0.5
+});
+const byLeadership = (a, b) => leaderScore(b) - leaderScore(a) ||
+  Number(a.id.split(':')[1]) - Number(b.id.split(':')[1]);
 const residents = (world, settlementId) => world.citizens.filter(c => c.alive && c.settlementId === settlementId);
 const depot = (world, settlementId) => world.stockpiles.find(s => s.settlementId === settlementId);
 const origin = (settlement, store) => store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
@@ -20,8 +27,7 @@ function settleNation(world, settlement, leader) {
   const state = ensureResearch(world, settlement);
   const nation = { id: nextId(world, 'nation'), name: `王国 ${world.nations.length + 1}`,
     capitalId: settlement.id, settlementIds: [settlement.id], leaderId: leader.id, createdAt: world.worldTimeTick,
-    weights: { food: 1 + leader.traits.diligence * 0.5, defense: 1 + leader.traits.bravery * 0.5,
-      research: 1 + leader.traits.curiosity * 0.5 }, relations: {}, policy: {} };
+    weights: leaderWeights(leader), relations: {}, policy: {} };
   for (const other of activeNations(world)) {
     nation.relations[other.id] = 0;
     other.relations[nation.id] = 0;
@@ -42,13 +48,28 @@ function checkFounding(world, settlement) {
   const people = residents(world, settlement.id);
   const store = depot(world, settlement.id);
   const adults = people.filter(c => ageYears(world, c) >= ADULT_AGE)
-    .sort((a, b) => leaderScore(b) - leaderScore(a));
+    .sort(byLeadership);
   const houses = world.buildings.filter(b => b.settlementId === settlement.id && b.kind === 'house');
   const days = (world.worldTimeTick - (settlement.createdAt ?? 0)) / TIME_TICKS_PER_DAY;
   const qualifies = people.length >= NATIONS.population && houses.length >= NATIONS.houses && adults.length &&
     store && available(store, 'food') >= people.length * FOOD_EMERGENCY_PER_PERSON && days >= NATIONS.minimumAgeDays;
   settlement.foundingDays = qualifies ? (settlement.foundingDays ?? 0) + 1 : 0;
   if (settlement.foundingDays >= NATIONS.consecutiveDays) settleNation(world, settlement, adults[0]);
+}
+
+function updateLeader(world, nation) {
+  const people = world.citizens.filter(c => c.alive && c.nationId === nation.id);
+  if (people.some(c => c.id === nation.leaderId)) return;
+  const previousLeaderId = nation.leaderId ?? null;
+  const [leader] = people.filter(c => ageYears(world, c) >= ADULT_AGE).sort(byLeadership);
+  nation.leaderId = leader?.id ?? null;
+  if (!leader) return;
+  nation.weights = leaderWeights(leader);
+  const capital = world.settlements.find(s => s.id === nation.capitalId);
+  emitOnce(world, `leader/${nation.id}/${world.worldTimeTick}`, 'leaderSucceeded', {
+    nationId: nation.id, leaderId: leader.id, previousLeaderId,
+    actorIds: [previousLeaderId, leader.id].filter(Boolean), x: capital.x, y: capital.y
+  });
 }
 
 function choosePolicy(world, nation) {
@@ -239,7 +260,10 @@ export function updateNations(world, ticks) {
   const now = world.worldTimeTick;
   if (Math.floor(now / TIME_TICKS_PER_DAY) === Math.floor((now - ticks) / TIME_TICKS_PER_DAY)) return;
   for (const settlement of world.settlements) checkFounding(world, settlement);
-  for (const nation of activeNations(world)) choosePolicy(world, nation);
+  for (const nation of activeNations(world)) {
+    updateLeader(world, nation);
+    choosePolicy(world, nation);
+  }
   updateRelations(world);
   updateWar(world);
   for (const nation of activeNations(world)) {

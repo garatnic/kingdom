@@ -93,3 +93,30 @@ test('research tests usable iron rather than reserved inventory', () => {
   assert.ok(state.unlockedIds.includes('weapons_1'));
   assert.equal(store.total.iron, 2);
 });
+
+test('a fallen leader is replaced once with the strongest eligible resident after reload', async () => {
+  const { recordDeath } = await import('../simulation/Population.js');
+  const world = createWorld('world-tree');
+  setSpeed(world, 20);
+  for (let i = 0; i < 600; i++) advanceFrame(world, 100);
+  const [nation] = world.nations;
+  const leader = world.citizens.find(c => c.id === nation.leaderId);
+  const successor = world.citizens.find(c => c !== leader && c.alive && c.nationId === nation.id);
+  for (const c of world.citizens) {
+    c.traits.diligence = c === successor ? 1 : 0;
+    c.traits.bravery = c === successor ? 1 : 0;
+  }
+  recordDeath(world, leader, 'oldAge');
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateNations(restored, 12);
+  assert.equal(restored.nations[0].leaderId, successor.id);
+  assert.equal(restored.nations[0].weights.defense, 1.5);
+  const history = restored.events.filter(e => e.type === 'leaderSucceeded');
+  assert.equal(history.length, 1);
+  assert.equal(history[0].previousLeaderId, leader.id);
+  assert.equal(history[0].leaderId, successor.id);
+  restored.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateNations(restored, 12);
+  assert.equal(restored.events.filter(e => e.type === 'leaderSucceeded').length, 1);
+});
