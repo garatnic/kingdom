@@ -7,6 +7,7 @@ import { updateAdventureWorld } from '../simulation/Adventure.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
 import { updateNations } from '../simulation/Nations.js';
 import { updateResearch } from '../simulation/Research.js';
+import { recordSettlements } from '../simulation/SettlementRecords.js';
 import { updatePopulation } from '../simulation/Population.js';
 
 export function advanceFrame(world, elapsedMs, hidden = false, camera) {
@@ -24,7 +25,10 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
       updatePopulation(world, TICKS_PER_STEP_AT_1X);
       updateNations(world, TICKS_PER_STEP_AT_1X);
       updateResearch(world, TICKS_PER_STEP_AT_1X);
-      if (world.worldTimeTick % TIME_TICKS_PER_DAY === 0) trimHistory(world);
+      if (world.worldTimeTick % TIME_TICKS_PER_DAY === 0) {
+        recordSettlements(world);
+        trimHistory(world);
+      }
     }
   }
   world.tickRemainder %= REAL_STEP_MS;

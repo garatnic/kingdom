@@ -1,3 +1,4 @@
+import { RECORD_DAYS } from '../simulation/SettlementRecords.js';
 import { FAR_MOVEMENT_STEPS, batchesMovement } from '../simulation/DetailLevel.js';
 import { resources } from '../simulation/Economy.js';
 import { NATIONS } from '../data/nations.js';
@@ -5,7 +6,7 @@ import { gear, monsters } from '../data/combat.js';
 import { technologies } from '../data/technologies.js';
 import { buildings, footprint } from '../data/buildings.js';
 import { migrateFixedMap, validSurveyDimension, validWorldDimension } from '../engine/Expansion.js';
-import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS, TICKS_PER_STEP_AT_1X } from '../data/balance.js';
+import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS, TICKS_PER_STEP_AT_1X, TIME_TICKS_PER_DAY } from '../data/balance.js';
 
 const VERSION = 1;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -72,7 +73,12 @@ function validate(world) {
   const expeditions = new Map((world.expeditions ?? []).map(e => [e.id, e]));
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&
     !world.buildings.some(building => footprint(building, tile));
-  if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId))) ||
+  if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
+        (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&
+          s.dailyRecords.every((r, i, records) => r && integer(r.day, (records[i - 1]?.day ?? 0) + 1,
+              Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY)) &&
+            integer(r.population, 0) && integer(r.hungry, 0, r.population) && integer(r.food, 0) &&
+            integer(r.waitingCargo, 0))))) ||
       !world.nations.every(n => n.fallenAt !== undefined
         ? integer(n.fallenAt, 0, world.worldTimeTick) && n.capitalId === null && n.settlementIds.length === 0
         : settlements.get(n.capitalId)?.nationId === n.id &&

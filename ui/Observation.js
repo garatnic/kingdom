@@ -1,4 +1,4 @@
-import { buildings, workTicks } from '../data/buildings.js';
+import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
 import { citizenRaces, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
 import { adventurerRanks, gear } from '../data/combat.js';
@@ -137,6 +137,13 @@ export function observation(getWorld, getCamera, focus) {
           const shortage = food < residents.length * FOOD_EMERGENCY_PER_PERSON ? ' · 備蓄不足' : '';
           add(body, 'p', `食料備蓄 ${food}/${residents.length * FOOD_TARGET_PER_PERSON}（目標） · 空腹 ${hungry}人${shortage}`);
         }
+      }
+      const recent = settlement.dailyRecords?.slice(-7);
+      if (recent?.length) {
+        const last = recent.at(-1);
+        const shortageDays = recent.filter(day => day.population > 0 &&
+          day.food < day.population * FOOD_EMERGENCY_PER_PERSON).length;
+        add(body, 'p', `直近${recent.length}日の備蓄不足 ${shortageDays}日 · 最終日 空腹 ${last.hungry}人 / 回収待ち資材 ${last.waitingCargo}`);
       }
       if (site) {
         add(body, 'p', `建設中 ${facilityNames[site.kind] ?? site.kind} ${Math.floor(100 * site.progress / workTicks(site.kind))}%`);
@@ -313,10 +320,22 @@ export function observation(getWorld, getCamera, focus) {
     render,
     markManual,
     inspectTile(x, y) {
-      const citizen = getWorld().citizens.find(c => c.alive && Math.floor(c.x) === x && Math.floor(c.y) === y);
-      if (!citizen) return;
-      tab.value = 'citizen';
-      selectCitizen(citizen.id);
+      const world = getWorld();
+      const citizen = world.citizens.find(c => c.alive && Math.floor(c.x) === x && Math.floor(c.y) === y);
+      if (citizen) {
+        tab.value = 'citizen';
+        selectCitizen(citizen.id);
+        return;
+      }
+      const structure = [...world.buildings, ...world.constructionSites].find(b => footprint(b, { x, y }));
+      const depot = world.stockpiles.find(s => s.x === x && s.y === y);
+      const settlementId = structure?.settlementId ?? depot?.settlementId;
+      if (!settlementId) return;
+      tab.value = 'settlement';
+      search.value = '';
+      render(true);
+      subjects.value = settlementId;
+      render(true);
     },
     updateCamera(now, elapsed) {
       const world = getWorld();
