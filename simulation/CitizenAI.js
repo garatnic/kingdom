@@ -304,21 +304,29 @@ function updateDistantSettlements(world, camera, population) {
           return connected[y * world.map.width + x] === 1;
         });
         if (builder) {
-          site ??= planSettlementConstruction(world, settlement, store, origin, residents);
-          if (site && workTile(world, origin, site)) {
-            if (materialsDelivered(site)) {
-              buildAtSite(world, site, NEED_HOUR_TICKS / 2, builder);
-            } else {
-              const abandoned = world.inTransit.find(item => item.destinationId === site.id &&
-                item.carrierId === null && distance(item, settlement) <= radius &&
-                connected[item.y * world.map.width + item.x] === 1);
-              reserveMaterials(world, site, store);
-              const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
-              const shipment = abandoned ?? (reservation && pickUpMaterials(world, reservation, builder));
-              if (abandoned) takeAbandonedCargo(abandoned, builder);
-              if (shipment) deliverMaterials(world, shipment, builder);
-            }
+          const salvage = world.resourceNodes.find(node => node.dropped && node.quantity > 0 &&
+            distance(node, settlement) <= radius && connected[node.y * world.map.width + node.x] === 1 &&
+            !claimedNodes.has(node.id) && !isQuestCargo(world, node) &&
+            storageRoom(store, node.resource, foodTarget) > 0);
+          if (salvage && gatherForStore(world, salvage, store, foodTarget, builder)) {
             builder.decisionAt = Math.max(builder.decisionAt, world.worldTimeTick + DECISION_TICKS);
+          } else {
+            site ??= planSettlementConstruction(world, settlement, store, origin, residents);
+            if (site && workTile(world, origin, site)) {
+              if (materialsDelivered(site)) {
+                buildAtSite(world, site, NEED_HOUR_TICKS / 2, builder);
+              } else {
+                const abandoned = world.inTransit.find(item => item.destinationId === site.id &&
+                  item.carrierId === null && distance(item, settlement) <= radius &&
+                  connected[item.y * world.map.width + item.x] === 1);
+                reserveMaterials(world, site, store);
+                const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
+                const shipment = abandoned ?? (reservation && pickUpMaterials(world, reservation, builder));
+                if (abandoned) takeAbandonedCargo(abandoned, builder);
+                if (shipment) deliverMaterials(world, shipment, builder);
+              }
+              builder.decisionAt = Math.max(builder.decisionAt, world.worldTimeTick + DECISION_TICKS);
+            }
           }
         }
       }

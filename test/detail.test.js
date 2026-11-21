@@ -343,3 +343,35 @@ test('a reassigned construction carrier still delivers cargo after loading and m
   assert.equal(saved.constructionSites.find(item => item.id === site.id)?.delivered.wood, 2);
   assert.equal(saved.stockpiles[0].total.wood, store.total.wood);
 });
+
+test('far builders return cancelled cargo to storage once through a camera switch and reload', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const { planSite, reserveMaterials, pickUpMaterials, cancelSite } = await import('../simulation/Construction.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const world = createWorld('salvage-cancelled-cargo');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const origin = { x: store.x, y: store.y };
+  for (let i = 0; i < 4; i++) world.citizens.push(createAdult(world, 'human', origin, home));
+  for (const c of world.citizens) {
+    c.profession = 'farmer';
+    c.decisionAt = 20 * NEED_HOUR_TICKS;
+  }
+  const builder = world.citizens.at(-1);
+  builder.profession = 'builder';
+  const site = planSite(world, home, 'farm', origin.x + 5, origin.y);
+  assert.ok(site && reserveMaterials(world, site, store));
+  const initial = store.total.wood;
+  assert.ok(pickUpMaterials(world, world.reservations[0], builder));
+  assert.ok(cancelSite(world, site));
+  const dropped = world.resourceNodes.find(n => n.dropped);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  saved.worldTimeTick = NEED_HOUR_TICKS;
+  updateCitizens(saved, 12, { x: 220, y: 220 });
+  assert.equal(saved.stockpiles[0].total.wood, initial);
+  assert.equal(saved.resourceNodes.find(n => n.id === dropped.id).quantity, 0);
+  saved.worldTimeTick += NEED_HOUR_TICKS;
+  updateCitizens(saved, 12, origin);
+  assert.equal(saved.stockpiles[0].total.wood, initial);
+});
