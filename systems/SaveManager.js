@@ -136,7 +136,7 @@ function validate(world) {
           Object.entries(q.recoveredBy).every(([id, quantity]) =>
             [q.claimedBy, q.escortId].includes(id) && integer(quantity, 0, q.pickupAmount))))
         : q.kind === 'survey_resources'
-          ? surveyTargets.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&
+          ? (q.prospectTile ? q.targetId === undefined && validTile(q.prospectTile) : surveyTargets.has(q.targetId)) && (q.claimedBy === null || (people.has(q.escortId) &&
             Array.isArray(q.surveyVisitors) && new Set(q.surveyVisitors).size === q.surveyVisitors.length &&
             q.surveyVisitors.every(id => [q.claimedBy, q.escortId].includes(id)))) &&
             (q.surveyQuantity === undefined ? q.status !== 'completed' : integer(q.surveyQuantity, 0)) &&

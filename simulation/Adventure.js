@@ -170,14 +170,24 @@ function offerRecovery(world, settlement, store, origin) {
   return true;
 }
 
-function manaProspect(world, node, store, settlementId) {
+function canProspect(world, store, settlementId) {
+  return available(store, 'manaStone') < manaSurvey.reserve && unlocked(world, settlementId, 'steel_1');
+}
+
+function openMountain(world, tile) {
   const { map } = world;
-  const terrain = (x, y) => map.terrain[y * map.width + x];
-  if (node.resource !== 'stone' || terrain(node.x, node.y) !== 'mountain' ||
-      available(store, 'manaStone') >= manaSurvey.reserve || !unlocked(world, settlementId, 'steel_1') ||
+  return tile.x >= 0 && tile.y >= 0 && tile.x < map.surveyedWidth && tile.y < map.surveyedHeight &&
+    map.terrain[tile.y * map.width + tile.x] === 'mountain' &&
+    !world.resourceNodes.some(node => distance(tile, node) === 0) &&
+    !world.stockpiles.some(store => distance(tile, store) === 0) &&
+    !world.constructionSites.some(site => tile.x >= site.x && tile.x < site.x + site.width &&
+      tile.y >= site.y && tile.y < site.y + site.height);
+}
+
+function manaProspect(world, node, store, settlementId) {
+  if (node.resource !== 'stone' || !canProspect(world, store, settlementId) ||
       world.quests.some(q => q.targetId === node.id && q.discoveredNodeId)) return null;
 
-  const occupied = [...world.resourceNodes, ...world.stockpiles];
   const nearby = [];
   for (let dy = -manaSurvey.radius; dy <= manaSurvey.radius; dy++) {
     const reach = manaSurvey.radius - Math.abs(dy);
@@ -186,38 +196,58 @@ function manaProspect(world, node, store, settlementId) {
     }
   }
   nearby.sort((a, b) => distance(node, a) - distance(node, b));
-  for (const tile of nearby) {
-    if (tile.x < 0 || tile.y < 0 || tile.x >= map.surveyedWidth || tile.y >= map.surveyedHeight ||
-        terrain(tile.x, tile.y) !== 'mountain' || occupied.some(other => distance(tile, other) === 0) ||
-        world.constructionSites.some(site => tile.x >= site.x && tile.x < site.x + site.width &&
-          tile.y >= site.y && tile.y < site.y + site.height)) continue;
-    if (findPath(world, node, tile) !== null) return tile;
-  }
-  return null;
+  return nearby.find(tile => openMountain(world, tile) && findPath(world, node, tile) !== null);
 }
 
-function offerSurvey(world, settlement, store, origin) {
+function mountainSurveyTarget(world, origin, surveys) {
+  const assigned = new Set(surveys.filter(q => q.prospectTile && activeQuest(q)).map(q => tileKey(q.prospectTile)));
+  const candidates = [];
+  for (let dy = -24; dy <= 24; dy++) {
+    const reach = 24 - Math.abs(dy);
+    for (let dx = -reach; dx <= reach; dx++) {
+      if (Math.abs(dx) + Math.abs(dy) < 6) continue;
+      const tile = { x: origin.x + dx, y: origin.y + dy };
+      if (openMountain(world, tile) && !assigned.has(tileKey(tile))) candidates.push(tile);
+    }
+  }
+  if (!candidates.length) return null;
+  const reachable = reachableTiles(world, origin, undefined, candidates);
+  candidates.sort((a, b) => distance(origin, a) - distance(origin, b));
+  return candidates.find(tile => reachable[tile.y * world.map.width + tile.x] === 1);
+}
+
+function surveyTarget(world, quest) {
+  return quest.prospectTile ?? world.resourceNodes.find(node => node.id === quest.targetId);
+}
+
+function offerSurvey(world, settlement, store, origin, prospectOnly) {
   if (!store || settlement.foodWarning || available(store, 'food') < 4 ||
       !world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
       world.citizens.filter(c => c.alive && c.profession === 'adventurer' && c.settlementId === settlement.id).length < 2 ||
       world.quests.some(q => q.kind === 'survey_resources' && q.settlementId === settlement.id && activeQuest(q))) return;
-  const surveyed = new Set(world.quests.filter(q => q.kind === 'survey_resources' &&
-    (activeQuest(q) || (q.status === 'completed' && q.settlementId === settlement.id))).map(q => q.targetId));
-  const destinations = world.resourceNodes.filter(node => !node.dropped && node.quantity > 0 &&
-    distance(origin, node) <= 24 && !surveyed.has(node.id));
+  const surveys = world.quests.filter(q => q.kind === 'survey_resources');
+  const assigned = new Set(surveys.filter(activeQuest).map(q => q.targetId));
+  const surveyed = new Set(surveys.filter(q => q.status === 'completed' &&
+    q.settlementId === settlement.id).map(q => q.targetId));
+  const destinations = world.resourceNodes.filter(node => !node.dropped &&
+    distance(origin, node) <= 24 && !assigned.has(node.id));
   destinations.sort((a, b) => distance(origin, a) - distance(origin, b));
-  const target = destinations.find(node => manaProspect(world, node, store, settlement.id) &&
-    findPath(world, origin, node) !== null) ?? destinations.find(node =>
-    distance(origin, node) >= 12 && findPath(world, origin, node) !== null);
-  if (!target) return;
+  const prospect = destinations.find(node => manaProspect(world, node, store, settlement.id) &&
+    findPath(world, origin, node) !== null);
+  const prospectTile = !prospect && canProspect(world, store, settlement.id)
+    ? mountainSurveyTarget(world, origin, surveys) : null;
+  const target = prospect ?? (prospectTile || prospectOnly ? null : destinations.find(node => node.quantity > 0 &&
+    !surveyed.has(node.id) && distance(origin, node) >= 12 && findPath(world, origin, node) !== null));
+  if (!target && !prospectTile) return;
   world.quests.push({ id: nextId(world, 'quest'), kind: 'survey_resources', settlementId: settlement.id,
-    targetId: target.id, status: 'open', claimedBy: null, createdAt: world.worldTimeTick,
+    ...(prospectTile ? { prospectTile } : { targetId: target.id }),
+    status: 'open', claimedBy: null, createdAt: world.worldTimeTick,
     expiresAt: world.worldTimeTick + 2 * COMBAT.questDuration, lootIds: [] });
   return true;
 }
 
 function claimSurvey(world, citizen, quest, store, travel) {
-  const node = world.resourceNodes.find(n => n.id === quest.targetId);
+  const node = surveyTarget(world, quest);
   if (!node || available(store, 'food') < 4 ||
       world.settlements.find(s => s.id === quest.settlementId)?.foodWarning) return false;
   const escort = findEscort(world, citizen, candidate => findPath(world, tileOf(candidate), node) !== null);
@@ -234,7 +264,7 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
   const lead = citizen.id === quest.claimedBy;
   if (!lead && quest.escortReturned) return true;
   const escortAlive = world.citizens.some(candidate => candidate.id === quest.escortId && candidate.alive);
-  const node = world.resourceNodes.find(n => n.id === quest.targetId);
+  const node = surveyTarget(world, quest);
   const tile = tileOf(citizen);
   if (quest.stage === 'survey') {
     if (!escortAlive || citizen.hunger >= NEEDS.eat || citizen.hp <= COMBAT.retreatHp) {
@@ -249,7 +279,7 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
         if (!quest.surveyVisitors.includes(citizen.id)) quest.surveyVisitors.push(citizen.id);
         if (quest.surveyVisitors.length < 2) return true;
         quest.stage = 'return';
-        quest.surveyQuantity = node.quantity;
+        quest.surveyQuantity = node.quantity ?? 0;
       }
     }
   }
@@ -264,10 +294,12 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
   quest.status = quest.retreated || !escortAlive ? 'retreated' : 'completed';
   if (quest.status === 'completed') {
     const actors = [citizen.id, quest.escortId];
-    emit(world, 'resourceSurveyReturned', quest, node, {
+    if (!quest.prospectTile) emit(world, 'resourceSurveyReturned', quest, node, {
       actorIds: actors, resource: node.resource, quantity: quest.surveyQuantity
     });
-    const prospect = manaProspect(world, node, store, quest.settlementId);
+    const prospect = quest.prospectTile
+      ? openMountain(world, node) && findPath(world, origin, node) !== null && node
+      : manaProspect(world, node, store, quest.settlementId);
     if (prospect) {
       const vein = { id: nextId(world, 'node'), ...prospect, resource: 'manaStone', quantity: manaSurvey.quantity };
       world.resourceNodes.push(vein);
@@ -462,7 +494,7 @@ export function updateAdventureWorld(world, ticks) {
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
     if (offerRecovery(world, settlement, store, origin)) slots--;
     if (slots === 0) continue;
-    if (slots > 1 && offerSurvey(world, settlement, store, origin)) slots--;
+    if (offerSurvey(world, settlement, store, origin, slots === 1)) slots--;
     const nearby = world.monsters.filter(m => m.alive && distance(m, settlement) <= COMBAT.questRadius);
     if (!nearby.length) continue;
     const connected = reachableTiles(world, origin, undefined, nearby.map(m => m.y * world.map.width + m.x));

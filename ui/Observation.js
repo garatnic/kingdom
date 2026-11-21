@@ -238,10 +238,11 @@ export function observation(getWorld, getCamera, focus) {
       for (const quest of quests) {
         const recovery = quest.kind === 'recover_supplies';
         const survey = quest.kind === 'survey_resources';
-        const target = (recovery || survey ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
-        const type = recovery ? '物資回収' : survey ? '資源調査' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
+        const target = quest.prospectTile ??
+          (recovery || survey ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
+        const type = recovery ? '物資回収' : quest.prospectTile ? '魔石探鉱' : survey ? '資源調査' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
         const status = quest.status === 'open' ? '募集中' : quest.stage === 'return' ? '帰還中' : '進行中';
-        const cargo = (recovery || survey) && target ? ` · ${resources[target.resource]}` : '';
+        const cargo = (recovery || survey) && target?.resource ? ` · ${resources[target.resource]}` : '';
         const details = add(body, target ? 'button' : 'p', `${type} · ${status}${cargo}`);
         if (target) details.onclick = () => {
           markManual();
