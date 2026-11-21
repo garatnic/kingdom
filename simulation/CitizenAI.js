@@ -182,13 +182,25 @@ function updateDistantSettlements(world, camera, population) {
         if (connected[y * world.map.width + x] === 1) eat(citizen, store);
       }
     }
-    const workers = locals.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&
+    const foodTarget = residents * FOOD_TARGET_PER_PERSON;
+    const ready = [];
+    for (const citizen of locals) {
+      if (resources.some(key => citizen.inventory[key] > 0 && storageRoom(store, key, foodTarget) > 0)) {
+        connected ??= reachableTiles(world, origin);
+        const { x, y } = citizen.lastKnownSafeTile;
+        if (connected[y * world.map.width + x] === 1 && deposit(citizen, store, foodTarget)) {
+          citizen.decisionAt = Math.max(citizen.decisionAt, world.worldTimeTick + DECISION_TICKS);
+          continue;
+        }
+      }
+      ready.push(citizen);
+    }
+    const workers = ready.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&
       c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && c.inventory.food === 0);
     const yieldPerFarm = farmYield(world, settlement.id);
-    const foodTarget = residents * FOOD_TARGET_PER_PERSON;
     for (const [resource, role, target] of [['wood', 'woodcutter', 24], ['stone', 'miner', 12]]) {
       if (available(store, resource) >= target || storageRoom(store, resource, foodTarget) <= 0) continue;
-      const crew = locals.filter(c => c.profession === role && c.hp > COMBAT.retreatHp &&
+      const crew = ready.filter(c => c.profession === role && c.hp > COMBAT.retreatHp &&
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && !c.inventory[resource]);
       if (!crew.length) continue;
       connected ??= reachableTiles(world, origin);
@@ -210,7 +222,7 @@ function updateDistantSettlements(world, camera, population) {
       world.citizens.some(c => c.alive && c.settlementId === settlement.id &&
         ['build', 'pickUpMaterials', 'deliverMaterials', 'recoverMaterials'].includes(c.action.kind)));
     if (!constructionBusy) {
-      const builders = locals.filter(c => c.profession === 'builder' && c.hp > COMBAT.retreatHp &&
+      const builders = ready.filter(c => c.profession === 'builder' && c.hp > COMBAT.retreatHp &&
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep &&
         !world.inTransit.some(item => item.carrierId === c.id));
       if (builders.length) {
@@ -250,6 +262,7 @@ function updateDistantSettlements(world, camera, population) {
       const delivered = Math.min(yieldPerFarm, room, foodTarget - available(store, 'food'));
       store.total.food += delivered;
       farmer.inventory.food += yieldPerFarm - delivered;
+      farmer.decisionAt = Math.max(farmer.decisionAt, world.worldTimeTick + DECISION_TICKS);
       if (!workers.length) break;
     }
   }
