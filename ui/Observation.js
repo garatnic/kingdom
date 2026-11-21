@@ -12,6 +12,7 @@ import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
+  friendshipReached: '国家間の友好が成立',
   foreignFoodAidDelivered: '友好国から食料援助が到着',
   materialAidDelivered: '同じ国の集落から資材が到着',
   manaVeinDiscovered: '協力調査で魔石鉱脈を発見', resourceSurveyDeparted: '資源調査に出発', resourceSurveyReturned: '資源調査を報告',
@@ -24,7 +25,7 @@ const events = {
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
-  nations: ['founding', 'leaderSucceeded', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
+  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered'],
   adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',

@@ -234,12 +234,33 @@ function updateRelations(world) {
     if (crossing) crossing.count++;
     else rivalries.set(key, { count: 1, tile: citizen.lastKnownSafeTile });
   }
+  const envoyDay = world.worldTimeTick % (TIME_TICKS_PER_DAY * NATIONS.envoyIntervalDays) === 0;
+  const capitals = envoyDay ? new Map(world.settlements.map(settlement => [settlement.id, settlement])) : null;
   for (const [index, first] of nations.entries()) {
     for (const second of nations.slice(index + 1)) {
       const key = [first.id, second.id].sort().join('/');
       const crossing = rivalries.get(key);
-      if (!crossing || truceBetween(world, first, second)) continue;
+      if (truceBetween(world, first, second)) continue;
       const previous = first.relations[second.id] ?? 0;
+      if (!crossing) {
+        if (!envoyDay || previous <= NATIONS.hostile || previous >= NATIONS.friendly ||
+            (second.relations[first.id] ?? 0) <= NATIONS.hostile) continue;
+        const a = capitals.get(first.capitalId);
+        const b = capitals.get(second.capitalId);
+        const from = depot(world, first.capitalId);
+        const to = depot(world, second.capitalId);
+        if (!a || !b || !from || !to || a.foodWarning || b.foodWarning ||
+            available(from, 'food') < 1 || available(to, 'food') < 1 ||
+            findPath(world, origin(a, from), origin(b, to)) === null) continue;
+        const value = Math.min(NATIONS.friendly, previous + NATIONS.envoyRelationGain);
+        first.relations[second.id] = second.relations[first.id] = value;
+        if (value === NATIONS.friendly) {
+          emitOnce(world, `friendship/${world.worldTimeTick}/${key}`, 'friendshipReached', {
+            nationIds: [first.id, second.id], value, x: b.x, y: b.y
+          });
+        }
+        continue;
+      }
       const value = Math.max(-100, previous - crossing.count * 2);
       if (value === previous) continue;
       first.relations[second.id] = second.relations[first.id] = value;

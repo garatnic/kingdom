@@ -365,3 +365,19 @@ test('friendly emergency aid survives saving but turns back when relations break
   assert.equal(homeStore.total.food, 52);
   assert.equal(away.foodAid, undefined);
 });
+
+test('peaceful nation relations can reach friendship through reachable capitals', () => {
+  const { world, invader, defender, away } = twoNations();
+  invader.relations[defender.id] = defender.relations[invader.id] = 0;
+  invader.createdAt = defender.createdAt = 1000 * TIME_TICKS_PER_DAY;
+  for (const citizen of world.citizens.filter(c => c.nationId === defender.id)) {
+    citizen.lastKnownSafeTile = { x: away.x, y: away.y };
+  }
+  for (let day = 10; day <= 60; day += 10) {
+    world.worldTimeTick = day * TIME_TICKS_PER_DAY;
+    updateNations(world, 1);
+  }
+  assert.equal(invader.relations[defender.id], 60);
+  assert.equal(defender.relations[invader.id], 60);
+  assert.equal(world.events.filter(e => e.type === 'friendshipReached').length, 1);
+});

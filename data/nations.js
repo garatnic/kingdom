@@ -3,5 +3,5 @@ export const NATIONS = {
   expeditionSize: 4, expeditionAgeDays: 7, expeditionMinDistance: 46,
   expeditionSearchDistance: 54, expeditionNodeDistance: 20,
   supplies: { food: 8, wood: 8, stone: 4 }, territoryRadius: 6,
-  friendly: 60, hostile: -40
+  friendly: 60, hostile: -40, envoyIntervalDays: 10, envoyRelationGain: 10
 };
