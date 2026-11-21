@@ -164,3 +164,11 @@ test('five nations can handle independent fronts and preserve a fallen nation in
   assert.equal(restored.nations.length, 6);
   assert.deepEqual(restored.campaigns, world.campaigns);
 });
+
+
+test('existing overlapping borders keep their old nearest-center owner when migrating', () => {
+  const { world, invader, defender, away } = twoNations();
+  Object.assign(away, { x: 42, y: 32 });
+  assert.equal(territoryAt(world, { x: 37, y: 32 }), invader.id);
+  assert.equal(territoryAt(world, { x: 38, y: 32 }), defender.id);
+});
