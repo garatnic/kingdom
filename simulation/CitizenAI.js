@@ -261,7 +261,7 @@ function updateDistantSettlements(world, camera, population) {
         if (available(store, resource) >= target) break;
         if (!accessible(worker.lastKnownSafeTile)) continue;
         const source = sources.find(n => n.quantity > 0);
-        if (!source || !gatherForStore(world, source, store, foodTarget)) break;
+        if (!source || !gatherForStore(world, source, store, foodTarget, worker)) break;
         dispatched.add(worker.id);
         worker.decisionAt = Math.max(worker.decisionAt, world.worldTimeTick + DECISION_TICKS);
       }

@@ -116,3 +116,52 @@ test('restoration can treat a nearby resting neighbor once per hour', () => {
   assert.equal(first.mp, 20);
   assert.equal(second.mp, 30);
 });
+
+test('steel industry equips miners after research and improves both mining paths across saves', async () => {
+  const { produceMiningTools } = await import('../simulation/Industry.js');
+  const { gatherForStore, harvest } = await import('../simulation/Economy.js');
+  const { createSnapshot, readSnapshot } = await import('../systems/SaveManager.js');
+  const world = createWorld('steel-industry');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const miner = world.citizens.find(c => c.profession === 'miner');
+  assert.ok(miner);
+  world.map.terrain.fill('grass');
+  const state = ensureResearch(world, home);
+  const capacity = store.capacity;
+  store.capacity += 20;
+  store.total.iron = 5;
+  produceMiningTools(world);
+  assert.equal(miner.steelMiningTools, undefined);
+
+  const smithy = { id: nextId(world, 'building'), kind: 'smithy', settlementId: home.id,
+    x: 1, y: 1, width: 2, height: 2, completedAt: 0 };
+  world.buildings.push(smithy);
+  produceMiningTools(world);
+  assert.equal(store.total.iron, 5);
+  state.unlockedIds.push('steel_1');
+  store.reserved.iron = 2;
+  produceMiningTools(world);
+  assert.equal(miner.steelMiningTools, undefined);
+  assert.equal(store.total.iron, 5);
+
+  store.reserved.iron = 0;
+  produceMiningTools(world);
+  assert.equal(miner.steelMiningTools, true);
+  assert.equal(store.total.iron, 3);
+
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const savedMiner = restored.citizens.find(c => c.id === miner.id);
+  const savedStore = restored.stockpiles[0];
+  produceMiningTools(restored);
+  assert.equal(savedStore.total.iron, 3);
+  assert.equal(restored.events.filter(e => e.type === 'miningToolsForged').length, 1);
+
+  const ore = { ...savedMiner.lastKnownSafeTile, quantity: 6, resource: 'iron' };
+  assert.equal(harvest(restored, savedMiner, ore), true);
+  assert.equal(savedMiner.inventory.iron, 3);
+  assert.equal(gatherForStore(restored, ore, savedStore, 0, savedMiner), true);
+  assert.equal(savedStore.total.iron, 6);
+  assert.equal(ore.quantity, 0);
+  assert.equal(savedStore.capacity, capacity + 20);
+});

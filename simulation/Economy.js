@@ -2,6 +2,7 @@ import {
   CONSTRUCTION_STORAGE_RESERVE, FOOD_TARGET_PER_PERSON, GATHER_BATCH, LARGE_SETTLEMENT_POPULATION,
   LAYOUT, NODE_RENEWAL_TICKS
 } from '../data/balance.js';
+import { TECH } from '../data/technologies.js';
 
 export const resources = Object.keys(LAYOUT.provisions);
 export const available = (store, resource) => store.total[resource] - store.reserved[resource];
@@ -28,11 +29,16 @@ export function storageRoom(store, resource, foodTarget = 0) {
   return Math.max(0, Math.min(room, otherSupplyRoom + ownConstructionRoom));
 }
 
+function gatherBatch(worker, resource) {
+  const usesTools = worker?.steelMiningTools && worker.profession === 'miner' && (resource === 'iron' || resource === 'manaStone');
+  return GATHER_BATCH + (usesTools ? TECH.miningToolBonus : 0);
+}
+
 export function harvest(world, worker, node) {
   if (!worker.alive || !node || worker.settlementId == null ||
       worker.inventory[node.resource] !== 0 || node.quantity <= 0 ||
       worker.lastKnownSafeTile.x !== node.x || worker.lastKnownSafeTile.y !== node.y) return false;
-  worker.inventory[node.resource] += extract(world, node, GATHER_BATCH);
+  worker.inventory[node.resource] += extract(world, node, gatherBatch(worker, node.resource));
   return true;
 }
 
@@ -45,10 +51,10 @@ function extract(world, node, limit) {
   return quantity;
 }
 
-export function gatherForStore(world, node, store, foodTarget) {
+export function gatherForStore(world, node, store, foodTarget, worker) {
   const room = storageRoom(store, node.resource, foodTarget);
   if (room <= 0 || node.quantity <= 0) return false;
-  store.total[node.resource] += extract(world, node, Math.min(GATHER_BATCH, room));
+  store.total[node.resource] += extract(world, node, Math.min(gatherBatch(worker, node.resource), room));
   return true;
 }
 

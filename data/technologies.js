@@ -15,6 +15,7 @@ export const technologies = [
 
 export const TECH = {
   farmYieldMultiplier: 1.25, buildingWorkPercent: 120, weaponBonus: 2,
+  miningToolIron: 2, miningToolIronReserve: 2, miningToolBonus: 1,
   steelWeaponBonus: 2, irrigationBonus: 0.25, verdantBonus: 0.5, arcaneSpellBonus: 4,
   farmEraDays: 3, farmEraFarms: 2, farmEraPopulation: 8,
   spellRange: 3, spellAttack: 8, spellMp: 10, maxMp: 30, mpRecovery: 5,

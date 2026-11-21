@@ -17,14 +17,14 @@ const events = {
   constructionCompleted: '施設が完成', foodShortage: '集落で食料難', foodRecovered: '集落の食料備蓄が回復', foodAidDelivered: '同じ国の集落から食料が到着', monsterDefeated: '魔物を討伐', monsterThreat: '集落に魔物が接近', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', supplyRecoveryDeparted: '物資回収に出発', supplyRecoveryReturned: '物資回収隊が帰還', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国', leaderSucceeded: '指導者が交代',
-  adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
+  miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
   nations: ['founding', 'leaderSucceeded', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
-  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'foodShortage', 'foodRecovered', 'foodAidDelivered'],
+  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered'],
   adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
@@ -164,6 +164,8 @@ export function observation(getWorld, getCamera, focus) {
       showResearch(world, researchOwner(world, settlement));
       add(body, 'p', Object.entries(jobs).map(([role, label]) =>
         `${label} ${residents.filter(c => c.profession === role).length}`).join(' / '));
+      const equippedMiners = residents.filter(c => c.profession === 'miner' && c.steelMiningTools).length;
+      if (equippedMiners) add(body, 'p', `鋼鉄の採掘道具 ${equippedMiners}人（鉄・魔石の採掘量が増加）`);
       if (store) {
         add(body, 'p', `倉庫 ${store.capacity - freeCapacity(store)}/${store.capacity}`);
         add(body, 'p', Object.entries(resources).map(([key, label]) =>
@@ -268,6 +270,7 @@ export function observation(getWorld, getCamera, focus) {
       add(body, 'p', `HP ${person.hp} / 空腹 ${person.hunger} / 疲労 ${person.fatigue} · ${actions[person.action.kind] ?? '待機'}`);
       if (person.profession === 'adventurer' || person.adventuresCompleted) {
         add(body, 'p', `${adventurerRanks[adventurerRank(person)]} · 戦闘 Lv.${person.skills.combat} · 討伐達成 ${person.adventuresCompleted ?? 0}回`);
+        if (person.steelMiningTools) add(body, 'p', '鋼鉄の採掘道具');
         if (person.gearId) add(body, 'p', gear[person.gearId]?.label ?? person.gearId);
       }
       const inventory = Object.entries(person.inventory).filter(([, qty]) => qty > 0);

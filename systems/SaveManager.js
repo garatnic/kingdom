@@ -159,6 +159,7 @@ function validate(world) {
         !c.traits || !['diligence', 'bravery', 'curiosity', 'magicAffinity'].every(key =>
           Number.isFinite(c.traits[key]) && c.traits[key] >= 0 && c.traits[key] <= 1) ||
         !Number.isFinite(c.hp) || c.hp < 0 || c.hp > 100 ||
+        (c.steelMiningTools !== undefined && typeof c.steelMiningTools !== 'boolean') ||
         (c.gearId !== undefined && !Object.hasOwn(gear, c.gearId)) ||
         (c.adventuresCompleted !== undefined && !integer(c.adventuresCompleted, 0)) ||
         (c.combatXp !== undefined && !integer(c.combatXp, 0)) ||
