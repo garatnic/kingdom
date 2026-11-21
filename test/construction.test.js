@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { buildAtSite, cancelSite, deliverMaterials, pickUpMaterials, planSettlementConstruction, planSite, reserveMaterials } from '../simulation/Construction.js';
+import { nextId } from '../simulation/Identity.js';
 import { workTicks } from '../data/buildings.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { findPath } from '../simulation/path.js';
@@ -44,7 +45,13 @@ test('building materials are counted once across reserve, transport, site and co
   assert.equal(buildAtSite(world, siteAfter, 100, workerAfter), null);
   assert.equal(siteAfter.progress, 110);
   assert.equal(buildAtSite(world, siteAfter, workTicks('house') - 111), null);
+  const loot = { id: nextId(world, 'node'), resource: 'manaStone', quantity: 1,
+    x: siteAfter.x, y: siteAfter.y, dropped: true };
+  world.resourceNodes.push(loot);
   assert.ok(buildAtSite(world, siteAfter, 1));
+  assert.notEqual(findPath(world, loot, loot), null);
+  const completed = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(completed.resourceNodes.find(node => node.id === loot.id).quantity, 1);
   assert.equal(buildAtSite(world, siteAfter, 1), null);
   assert.equal(world.constructionSites.length, 0);
   assert.equal(world.reservations.length, 0);

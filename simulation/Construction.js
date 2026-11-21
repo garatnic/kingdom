@@ -102,6 +102,12 @@ export function buildAtSite(world, site, ticks, worker) {
   if (site.progress < workTicks(site.kind) || world.monsters.some(m => m.alive && footprint(site, m)) ||
       world.citizens.some(c => c.alive &&
       (footprint(site, c.lastKnownSafeTile) || footprint(site, { x: Math.floor(c.x), y: Math.floor(c.y) }))) || !keepsPathsOpen(world, site)) return null;
+  const covered = world.resourceNodes.filter(node => footprint(site, node));
+  if (covered.length) {
+    const dropTile = perimeter(site).find(tile => findPath(world, tile, tile) !== null);
+    if (!dropTile || covered.some(node => !node.dropped)) return null;
+    for (const node of covered) Object.assign(node, dropTile);
+  }
   const { x, y, width, height, kind, settlementId } = site;
   const building = { id: nextId(world, 'building'), x, y, width, height, kind, settlementId, state: 'active',
     capacity: buildings[kind].capacity ?? 0, completedAt: world.worldTimeTick };
