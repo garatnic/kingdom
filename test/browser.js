@@ -183,6 +183,13 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
 
     await evaluate(`(() => {
       const tab = document.querySelector('#history-tab');
+      tab.value = 'ecology';
+      tab.dispatchEvent(new Event('change'));
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('探索済み領域の魔物') && document.querySelector('#history-body').textContent.includes('スライム')"));
+
+    await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
       tab.value = 'citizen';
       tab.dispatchEvent(new Event('change'));
       document.querySelector('#follow').click();

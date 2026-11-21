@@ -1,7 +1,7 @@
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
 import { citizenRaces, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
-import { adventurerRanks, gear } from '../data/combat.js';
+import { adventurerRanks, gear, monsters } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
 import { civilizationNames, technologies } from '../data/technologies.js';
 import { calendar } from '../engine/GameLoop.js';
@@ -87,7 +87,7 @@ export function observation(getWorld, getCamera, focus) {
     const citizenMode = mode === 'citizen' || mode === 'family';
     get('favorite-filter').hidden = !citizenMode;
     const favorites = world.settings.favoriteCitizenIds ?? [];
-    search.hidden = mode === 'world';
+    search.hidden = mode === 'world' || mode === 'ecology';
     const listKey = [mode, query, world.citizens.length, world.nations.length, world.settlements.length,
       citizenMode && favoriteOnly.checked ? favorites.join(',') : '*'].join('/');
     if (listKey !== subjectListKey) {
@@ -124,6 +124,32 @@ export function observation(getWorld, getCamera, focus) {
       return;
     }
 
+    if (mode === 'ecology') {
+      const surveyed = tile => tile.x < (world.map.surveyedWidth ?? world.map.width) &&
+        tile.y < (world.map.surveyedHeight ?? world.map.height);
+      const living = world.monsters.filter(monster => monster.alive && surveyed(monster));
+      const habitats = { grass: '草地', forest: '森林', mountain: '山地' };
+      add(body, 'h3', '探索済み領域の魔物');
+      for (const [species, config] of Object.entries(monsters)) {
+        const population = living.filter(monster => monster.species === species);
+        add(body, 'p', `${config.label} ${population.length}体 · 生息地 ${config.habitat.map(tile => habitats[tile]).join('・')}`);
+        const nests = new Map();
+        for (const monster of population) {
+          if (!monster.hasNest || !surveyed(monster.homeTile)) continue;
+          const tile = monster.homeTile;
+          nests.set(`${tile.x}, ${tile.y}`, tile);
+        }
+        for (const [coordinates, tile] of nests) {
+          const button = add(body, 'button', `${config.label}の巣（${coordinates}）`);
+          button.onclick = () => {
+            markManual();
+            focus({ x: tile.x + 0.5, y: tile.y + 0.5 }, 'manualOverride');
+          };
+        }
+      }
+      return;
+    }
+
     if (mode === 'settlement' && subjects.value) {
       const settlement = world.settlements.find(s => s.id === subjects.value);
       const residents = world.citizens.filter(c => c.alive && c.settlementId === settlement.id);
@@ -151,7 +177,7 @@ export function observation(getWorld, getCamera, focus) {
       if (settlement.foodAid) {
         const { sourceId, food, returning } = settlement.foodAid;
         const source = world.settlements.find(s => s.id === sourceId);
-        add(body, 'p', `食料援助 ${food} · ${source?.name ?? sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
+        add(body, 'p', `食料援助 ${food} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
       }
       const recent = settlement.dailyRecords?.slice(-7);
       if (recent?.length) {
@@ -325,6 +351,7 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'god_intervention' && event.kind === 'terrain' && event.value === 'undo') title = '地形編集を取り消し';
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
     if (event.type === 'supplyRecoveryReturned') title += `（${resources[event.resource]} ${event.quantity}）`;
+    if (event.type === 'foodAidDelivered') title += `（食料 ${event.food}）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);
     if (!target) { add(body, 'p', label); return; }
