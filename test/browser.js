@@ -171,6 +171,12 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('アルディン')"));
     await evaluate(`(() => {
+      const search = document.querySelector('#history-search');
+      search.value = 'ミラ';
+      search.dispatchEvent(new Event('input'));
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-subject').options.length === 1 && document.querySelector('#history-body').textContent.includes('ミラ')"));
+    await evaluate(`(() => {
       const tab = document.querySelector('#history-tab');
       tab.value = 'family';
       tab.dispatchEvent(new Event('change'));

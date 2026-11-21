@@ -48,6 +48,7 @@ const add = (target, element, text) => {
 export function observation(getWorld, getCamera, focus) {
   const tab = get('history-tab');
   const subjects = get('history-subject');
+  const search = get('history-search');
   const body = get('history-body');
   let previousRender = '';
   let observedEvent = '';
@@ -60,12 +61,17 @@ export function observation(getWorld, getCamera, focus) {
     const world = getWorld();
     const mode = tab.value;
     const cutoff = Math.floor(world.worldTimeTick / 120);
-    const key = [mode, subjects.value, cutoff, world.events.at(-1)?.id, world.citizens.length, world.nations.length, world.settlements.length].join('/');
+    const query = search.value.normalize('NFKC').trim().toLowerCase();
+    const key = [mode, subjects.value, query, cutoff, world.events.at(-1)?.id, world.citizens.length, world.nations.length, world.settlements.length].join('/');
     if (!force && key === previousRender) return;
     previousRender = key;
     const citizenMode = mode === 'citizen' || mode === 'family';
-    const choices = citizenMode ? world.citizens :
+    const candidates = citizenMode ? world.citizens :
       mode === 'nation' ? world.nations : mode === 'settlement' ? world.settlements : [];
+    search.hidden = mode === 'world';
+    const choices = query ? candidates.filter(entry =>
+      [entry.id, mode === 'settlement' ? settlementName(entry) : entry.name, citizenRaces[entry.race]?.label]
+        .some(value => value?.normalize('NFKC').toLowerCase().includes(query))) : candidates;
     const selected = subjects.value;
     subjects.replaceChildren(...choices.map(c => new Option(mode === 'settlement' ? settlementName(c) : c.name, c.id)));
     subjects.hidden = choices.length === 0;
@@ -137,6 +143,10 @@ export function observation(getWorld, getCamera, focus) {
       return;
     }
 
+    if (query && !choices.length) {
+      add(body, 'p', '検索に一致する対象はありません。');
+      return;
+    }
     const person = world.citizens.find(c => c.id === subjects.value);
     const nation = world.nations.find(n => n.id === subjects.value);
     if (person) {
@@ -159,7 +169,7 @@ export function observation(getWorld, getCamera, focus) {
           for (const id of ids) {
             const member = world.citizens.find(c => c.id === id);
             const button = add(body, 'button', member?.name ?? id);
-            button.onclick = () => { subjects.value = id; render(true); };
+            button.onclick = () => selectCitizen(id);
           }
         }
       } else {
@@ -223,7 +233,8 @@ export function observation(getWorld, getCamera, focus) {
     };
   }
 
-  tab.onchange = () => render(true);
+  tab.onchange = () => { search.value = ''; render(true); };
+  search.oninput = () => render(true);
   subjects.onchange = () => render(true);
   get('follow').onclick = () => {
     const camera = getCamera();
@@ -239,6 +250,13 @@ export function observation(getWorld, getCamera, focus) {
 
   get('auto-resume').onchange = event => { getCamera().autoResume = event.target.checked; };
 
+  function selectCitizen(id) {
+    search.value = '';
+    render(true);
+    subjects.value = id;
+    render(true);
+  }
+
   function markManual() {
     const camera = getCamera();
     if (camera.mode === 'autoEvent' || suspendedAt !== null) suspendedAt = performance.now();
@@ -251,9 +269,7 @@ export function observation(getWorld, getCamera, focus) {
       const citizen = getWorld().citizens.find(c => c.alive && Math.floor(c.x) === x && Math.floor(c.y) === y);
       if (!citizen) return;
       tab.value = 'citizen';
-      render(true);
-      subjects.value = citizen.id;
-      render(true);
+      selectCitizen(citizen.id);
     },
     updateCamera(now, elapsed) {
       const world = getWorld();
@@ -271,9 +287,7 @@ export function observation(getWorld, getCamera, focus) {
         if (!target?.alive) {
           camera.mode = 'free';
           tab.value = 'citizen';
-          render(true);
-          subjects.value = target?.id ?? '';
-          render(true);
+          selectCitizen(target?.id ?? '');
           return;
         }
       }
