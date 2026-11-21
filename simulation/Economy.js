@@ -16,9 +16,16 @@ export function storeTile(world, store) {
 export function storageRoom(store, resource, foodTarget = 0) {
   const room = freeCapacity(store);
   const largeSettlement = foodTarget >= LARGE_SETTLEMENT_POPULATION * FOOD_TARGET_PER_PERSON;
-  const reserve = largeSettlement ? Math.min(foodTarget, store.capacity - CONSTRUCTION_STORAGE_RESERVE) : foodTarget;
-  if (resource === 'food') return Math.max(0, largeSettlement ? Math.min(room, reserve - store.total.food) : room);
-  return Math.max(0, room - Math.max(0, reserve - store.total.food));
+  if (!largeSettlement) {
+    return Math.max(0, resource === 'food' ? room : room - Math.max(0, foodTarget - store.total.food));
+  }
+  const woodNeeded = Math.max(0, CONSTRUCTION_STORAGE_RESERVE.wood - available(store, 'wood'));
+  const stoneNeeded = Math.max(0, CONSTRUCTION_STORAGE_RESERVE.stone - available(store, 'stone'));
+  const constructionRoom = woodNeeded + stoneNeeded;
+  if (resource === 'food') return Math.max(0, Math.min(room - constructionRoom, foodTarget - store.total.food));
+  const otherSupplyRoom = Math.max(0, room - constructionRoom - Math.max(0, foodTarget - store.total.food));
+  const ownConstructionRoom = resource === 'wood' ? woodNeeded : resource === 'stone' ? stoneNeeded : 0;
+  return Math.max(0, Math.min(room, otherSupplyRoom + ownConstructionRoom));
 }
 
 export function harvest(world, worker, node) {

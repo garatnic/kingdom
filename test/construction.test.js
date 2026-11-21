@@ -155,6 +155,7 @@ test('growing towns keep room for warehouse materials before the food target fil
   world.map.terrain.fill('grass');
   store.capacity = 200;
   store.total.food = 140;
+  store.total.manaStone = 30;
   store.total.wood = 0;
   store.total.stone = 0;
   const [citizen] = world.citizens;
@@ -162,8 +163,8 @@ test('growing towns keep room for warehouse materials before the food target fil
   citizen.inventory.wood = 10;
   citizen.inventory.stone = 5;
   assert.equal(deposit(citizen, store, 48 * 4), true);
-  assert.deepEqual([store.total.food, store.total.wood, store.total.stone], [185, 10, 5]);
-  assert.equal(citizen.inventory.food, 15);
+  assert.deepEqual([store.total.food, store.total.wood, store.total.stone], [155, 10, 5]);
+  assert.equal(citizen.inventory.food, 45);
   assert.equal(planSettlementConstruction(world, settlement, store, store, 48).kind, 'warehouse');
 });
 
