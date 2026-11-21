@@ -73,12 +73,15 @@ function validate(world) {
   const expeditions = new Map((world.expeditions ?? []).map(e => [e.id, e]));
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&
     !world.buildings.some(building => footprint(building, tile));
+  const validAid = (aid, destinationId) => aid && aid.sourceId !== destinationId &&
+    settlements.has(aid.sourceId) && nations.has(aid.nationId) &&
+    integer(aid.travelDays, 1, map.width * map.height) && integer(aid.arrivalDay, 1) &&
+    typeof aid.returning === 'boolean';
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
-        (s.foodAid === undefined || (s.foodAid && s.foodAid.sourceId !== s.id &&
-          settlements.has(s.foodAid.sourceId) && nations.has(s.foodAid.nationId) &&
-          integer(s.foodAid.food, 1) && integer(s.foodAid.travelDays, 1, map.width * map.height) &&
-          integer(s.foodAid.arrivalDay, 1) && typeof s.foodAid.returning === 'boolean')) &&
+        (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1))) &&
+        (s.materialAid === undefined || (validAid(s.materialAid, s.id) &&
+          ['wood', 'stone', 'iron'].includes(s.materialAid.resource) && integer(s.materialAid.quantity, 1))) &&
         (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&
           s.dailyRecords.every((r, i, records) => r && integer(r.day, (records[i - 1]?.day ?? 0) + 1,
               Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY)) &&

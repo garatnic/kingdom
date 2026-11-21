@@ -288,3 +288,40 @@ test('the scarcest reserve per resident receives limited food aid first', async 
   assert.equal(away.foodAid, undefined);
   assert.equal(homeStore.total.food, 30);
 });
+
+test('domestic material aid supplies a real construction reservation after reloading', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { planSite, reserveMaterials } = await import('../simulation/Construction.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const awayStore = world.stockpiles[1];
+  awayStore.total.wood = 0;
+  homeStore.total.wood = 24;
+  const site = planSite(world, away, 'house', away.x + 2, away.y);
+  assert.ok(site);
+  updateFoodAid(world);
+  assert.equal(away.materialAid, undefined);
+
+  away.nationId = invader.id;
+  invader.settlementIds.push(away.id);
+  defender.settlementIds = [];
+  defender.capitalId = null;
+  defender.fallenAt = 0;
+  for (const citizen of world.citizens.slice(-2)) citizen.nationId = invader.id;
+  assert.equal(reserveMaterials(world, site, awayStore), false);
+  updateFoodAid(world);
+  assert.equal(away.materialAid.quantity, 8);
+  assert.equal(homeStore.total.wood, 16);
+  assert.equal(awayStore.total.wood, 0);
+
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const destination = saved.settlements[1];
+  const store = saved.stockpiles[1];
+  saved.worldTimeTick = destination.materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(saved);
+  updateFoodAid(saved);
+  assert.equal(destination.materialAid, undefined);
+  assert.equal(store.total.wood, 8);
+  assert.equal(saved.events.filter(e => e.type === 'materialAidDelivered').length, 1);
+  assert.equal(reserveMaterials(saved, saved.constructionSites[0], store), true);
+  assert.equal(store.reserved.wood, 8);
+});

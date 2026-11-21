@@ -1,10 +1,13 @@
-import { FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { buildings } from '../data/buildings.js';
+import { TECH } from '../data/technologies.js';
+import { unlocked } from './Research.js';
 import { emitOnce } from '../systems/History.js';
 import { available, storageRoom, storeTile } from './Economy.js';
 import { findPath } from './path.js';
 
 export function updateFoodAid(world) {
-  if (!world.settlements.some(settlement => settlement.foodAid || (settlement.foodWarning && settlement.nationId))) return;
+  if (!world.settlements.some(settlement => settlement.foodAid || settlement.materialAid || settlement.nationId)) return;
   const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
   const stores = new Map(world.stockpiles.map(store => [store.settlementId, store]));
   const settlements = new Map(world.settlements.map(settlement => [settlement.id, settlement]));
@@ -17,34 +20,42 @@ export function updateFoodAid(world) {
     return findPath(world, storeTile(world, from), storeTile(world, to));
   }
 
-  for (const destination of world.settlements) {
-    const aid = destination.foodAid;
-    if (!aid || day < aid.arrivalDay) continue;
+  function settle(destination, field, resource, quantityKey) {
+    const aid = destination[field];
+    if (!aid || day < aid.arrivalDay) return;
     const source = settlements.get(aid.sourceId);
     const from = stores.get(aid.sourceId);
     const to = stores.get(destination.id);
     const residents = population.get(destination.id) ?? 0;
     const sameNation = source.nationId === aid.nationId && destination.nationId === aid.nationId;
     if (!aid.returning && sameNation && residents && route(from, to)) {
-      const delivered = Math.min(aid.food, storageRoom(to, 'food', residents * FOOD_TARGET_PER_PERSON));
+      const delivered = Math.min(aid[quantityKey], storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (delivered) {
-        to.total.food += delivered;
-        aid.food -= delivered;
-        emitOnce(world, `${destination.id}/foodAid/${day}`, 'foodAidDelivered', {
+        to.total[resource] += delivered;
+        aid[quantityKey] -= delivered;
+        const food = resource === 'food';
+        emitOnce(world, `${destination.id}/${field}/${day}`, food ? 'foodAidDelivered' : 'materialAidDelivered', {
           settlementId: destination.id, nationId: destination.nationId, sourceSettlementId: source.id,
-          x: destination.x, y: destination.y, food: delivered
+          x: destination.x, y: destination.y, ...(food ? { food: delivered } : { resource, quantity: delivered })
         });
       }
     }
-    if (aid.food && !aid.returning) {
+    if (!aid[quantityKey]) {
+      delete destination[field];
+    } else if (!aid.returning) {
       aid.returning = true;
       aid.arrivalDay = day + aid.travelDays;
-    } else if (aid.food && route(to, from)) {
-      const returned = Math.min(aid.food, storageRoom(from, 'food'));
-      from.total.food += returned;
-      aid.food -= returned;
+    } else if (route(to, from)) {
+      const returned = Math.min(aid[quantityKey], storageRoom(from, resource));
+      from.total[resource] += returned;
+      aid[quantityKey] -= returned;
+      if (!aid[quantityKey]) delete destination[field];
     }
-    if (!aid.food) delete destination.foodAid;
+  }
+
+  for (const destination of world.settlements) {
+    settle(destination, 'foodAid', 'food', 'food');
+    settle(destination, 'materialAid', destination.materialAid?.resource, 'quantity');
   }
 
   const recipients = world.settlements.filter(settlement => settlement.foodWarning &&
@@ -71,6 +82,47 @@ export function updateFoodAid(world) {
       destination.foodAid = { sourceId: source.id, nationId: source.nationId,
         food, travelDays, arrivalDay: day + travelDays, returning: false };
       break;
+    }
+  }
+
+  const projectNeeds = new Map(world.constructionSites.map(site => [site.settlementId,
+    world.reservations.some(r => r.siteId === site.id) ? {} : buildings[site.kind].cost]));
+  const steelDemand = TECH.miningToolIron + TECH.miningToolIronReserve;
+  const industrialNeeds = new Map();
+  for (const smithy of world.buildings.filter(b => b.kind === 'smithy')) {
+    const id = smithy.settlementId;
+    if (unlocked(world, id, 'steel_1') && world.citizens.some(c =>
+        c.alive && c.settlementId === id && c.profession === 'miner' && !c.steelMiningTools)) {
+      industrialNeeds.set(id, steelDemand);
+    }
+  }
+
+  for (const destination of world.settlements) {
+    const residents = population.get(destination.id);
+    if (!residents || destination.foodWarning || !destination.nationId || destination.materialAid) continue;
+    const to = stores.get(destination.id);
+    const demand = { ...projectNeeds.get(destination.id) };
+    demand.iron = Math.max(demand.iron ?? 0, industrialNeeds.get(destination.id) ?? 0);
+    for (const [resource, target] of Object.entries(demand)) {
+      const needed = Math.min(target - available(to, resource), storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
+      if (needed <= 0) continue;
+      for (const source of world.settlements) {
+        if (source === destination || source.nationId !== destination.nationId || source.foodWarning ||
+            !population.has(source.id)) continue;
+        const from = stores.get(source.id);
+        const reserve = Math.max(CONSTRUCTION_STORAGE_RESERVE[resource] ?? TECH.miningToolIronReserve,
+          projectNeeds.get(source.id)?.[resource] ?? 0, resource === 'iron' ? industrialNeeds.get(source.id) ?? 0 : 0);
+        const quantity = Math.min(needed, available(from, resource) - reserve);
+        if (quantity <= 0) continue;
+        const path = route(from, to);
+        if (!path) continue;
+        const travelDays = Math.max(1, Math.ceil(path.length / 32));
+        from.total[resource] -= quantity;
+        destination.materialAid = { sourceId: source.id, nationId: source.nationId,
+          resource, quantity, travelDays, arrivalDay: day + travelDays, returning: false };
+        break;
+      }
+      if (destination.materialAid) break;
     }
   }
 }
