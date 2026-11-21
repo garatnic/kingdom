@@ -147,6 +147,21 @@ test('five nations can handle independent fronts and preserve a fallen nation in
   for (const c of participants) Object.assign(c, { nationId: east.id, settlementId: settlement.id, homeBuildingId: null });
   world.buildings.push({ id: nextId(world, 'building'), kind: 'barracks', settlementId: settlement.id, x: 84, y: 32 });
   east.relations[west.id] = west.relations[east.id] = -60;
+  const twoAttacks = structuredClone(world);
+  const [capital, firstTarget, secondTarget] = twoAttacks.nations;
+  for (const citizen of twoAttacks.citizens.filter(c => c.nationId === secondTarget.id)) {
+    Object.assign(citizen, { nationId: capital.id, settlementId: capital.capitalId });
+  }
+  capital.relations[secondTarget.id] = secondTarget.relations[capital.id] = -60;
+  const depot = twoAttacks.stockpiles[0];
+  depot.total.food = 80;
+  depot.capacity = 200;
+  updateWar(twoAttacks);
+  const offensives = twoAttacks.campaigns.filter(c => c.attackerId === capital.id);
+  assert.deepEqual(offensives.map(c => c.defenderId), [firstTarget.id, secondTarget.id]);
+  assert.equal(new Set(offensives.flatMap(c => c.memberIds)).size, 6);
+  assert.equal(depot.total.food, 32);
+  await readSnapshot(JSON.stringify(await createSnapshot(twoAttacks)));
   const multi = structuredClone(world);
   const [multiInvader, multiDefender, multiEast, multiWest] = multi.nations;
   multiEast.relations[multiWest.id] = multiWest.relations[multiEast.id] = 0;

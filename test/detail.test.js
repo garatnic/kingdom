@@ -89,6 +89,14 @@ test('far settlements move a ripe harvest to the shared store once across camera
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   updateCitizens(restored, 12, distant);
   assert.equal(restored.stockpiles[0].total.food, foodBefore + FARM_YIELD);
+  const depot = restored.stockpiles[0];
+  depot.capacity = Object.values(depot.total).reduce((sum, value) => sum + value, 0) + 2;
+  restored.worldTimeTick += FARM_HARVEST_TICKS;
+  for (const citizen of restored.citizens) citizen.decisionAt = restored.worldTimeTick + NEED_HOUR_TICKS;
+  updateCitizens(restored, 12, distant);
+  assert.equal(depot.total.food, foodBefore + FARM_YIELD + 2);
+  assert.equal(restored.citizens.reduce((sum, c) => sum + c.inventory.food, 0), FARM_YIELD - 2);
+  await readSnapshot(JSON.stringify(await createSnapshot(restored)));
 });
 
 test('distant meals use only available food and leave isolated residents to individual AI', async () => {

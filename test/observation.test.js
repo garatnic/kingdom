@@ -126,4 +126,12 @@ test('drought delays local harvests and remains idempotent after restoration', a
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   assert.equal(restored.buildings[1].harvestAt, TIME_TICKS_PER_DAY);
   assert.equal(applyGodCommand(restored, drought), 'DUPLICATE');
+  const fertility = command('first-fertility', 'blessing', farm, 'fertility');
+  const storeFood = restored.stockpiles[0].total.food;
+  assert.equal(applyGodCommand(restored, fertility), null);
+  assert.equal(restored.buildings[1].harvestAt, restored.worldTimeTick);
+  assert.equal(restored.buildings[2].harvestAt, undefined);
+  assert.equal(restored.stockpiles[0].total.food, storeFood);
+  const revived = await readSnapshot(JSON.stringify(await createSnapshot(restored)));
+  assert.equal(applyGodCommand(revived, fertility), 'DUPLICATE');
 });

@@ -183,7 +183,7 @@ function updateDistantSettlements(world, camera, population) {
       }
     }
     const workers = locals.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&
-      c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep);
+      c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && c.inventory.food === 0);
     const yieldPerFarm = farmYield(world, settlement.id);
     const foodTarget = residents * FOOD_TARGET_PER_PERSON;
     for (const [resource, role, target] of [['wood', 'woodcutter', 24], ['stone', 'miner', 12]]) {
@@ -235,18 +235,21 @@ function updateDistantSettlements(world, camera, population) {
         }
       }
     }
-    if (!workers.length || storageRoom(store, 'food', foodTarget) < yieldPerFarm) continue;
+    if (!workers.length) continue;
     for (const farm of world.buildings) {
-      if (available(store, 'food') >= foodTarget || storageRoom(store, 'food', foodTarget) < yieldPerFarm) break;
+      const room = storageRoom(store, 'food', foodTarget);
+      if (available(store, 'food') >= foodTarget || room <= 0) break;
       if (farm.kind !== 'farm' || farm.settlementId !== settlement.id || claimedFarms.has(farm.id) ||
           (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) > world.worldTimeTick) continue;
       const field = workTile(world, origin, farm);
       if (!field) continue;
       const worker = workers.findIndex(c => findPath(world, c.lastKnownSafeTile, field) !== null);
       if (worker === -1) continue;
-      workers.splice(worker, 1);
+      const [farmer] = workers.splice(worker, 1);
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      store.total.food += yieldPerFarm;
+      const delivered = Math.min(yieldPerFarm, room, foodTarget - available(store, 'food'));
+      store.total.food += delivered;
+      farmer.inventory.food += yieldPerFarm - delivered;
       if (!workers.length) break;
     }
   }
@@ -326,12 +329,10 @@ export function updateCitizens(world, ticks, camera) {
       if (!citizen.alive) continue;
       if (citizen.hunger >= NEEDS.eat - FOOD_HUNGER_PER_HOUR && citizen.inventory.food > 0) {
         const quest = assignedAdventure(world, citizen);
-        if (quest) {
-          citizen.inventory.food--;
-          citizen.hunger -= FOOD_HUNGER_RESTORED;
-          if (quest.claimedBy === citizen.id) quest.provision = 0;
-          else quest.escortAteProvision = true;
-        }
+        citizen.inventory.food--;
+        citizen.hunger -= FOOD_HUNGER_RESTORED;
+        if (quest?.claimedBy === citizen.id) quest.provision = 0;
+        else if (quest) quest.escortAteProvision = true;
       }
       updateNeeds(world, citizen, ticks);
       interruptForFood(world, citizen);

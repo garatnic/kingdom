@@ -79,6 +79,11 @@ export function applyGodCommand(world, command) {
       (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) < until);
     if (!affectedFarms.length) return 'NO_TARGET';
     for (const farm of affectedFarms) farm.harvestAt = until;
+  } else if (kind === 'blessing' && value === 'fertility') {
+    affectedFarms = world.buildings.filter(b => b.kind === 'farm' && sumDistance(b, tile) <= 5 &&
+      (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) > world.worldTimeTick);
+    if (!affectedFarms.length) return 'NO_TARGET';
+    for (const farm of affectedFarms) farm.harvestAt = world.worldTimeTick;
   } else if (kind === 'blessing') {
     if (value !== 'recovery') return 'INVALID_KIND';
     const affected = world.citizens.filter(c => c.alive && sumDistance(cell(c), tile) <= 3 &&

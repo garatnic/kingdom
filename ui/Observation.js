@@ -176,7 +176,9 @@ export function observation(getWorld, getCamera, focus) {
       if (winner) title += '（勝利 ' + winner.name + '）';
     }
     if (event.type === 'civilizationAdvanced') title = civilizationNames[event.civilization] + 'へ進展';
-    if (event.type === 'god_intervention' && event.kind === 'blessing') title = '回復の祝福（' + event.quantity + '人）';
+    if (event.type === 'god_intervention' && event.kind === 'blessing') {
+      title = event.value === 'fertility' ? `豊穣の祝福（畑${event.quantity}棟）` : `回復の祝福（${event.quantity}人）`;
+    }
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);

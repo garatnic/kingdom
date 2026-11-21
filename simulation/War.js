@@ -5,7 +5,7 @@ import { ageYears, nextId } from './Identity.js';
 import { unlocked } from './Research.js';
 import { findPath } from './path.js';
 
-const WAR = { hostility: -60, unitCount: 3, foodPerUnit: 8, marchDays: 3, siegeDays: 5, occupationDays: 3, truceDays: 10 };
+const WAR = { hostility: -60, unitCount: 3, offensiveLimit: 2, foodPerUnit: 8, marchDays: 3, siegeDays: 5, occupationDays: 3, truceDays: 10 };
 
 export function activeNations(world) {
   return world.nations.filter(n => n.fallenAt === undefined);
@@ -182,7 +182,8 @@ function updateCampaign(world, campaign, attacker, defender) {
 export function updateWar(world) {
   const nationsById = new Map(world.nations.map(n => [n.id, n]));
   const fronts = (world.campaigns ?? []).filter(c => c.status === 'marching' || c.status === 'siege');
-  const outgoing = new Set(fronts.map(c => c.attackerId));
+  const outgoing = new Map();
+  for (const { attackerId } of fronts) outgoing.set(attackerId, (outgoing.get(attackerId) ?? 0) + 1);
   const incoming = new Set(fronts.map(c => c.defenderId));
   const invalid = campaign => nationsById.get(campaign.attackerId).fallenAt !== undefined ||
     nationsById.get(campaign.defenderId).fallenAt !== undefined ||
@@ -217,9 +218,10 @@ export function updateWar(world) {
     const attackers = [first, second].sort((a, b) => b.weights.defense - a.weights.defense);
     for (const candidate of attackers) {
       const defender = candidate === first ? second : first;
-      if (outgoing.has(candidate.id) || incoming.has(defender.id)) continue;
+      const attacks = outgoing.get(candidate.id) ?? 0;
+      if (attacks >= WAR.offensiveLimit || incoming.has(defender.id)) continue;
       if (startCampaign(world, candidate, defender)) {
-        outgoing.add(candidate.id);
+        outgoing.set(candidate.id, attacks + 1);
         incoming.add(defender.id);
         break;
       }
