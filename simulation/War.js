@@ -12,7 +12,7 @@ export function activeNations(world) {
 }
 
 export function truceBetween(world, first, second) {
-  return world.campaigns?.findLast(c => c.status === 'repelled' && !c.peaceAgreed && c.endedAt !== undefined &&
+  return world.campaigns?.findLast(c => c.status === 'repelled' && !c.cancelled && !c.peaceAgreed && c.endedAt !== undefined &&
     ((c.attackerId === first.id && c.defenderId === second.id) ||
       (c.attackerId === second.id && c.defenderId === first.id)) &&
     world.worldTimeTick < c.endedAt + WAR.truceDays * TIME_TICKS_PER_DAY);
@@ -166,7 +166,7 @@ function updateCampaign(world, campaign, attacker, defender) {
 
   const location = { x: campaign.x, y: campaign.y, nationIds: [attacker.id, defender.id] };
   emitOnce(world, campaign.id, 'siegeRepelled', location);
-  const recentDefeat = world.campaigns.some(c => c !== campaign && c.status === 'repelled' &&
+  const recentDefeat = world.campaigns.some(c => c !== campaign && c.status === 'repelled' && !c.cancelled &&
     samePair(c, attacker, defender) && c.endedAt >= world.worldTimeTick - 45 * TIME_TICKS_PER_DAY);
   if (recentDefeat) {
     campaign.peaceAgreed = true;
@@ -193,6 +193,7 @@ export function updateWar(world) {
   for (const campaign of fronts) {
     if ((campaign.status !== 'marching' && campaign.status !== 'siege') || !invalid(campaign)) continue;
     campaign.status = 'repelled';
+    campaign.cancelled = true;
     campaign.endedAt = world.worldTimeTick;
     const attacker = nationsById.get(campaign.attackerId);
     recoverRations(world, campaign, attacker);

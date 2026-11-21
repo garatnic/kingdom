@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { findPath } from '../simulation/path.js';
 import { createWorld } from '../engine/World.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
@@ -179,4 +180,26 @@ test('distant construction delivers one reservation and resumes without double c
   restored.worldTimeTick = NEED_HOUR_TICKS * 4;
   updateCitizens(restored, 12, far);
   assert.ok(restored.constructionSites.some(s => s.id !== site.id));
+});
+
+
+test('a starving resident turns back to available food without losing cargo', async () => {
+  const world = createWorld('hungry-hauler');
+  world.map.terrain.fill('grass');
+  const [store] = world.stockpiles;
+  const [citizen] = world.citizens;
+  const start = { x: store.x + 5, y: store.y };
+  const goal = { x: start.x + 2, y: start.y };
+  Object.assign(citizen, { x: start.x + 0.5, y: start.y + 0.5, lastKnownSafeTile: start, hunger: 93 });
+  citizen.inventory.wood = 2;
+  citizen.action = {
+    kind: 'gather', phase: 'travel', goal, path: findPath(world, start, goal),
+    progress: 0, navigationVersion: world.map.navigationVersion
+  };
+  world.worldTimeTick = 600;
+  updateCitizens(world, 12);
+  assert.equal(citizen.action.kind, 'eat');
+  assert.deepEqual(citizen.action.goal, { x: store.x, y: store.y });
+  assert.equal(citizen.inventory.wood, 2);
+  await readSnapshot(JSON.stringify(await createSnapshot(world)));
 });

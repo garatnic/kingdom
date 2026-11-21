@@ -168,6 +168,7 @@ test('five nations can handle independent fronts and preserve a fallen nation in
   assert.equal(incoming.status, 'occupied');
   assert.equal(outbound.status, 'repelled');
   assert.equal(outbound.rations, 0);
+  assert.equal(truceBetween(activeSave, multiInvader, multiDefender), undefined);
   assert.ok(activeSave.events.some(e => e.type === 'campaignCancelled'));
   await readSnapshot(JSON.stringify(await createSnapshot(activeSave)));
   world.worldTimeTick = TIME_TICKS_PER_DAY;
