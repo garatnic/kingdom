@@ -235,3 +235,55 @@ test('a hungry builder leaves a stalled site to eat and preserves completed work
   assert.equal(builder.action.kind, 'eat');
   assert.equal(site.progress, 50);
 });
+
+test('gatherers prefer a nearby reported source and fall back when it is depleted', () => {
+  const world = createWorld('reported-source');
+  world.map.terrain.fill('grass');
+  const worker = world.citizens[0];
+  const [store] = world.stockpiles;
+  Object.assign(worker, { profession: 'woodcutter', x: store.x + 0.5, y: store.y + 0.5, decisionAt: 0 });
+  worker.lastKnownSafeTile = { x: store.x, y: store.y };
+  world.citizens = [worker];
+  store.total.wood = 0;
+  const nearer = { id: 'node:100', resource: 'wood', x: store.x + 3, y: store.y, quantity: 10 };
+  const reported = { ...nearer, id: 'node:101', x: store.x + 5 };
+  world.resourceNodes = [nearer, reported];
+  const quest = { kind: 'survey_resources', status: 'completed', settlementId: worker.settlementId, targetId: reported.id };
+  world.quests.push(quest);
+  updateCitizens(world, 0);
+  assert.equal(worker.action.targetId, reported.id);
+
+  reported.quantity = 0;
+  worker.decisionAt = 0;
+  worker.action = { kind: 'idle', phase: 'plan' };
+  updateCitizens(world, 0);
+  assert.equal(worker.action.targetId, nearer.id);
+});
+
+test('a distant miner delivers rare ore without doing two jobs in the same update', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const world = createWorld('distant-ore');
+  world.map.terrain.fill('grass');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  for (let i = 0; i < 4; i++) world.citizens.push(createAdult(world, 'human', store, settlement));
+  for (const citizen of world.citizens) {
+    citizen.profession = citizen === world.citizens.at(-1) ? 'miner' : 'farmer';
+    citizen.decisionAt = NEED_HOUR_TICKS * 3;
+  }
+  store.total.stone = 12;
+  store.total.iron = store.total.manaStone = 0;
+  world.resourceNodes = ['iron', 'manaStone'].map((resource, index) => ({
+    id: 'node:' + world.idCounters.node++, resource, quantity: 2, x: store.x + 5 + index, y: store.y
+  }));
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  updateCitizens(world, 12, { x: 110, y: 110 });
+  assert.equal(store.total.iron, 2);
+  assert.equal(store.total.manaStone, 0);
+  assert.deepEqual(world.resourceNodes.map(n => n.quantity), [0, 2]);
+  world.worldTimeTick += NEED_HOUR_TICKS;
+  updateCitizens(world, 12, { x: 110, y: 110 });
+  assert.equal(store.total.manaStone, 2);
+  assert.equal(world.resourceNodes[1].quantity, 0);
+});

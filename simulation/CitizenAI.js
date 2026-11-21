@@ -23,6 +23,19 @@ const idle = tick => ({ kind: 'idle', phase: 'plan', targetId: null, startedAt: 
 
 const jobs = { farmer: ['food'], woodcutter: ['wood'], miner: ['stone', 'iron', 'manaStone'] };
 
+const SURVEY_DISTANCE_BONUS = 4;
+
+function gatherPriority(world, settlementId, distance) {
+  const surveyed = new Set();
+  for (const quest of world.quests) {
+    if (quest.kind === 'survey_resources' && quest.status === 'completed' && quest.settlementId === settlementId) {
+      surveyed.add(quest.targetId);
+    }
+  }
+  const score = node => distance(node) - (surveyed.has(node.id) ? SURVEY_DISTANCE_BONUS : 0);
+  return (a, b) => score(a) - score(b) || distance(a) - distance(b);
+}
+
 function travel(world, citizen, goal, kind, targetId = null) {
   const path = findPath(world, tileOf(citizen), goal);
   if (path === null || (!path.length && kind === 'explore')) return false;
@@ -153,9 +166,10 @@ function chooseRoute(world, citizen, store, population) {
     for (const resource of candidates) {
       const current = tileOf(citizen);
       const distance = node => Math.abs(node.x - current.x) + Math.abs(node.y - current.y);
-      const nodes = world.resourceNodes.filter(node => node.resource === resource).sort((a, b) => distance(a) - distance(b));
+      const nodes = world.resourceNodes.filter(node => node.resource === resource && node.quantity > 0)
+        .sort(gatherPriority(world, citizen.settlementId, distance));
       for (const node of nodes) {
-        if (node.quantity > 0 && (!node.dropped || !isQuestCargo(world, node)) &&
+        if ((!node.dropped || !isQuestCargo(world, node)) &&
             travel(world, citizen, node, 'gather', node.id)) return;
       }
     }
@@ -230,9 +244,11 @@ function updateDistantSettlements(world, camera, population) {
       (settlement.foodWarning && c.profession === 'adventurer')) && c.hp > COMBAT.retreatHp &&
       c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && c.inventory.food === 0);
     const yieldPerFarm = farmYield(world, settlement.id);
-    for (const [resource, role, target] of [['wood', 'woodcutter', 24], ['stone', 'miner', 12]]) {
+    const dispatched = new Set();
+    for (const resource of ['wood', 'stone', 'iron', 'manaStone']) {
+      const target = resource === 'wood' ? 24 : 12;
       if (available(store, resource) >= target || storageRoom(store, resource, foodTarget) <= 0) continue;
-      const crew = ready.filter(c => c.profession === role && c.hp > COMBAT.retreatHp &&
+      const crew = ready.filter(c => jobs[c.profession]?.includes(resource) && !dispatched.has(c.id) && c.hp > COMBAT.retreatHp &&
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && !c.inventory[resource]);
       if (!crew.length) continue;
       connected ??= reachableTiles(world, origin);
@@ -240,12 +256,13 @@ function updateDistantSettlements(world, camera, population) {
       if (!crew.some(c => accessible(c.lastKnownSafeTile))) continue;
       const sources = world.resourceNodes.filter(n => n.resource === resource && !n.dropped && n.quantity > 0 &&
         !claimedNodes.has(n.id) && distance(settlement, n) <= radius && accessible(n));
-      sources.sort((a, b) => distance(origin, a) - distance(origin, b));
+      sources.sort(gatherPriority(world, settlement.id, node => distance(origin, node)));
       for (const worker of crew) {
         if (available(store, resource) >= target) break;
         if (!accessible(worker.lastKnownSafeTile)) continue;
         const source = sources.find(n => n.quantity > 0);
         if (!source || !gatherForStore(world, source, store, foodTarget)) break;
+        dispatched.add(worker.id);
         worker.decisionAt = Math.max(worker.decisionAt, world.worldTimeTick + DECISION_TICKS);
       }
     }
