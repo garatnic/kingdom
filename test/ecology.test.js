@@ -37,11 +37,14 @@ test('wisps immigrate after expansion and inhabit forest beyond the initial map'
   for (let y = 2; y < 12; y++) {
     for (let x = 70; x < 80; x++) world.map.terrain[y * world.map.width + x] = 'forest';
   }
+  const prey = world.monsters.find(m => m.species === 'slime');
+  Object.assign(prey, { x: 73, y: 8, homeTile: { x: 73, y: 8 }, moveAt: Number.MAX_SAFE_INTEGER });
   world.worldTimeTick = world.nextMonsterSpawnTick;
   updateAdventureWorld(world, 12);
   const wisp = world.monsters.find(m => m.species === 'wisp');
   assert.ok(wisp);
   assert.ok(wisp.homeTile.x >= 64);
+  assert.ok(Math.abs(wisp.x - prey.x) + Math.abs(wisp.y - prey.y) <= 7);
   assert.equal(world.map.terrain[wisp.homeTile.y * world.map.width + wisp.homeTile.x], 'forest');
 });
 

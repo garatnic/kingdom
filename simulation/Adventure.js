@@ -68,11 +68,20 @@ function spawnAway(world, species, forbidden, habitatOnly = false) {
       }
     }
   }
-  while (candidates.length) {
-    const index = Math.floor(random(world.rngState) * candidates.length);
-    const monster = spawnMonster(world, species, candidates[index]);
-    if (monster) return monster;
-    candidates.splice(index, 1);
+  const { prey, sight } = monsters[species];
+  const preyHomes = prey ? world.monsters.filter(m => m.alive && m.species === prey) : [];
+  const nearPrey = candidates.filter(tile => preyHomes.some(m =>
+    distance(tile, m) <= sight && findPath(world, tile, m) !== null));
+  const tried = new Set();
+  for (const pool of [nearPrey, candidates]) {
+    while (pool.length) {
+      const index = Math.floor(random(world.rngState) * pool.length);
+      const [tile] = pool.splice(index, 1);
+      if (tried.has(tile)) continue;
+      tried.add(tile);
+      const monster = spawnMonster(world, species, tile);
+      if (monster) return monster;
+    }
   }
   return null;
 }
