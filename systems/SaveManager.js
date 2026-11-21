@@ -114,6 +114,7 @@ function validate(world) {
   const stores = new Set(world.stockpiles.map(store => store.id));
   const targets = new Set(world.monsters.map(monster => monster.id));
   const techIds = new Set(technologies.map(technology => technology.id));
+  const surveyTargets = new Set(world.resourceNodes.filter(node => !node.dropped).map(node => node.id));
   const dropIds = new Set(world.resourceNodes.filter(node => node.dropped).map(node => node.id));
   const accounts = new Set(world.researchStates.map(state => state.ownerId));
   if (!world.constructionSites.every(site => Object.hasOwn(buildings, site.kind) && validTile(site) &&
@@ -131,7 +132,12 @@ function validate(world) {
           integer(q.pickupAmount, 1) && q.recoveredBy && Object.getPrototypeOf(q.recoveredBy) === Object.prototype &&
           Object.entries(q.recoveredBy).every(([id, quantity]) =>
             [q.claimedBy, q.escortId].includes(id) && integer(quantity, 0, q.pickupAmount))))
-        : targets.has(q.targetId)) && settlements.has(q.settlementId) &&
+        : q.kind === 'survey_resources'
+          ? surveyTargets.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&
+            Array.isArray(q.surveyVisitors) && new Set(q.surveyVisitors).size === q.surveyVisitors.length &&
+            q.surveyVisitors.every(id => [q.claimedBy, q.escortId].includes(id)))) &&
+            (q.surveyQuantity === undefined ? q.status !== 'completed' : integer(q.surveyQuantity, 0))
+          : targets.has(q.targetId)) && settlements.has(q.settlementId) &&
         (q.claimedBy === null || people.has(q.claimedBy)) &&
         (q.escortId === undefined || (people.has(q.escortId) && q.escortId !== q.claimedBy)) &&
         (q.kind !== 'clear_nest' || (validTile(q.nestTile) && Object.hasOwn(monsters, q.species))) &&

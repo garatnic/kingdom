@@ -47,9 +47,12 @@ export function updateFoodAid(world) {
     if (!aid.food) delete destination.foodAid;
   }
 
-  for (const destination of world.settlements) {
-    const residents = population.get(destination.id) ?? 0;
-    if (!destination.foodWarning || !destination.nationId || !residents || destination.foodAid) continue;
+  const recipients = world.settlements.filter(settlement => settlement.foodWarning &&
+    settlement.nationId && population.get(settlement.id) && !settlement.foodAid);
+  const foodPerResident = settlement => available(stores.get(settlement.id), 'food') / population.get(settlement.id);
+  recipients.sort((a, b) => foodPerResident(a) - foodPerResident(b));
+  for (const destination of recipients) {
+    const residents = population.get(destination.id);
     const to = stores.get(destination.id);
     const needed = Math.min(residents * FOOD_BIRTH_PER_PERSON - available(to, 'food'),
       storageRoom(to, 'food', residents * FOOD_TARGET_PER_PERSON));

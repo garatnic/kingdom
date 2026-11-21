@@ -12,6 +12,7 @@ import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
+  resourceSurveyDeparted: '資源調査に出発', resourceSurveyReturned: '資源調査を報告',
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
   constructionCompleted: '施設が完成', foodShortage: '集落で食料難', foodRecovered: '集落の食料備蓄が回復', foodAidDelivered: '同じ国の集落から食料が到着', monsterDefeated: '魔物を討伐', monsterThreat: '集落に魔物が接近', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', supplyRecoveryDeparted: '物資回収に出発', supplyRecoveryReturned: '物資回収隊が帰還', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
@@ -25,7 +26,7 @@ const eventGroups = {
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'foodShortage', 'foodRecovered', 'foodAidDelivered'],
   adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
-    'cooperativeExpedition', 'supplyRecoveryReturned', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
+    'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
   god: ['god_intervention']
 };
@@ -228,10 +229,11 @@ export function observation(getWorld, getCamera, focus) {
       if (quests.length) add(body, 'h4', '依頼');
       for (const quest of quests) {
         const recovery = quest.kind === 'recover_supplies';
-        const target = (recovery ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
-        const type = recovery ? '物資回収' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
+        const survey = quest.kind === 'survey_resources';
+        const target = (recovery || survey ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
+        const type = recovery ? '物資回収' : survey ? '資源調査' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
         const status = quest.status === 'open' ? '募集中' : quest.stage === 'return' ? '帰還中' : '進行中';
-        const cargo = recovery && target ? ` · ${resources[target.resource]}` : '';
+        const cargo = (recovery || survey) && target ? ` · ${resources[target.resource]}` : '';
         const details = add(body, target ? 'button' : 'p', `${type} · ${status}${cargo}`);
         if (target) details.onclick = () => {
           markManual();
@@ -350,7 +352,7 @@ export function observation(getWorld, getCamera, focus) {
     }
     if (event.type === 'god_intervention' && event.kind === 'terrain' && event.value === 'undo') title = '地形編集を取り消し';
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
-    if (event.type === 'supplyRecoveryReturned') title += `（${resources[event.resource]} ${event.quantity}）`;
+    if (['supplyRecoveryReturned', 'resourceSurveyReturned'].includes(event.type)) title += `（${resources[event.resource]} ${event.quantity}）`;
     if (event.type === 'foodAidDelivered') title += `（食料 ${event.food}）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);

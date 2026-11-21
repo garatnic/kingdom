@@ -248,3 +248,25 @@ test('food aid survives reload, delivers once and returns if the destination cha
   assert.equal(homeStore.total.food, 52);
   assert.equal(away.foodAid, undefined);
 });
+
+test('the scarcest reserve per resident receives limited food aid first', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { world, invader, away, homeStore } = twoNations();
+  const third = { ...away, id: nextId(world, 'settlement'), x: 14, y: 13, foodWarning: true, nationId: invader.id };
+  world.settlements.push(third);
+  away.foodWarning = true;
+  away.nationId = invader.id;
+  world.citizens.at(-1).settlementId = third.id;
+  homeStore.total.food = 31;
+  world.stockpiles[1].total.food = 1;
+  const thirdStore = {
+    ...structuredClone(world.stockpiles[1]), id: nextId(world, 'stockpile'), settlementId: third.id,
+    x: third.x, y: third.y
+  };
+  thirdStore.total.food = 0;
+  world.stockpiles.push(thirdStore);
+  updateFoodAid(world);
+  assert.equal(third.foodAid.food, 1);
+  assert.equal(away.foodAid, undefined);
+  assert.equal(homeStore.total.food, 30);
+});
