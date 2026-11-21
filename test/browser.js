@@ -175,6 +175,13 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await poll(() => evaluate("document.querySelector('#god-status').textContent === '介入を適用しました'"));
     await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('神の介入')"));
     await evaluate(`(() => {
+      const filter = document.querySelector('#event-filter');
+      filter.value = 'god';
+      filter.dispatchEvent(new Event('change'));
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('神の介入')"));
+
+    await evaluate(`(() => {
       const tab = document.querySelector('#history-tab');
       tab.value = 'citizen';
       tab.dispatchEvent(new Event('change'));

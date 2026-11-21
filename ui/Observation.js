@@ -20,6 +20,16 @@ const events = {
   warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
+const eventGroups = {
+  nations: ['founding', 'leaderSucceeded', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
+    'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
+  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted'],
+  adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterNestFounded', 'monsterNestCleared',
+    'cooperativeExpedition', 'supplyRecoveryReturned', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
+  science: ['research_unlocked', 'civilizationAdvanced'],
+  god: ['god_intervention']
+};
+const eventNumber = event => Number(event.id.split(':')[1]);
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
   idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', haul: '運搬',
@@ -53,6 +63,8 @@ export function observation(getWorld, getCamera, focus) {
   const tab = get('history-tab');
   const subjects = get('history-subject');
   const search = get('history-search');
+  const eventFilter = get('event-filter');
+  const previousPages = [];
   const body = get('history-body');
   let previousRender = '';
   let observedEvent = '';
@@ -82,10 +94,23 @@ export function observation(getWorld, getCamera, focus) {
     if (choices.some(c => c.id === selected)) subjects.value = selected;
     get('follow').hidden = !subjects.value || mode === 'settlement';
     body.replaceChildren();
+    eventFilter.hidden = mode !== 'world';
     if (mode === 'world') {
-      const list = historyFor(world, 'world').slice(-20).reverse();
-      if (!list.length) add(body, 'p', '出来事はまだありません。');
-      for (const event of list) showEvent(world, event);
+      const group = eventGroups[eventFilter.value];
+      const before = previousPages.at(-1) ?? Infinity;
+      const list = historyFor(world, 'world')
+        .filter(event => eventNumber(event) < before && (!group || group.includes(event.type)))
+        .slice(-21).reverse();
+      if (!list.length) add(body, 'p', '該当する出来事はありません。');
+      for (const event of list.slice(0, 20)) showEvent(world, event);
+      if (previousPages.length) {
+        const newer = add(body, 'button', '新しい出来事');
+        newer.onclick = () => { previousPages.pop(); render(true); };
+      }
+      if (list.length > 20) {
+        const older = add(body, 'button', '古い出来事');
+        older.onclick = () => { previousPages.push(eventNumber(list[19])); render(true); };
+      }
       return;
     }
 
@@ -254,7 +279,8 @@ export function observation(getWorld, getCamera, focus) {
     };
   }
 
-  tab.onchange = () => { search.value = ''; render(true); };
+  tab.onchange = () => { search.value = ''; previousPages.length = 0; render(true); };
+  eventFilter.onchange = () => { previousPages.length = 0; render(true); };
   search.oninput = () => render(true);
   subjects.onchange = () => render(true);
   get('follow').onclick = () => {
@@ -338,6 +364,7 @@ export function observation(getWorld, getCamera, focus) {
       camera.y += (target.y - camera.y) * weight;
     },
     reset() {
+      previousPages.length = 0;
       previousRender = '';
       observedEvent = '';
       eventAt = -Infinity;

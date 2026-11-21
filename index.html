@@ -60,6 +60,11 @@
       </div>
       <label class="camera-option"><input type="checkbox" id="auto-camera"> 事件を自動追跡</label>
       <label class="camera-option"><input type="checkbox" id="auto-resume"> 手動操作後に自動追跡へ戻る</label>
+      <select id="event-filter" aria-label="世界史の出来事を絞り込む">
+        <option value="all">すべての出来事</option><option value="nations">国家・戦争</option>
+        <option value="people">住民・集落</option><option value="adventure">冒険・魔物</option>
+        <option value="science">研究・文明</option><option value="god">神の介入</option>
+      </select>
       <div id="history-body"></div>
       <details>
         <summary>神の介入</summary>
