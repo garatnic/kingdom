@@ -146,3 +146,34 @@ test('distant timber uses reachable deposits and conserves stock within storage 
   assert.equal(reachable.quantity, 2);
   assert.equal(blocked.quantity, 3);
 });
+
+test('distant construction delivers one reservation and resumes without double charging', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const { planSite } = await import('../simulation/Construction.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const world = createWorld('distant-build');
+  world.map.terrain.fill('grass');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const origin = { x: store.x, y: store.y };
+  for (let i = 0; i < 4; i++) world.citizens.push(createAdult(world, 'human', origin, settlement));
+  for (const citizen of world.citizens) citizen.profession = 'farmer';
+  world.citizens.at(-1).profession = 'builder';
+  const site = planSite(world, settlement, 'farm', origin.x + 5, origin.y);
+  assert.ok(site);
+  const wood = store.total.wood;
+  const far = { x: 110, y: 110 };
+  for (const citizen of world.citizens) citizen.decisionAt = NEED_HOUR_TICKS * 10;
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  updateCitizens(world, 12, far);
+  assert.equal(store.total.wood, wood - 2);
+  assert.deepEqual(site.delivered, { wood: 2 });
+  assert.equal(world.inTransit.length, 0);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  for (let hour = 2; hour <= 4; hour++) {
+    restored.worldTimeTick = NEED_HOUR_TICKS * hour;
+    updateCitizens(restored, 12, far);
+  }
+  assert.equal(restored.stockpiles[0].total.wood, wood - 2);
+  assert.ok(restored.buildings.some(b => b.kind === 'farm'));
+});

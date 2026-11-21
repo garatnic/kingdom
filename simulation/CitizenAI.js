@@ -189,6 +189,33 @@ function updateDistantSettlements(world, camera, population) {
         worker.decisionAt = Math.max(worker.decisionAt, world.worldTimeTick + DECISION_TICKS);
       }
     }
+    const site = world.constructionSites.find(s => s.settlementId === settlement.id);
+    const constructionBusy = site && (world.inTransit.some(s => s.destinationId === site.id) ||
+      world.citizens.some(c => c.alive && c.settlementId === settlement.id &&
+        ['build', 'pickUpMaterials', 'deliverMaterials', 'recoverMaterials'].includes(c.action.kind)));
+    if (site && !constructionBusy) {
+      const builders = locals.filter(c => c.profession === 'builder' && c.hp > COMBAT.retreatHp &&
+        c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep);
+      const work = builders.length && workTile(world, origin, site);
+      if (work) {
+        connected ??= reachableTiles(world, origin);
+        const builder = builders.find(c => {
+          const { x, y } = c.lastKnownSafeTile;
+          return connected[y * world.map.width + x] === 1;
+        });
+        if (builder) {
+          if (materialsDelivered(site)) {
+            buildAtSite(world, site, NEED_HOUR_TICKS / 2);
+          } else {
+            reserveMaterials(world, site, store);
+            const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');
+            const shipment = reservation && pickUpMaterials(world, reservation, builder);
+            if (shipment) deliverMaterials(world, shipment, builder);
+          }
+          builder.decisionAt = Math.max(builder.decisionAt, world.worldTimeTick + DECISION_TICKS);
+        }
+      }
+    }
     if (!workers.length || storageRoom(store, 'food', foodTarget) < yieldPerFarm) continue;
     for (const farm of world.buildings) {
       if (available(store, 'food') >= foodTarget || storageRoom(store, 'food', foodTarget) < yieldPerFarm) break;
