@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { advanceFrame, setSpeed } from '../engine/GameLoop.js';
-import { claimAdventure, continueAdventure, issueQuest, spawnMonster } from '../simulation/Adventure.js';
+import { claimAdventure, continueAdventure, issueQuest, spawnMonster, updateAdventureWorld, isQuestCargo } from '../simulation/Adventure.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 
 test('adventurers depart, defeat monsters, collect drops and return across three seeds', async () => {
@@ -210,4 +210,46 @@ test('a guild can send a second adventurer to hunt a dangerous roaming monster',
   assert.equal(quest.escortId, escort.id);
   assert.equal(store.total.food, food - 2);
   assert.ok(world.events.some(e => e.type === 'cooperativeExpedition'));
+});
+
+
+test('guild partners recover abandoned cargo once across save and reload', async () => {
+  const world = createWorld('supply-recovery');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const lead = world.citizens.find(c => c.profession === 'adventurer');
+  world.citizens.find(c => c !== lead).profession = 'adventurer';
+  world.buildings.push({ id: 'building:2', kind: 'guild', x: home.x + 5, y: home.y, settlementId: home.id });
+  world.idCounters.building = 3;
+  const node = { id: 'node:' + world.idCounters.node++, resource: 'wood', quantity: 4, x: store.x + 10, y: store.y, dropped: true };
+  world.resourceNodes.push(node);
+  updateAdventureWorld(world, 12);
+  const recovery = world.quests.find(q => q.kind === 'recover_supplies');
+  assert.ok(recovery);
+  assert.ok(claimAdventure(world, lead, store, () => true));
+  assert.ok(isQuestCargo(world, node));
+  const move = person => tile => {
+    person.lastKnownSafeTile = { x: tile.x, y: tile.y };
+    person.x = tile.x + 0.5;
+    person.y = tile.y + 0.5;
+    return true;
+  };
+  continueAdventure(world, lead, recovery, store, store, move(lead));
+  continueAdventure(world, lead, recovery, store, store, move(lead));
+  assert.equal(node.quantity, 2);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const quest = restored.quests.find(q => q.id === recovery.id);
+  const savedStore = restored.stockpiles[0];
+  const leader = restored.citizens.find(c => c.id === quest.claimedBy);
+  const escort = restored.citizens.find(c => c.id === quest.escortId);
+  const before = savedStore.total.wood;
+  for (let i = 0; i < 5 && quest.status === 'claimed'; i++) {
+    continueAdventure(restored, escort, quest, savedStore, savedStore, move(escort));
+    continueAdventure(restored, leader, quest, savedStore, savedStore, move(leader));
+  }
+  assert.equal(quest.status, 'completed');
+  assert.equal(savedStore.total.wood, before + 4);
+  assert.equal(restored.resourceNodes.find(n => n.id === node.id).quantity, 0);
+  assert.equal(restored.events.filter(e => e.type === 'supplyRecoveryReturned').length, 1);
 });

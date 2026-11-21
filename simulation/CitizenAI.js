@@ -13,7 +13,7 @@ import {
 } from './Construction.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
-import { assignedAdventure, claimAdventure, continueAdventure } from './Adventure.js';
+import { assignedAdventure, claimAdventure, continueAdventure, isQuestCargo } from './Adventure.js';
 import { campaignFor, invasionOrder } from './War.js';
 import { recordDeath } from './Population.js';
 
@@ -102,7 +102,7 @@ function chooseRoute(world, citizen, store, population) {
     if (citizen.profession === 'builder') {
       const dropped = world.resourceNodes.find(node => node.dropped && node.quantity > 0 &&
         storageRoom(store, node.resource, foodTarget) > 0 &&
-        !world.quests.some(q => q.id === node.questId && q.status === 'claimed'));
+        !isQuestCargo(world, node));
       if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
     }
     if (citizen.profession === 'farmer' && available(store, 'food') < foodTarget && storageRoom(store, 'food', foodTarget) > 0) {
@@ -123,7 +123,7 @@ function chooseRoute(world, citizen, store, population) {
       const distance = node => Math.abs(node.x - current.x) + Math.abs(node.y - current.y);
       const nodes = world.resourceNodes.filter(node => node.resource === resource).sort((a, b) => distance(a) - distance(b));
       for (const node of nodes) {
-        if (node.resource === resource && node.quantity > 0 &&
+        if (node.quantity > 0 && (!node.dropped || !isQuestCargo(world, node)) &&
             travel(world, citizen, node, 'gather', node.id)) return;
       }
     }
@@ -294,7 +294,7 @@ function perform(world, citizen, store, ticks, population) {
     action.progress += ticks;
     if (action.progress < GATHER_TICKS) return;
     const node = world.resourceNodes.find(n => n.id === action.targetId);
-    harvest(world, citizen, node);
+    if (node && !isQuestCargo(world, node)) harvest(world, citizen, node);
     if (store && node && citizen.inventory[node.resource] && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
   }
   if (action.kind === 'farm') {

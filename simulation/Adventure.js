@@ -3,7 +3,7 @@ import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { commissionGear, recordAdventureSuccess, trainCombat } from './AdventurerGrowth.js';
 import { COMBAT, gear, monsters } from '../data/combat.js';
-import { ADULT_AGE, START_REGION_SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { ADULT_AGE, START_REGION_SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, GATHER_BATCH, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
 import { available, deposit, storeTile } from './Economy.js';
@@ -143,6 +143,82 @@ export function issueQuest(world, settlement, target, allowNest = true) {
   return quest;
 }
 
+export function isQuestCargo(world, node) {
+  if (!node.dropped) return false;
+  return world.quests.some(q => q.status === 'claimed' &&
+    (q.id === node.questId || (q.kind === 'recover_supplies' && q.targetId === node.id)));
+}
+
+function offerRecovery(world, settlement, origin) {
+  if (!world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
+      world.citizens.filter(c => c.alive && c.settlementId === settlement.id && c.profession === 'adventurer').length < 2 ||
+      world.quests.some(q => q.kind === 'recover_supplies' && q.settlementId === settlement.id && activeQuest(q))) return false;
+  const piles = world.resourceNodes.filter(n => n.dropped && !n.questId && n.quantity >= 2 &&
+    distance(origin, n) >= 8 && distance(origin, n) <= 32 &&
+    !world.quests.some(q => q.targetId === n.id && activeQuest(q)));
+  const target = piles.sort((a, b) => distance(origin, a) - distance(origin, b))
+    .find(node => findPath(world, origin, node) !== null);
+  if (!target) return false;
+  world.quests.push({ id: nextId(world, 'quest'), kind: 'recover_supplies', settlementId: settlement.id,
+    targetId: target.id, status: 'open', claimedBy: null, createdAt: world.worldTimeTick,
+    expiresAt: world.worldTimeTick + COMBAT.questDuration, lootIds: [] });
+  return true;
+}
+
+function findEscort(world, citizen, reachable) {
+  const leaderId = world.nations.find(n => n.id === citizen.nationId)?.leaderId;
+  return world.citizens.find(c => c !== citizen && c.alive && c.settlementId === citizen.settlementId &&
+    ageYears(world, c) >= ADULT_AGE && c.profession === 'adventurer' && c.action.kind === 'idle' && c.hp >= 70 &&
+    c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && !c.expeditionId && c.id !== leaderId &&
+    !world.inTransit.some(item => item.carrierId === c.id) &&
+    !assignedAdventure(world, c) && !campaignFor(world, c) && reachable(c));
+}
+
+function claimRecovery(world, citizen, quest, store, travel) {
+  const node = world.resourceNodes.find(n => n.id === quest.targetId);
+  if (!node || node.quantity < 2 || available(store, 'food') < 2) return false;
+  const escort = findEscort(world, citizen, c => findPath(world, tileOf(c), node) !== null);
+  if (!escort || !travel(node, 'adventure', quest.id)) return false;
+  store.total.food -= 2;
+  citizen.inventory.food++;
+  escort.inventory.food++;
+  Object.assign(quest, { status: 'claimed', stage: 'recover', claimedBy: citizen.id,
+    escortId: escort.id, provision: 1, recoveredBy: {}, pickupAmount: Math.min(GATHER_BATCH, Math.floor(node.quantity / 2)) });
+  emit(world, 'supplyRecoveryDeparted', quest, tileOf(citizen), { actorIds: [citizen.id, escort.id] });
+  return true;
+}
+
+function continueRecovery(world, citizen, quest, store, origin, travel) {
+  const node = world.resourceNodes.find(n => n.id === quest.targetId);
+  const tile = tileOf(citizen);
+  const isLead = citizen.id === quest.claimedBy;
+  const escort = world.citizens.find(c => c.id === quest.escortId && c.alive);
+  if (!isLead && quest.escortReturned) return true;
+  if (!escort || (quest.stage === 'recover' && (citizen.hunger >= NEEDS.eat || citizen.hp <= COMBAT.retreatHp))) {
+    quest.retreated = true;
+    quest.stage = 'return';
+  }
+  if (quest.stage === 'recover' && !Object.hasOwn(quest.recoveredBy, citizen.id)) {
+    if (distance(tile, node) && travel(node, 'adventure', quest.id)) return true;
+    const quantity = distance(tile, node) ? 0 : Math.min(node.quantity, quest.pickupAmount);
+    citizen.inventory[node.resource] += quantity;
+    node.quantity -= quantity;
+    quest.recoveredBy[citizen.id] = quantity;
+  }
+  if (distance(tile, origin)) return travel(origin, 'adventure', quest.id);
+  const population = world.citizens.filter(c => c.alive && c.settlementId === citizen.settlementId).length;
+  deposit(citizen, store, population * FOOD_TARGET_PER_PERSON);
+  if (!isLead) {
+    quest.escortReturned = true;
+    return true;
+  }
+  if (escort && !quest.escortReturned) return true;
+  const quantity = Object.values(quest.recoveredBy).reduce((sum, value) => sum + value, 0);
+  quest.status = quest.retreated || !quantity ? 'retreated' : 'completed';
+  emit(world, 'supplyRecoveryReturned', quest, origin, { actorIds: [citizen.id, quest.escortId], quantity, resource: node.resource });
+  return false;
+}
+
 function moveMonsters(world) {
   const reserved = new Set(world.monsters.filter(m => m.alive).map(tileKey));
   for (const monster of world.monsters) {
@@ -249,6 +325,8 @@ export function updateAdventureWorld(world, ticks) {
     if (slots <= 0) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
+    if (offerRecovery(world, settlement, origin)) slots--;
+    if (slots === 0) continue;
     const nearby = world.monsters.filter(m => m.alive && distance(m, settlement) <= COMBAT.questRadius);
     if (!nearby.length) continue;
     const connected = reachableTiles(world, origin, undefined, nearby.map(m => m.y * world.map.width + m.x));
@@ -287,6 +365,10 @@ export function claimAdventure(world, citizen, store, travel) {
       citizen.fatigue >= NEEDS.sleep || available(store, 'food') < 1) return false;
   for (const quest of world.quests) {
     if (quest.status !== 'open' || quest.settlementId !== citizen.settlementId) continue;
+    if (quest.kind === 'recover_supplies') {
+      if (claimRecovery(world, citizen, quest, store, travel)) return true;
+      continue;
+    }
     const monster = world.monsters.find(m => m.id === quest.targetId && m.alive);
     if (!monster || distance(storeTile(world, store), monster) > COMBAT.questRadius) continue;
     const goal = approach(world, citizen, monster);
@@ -302,12 +384,7 @@ export function claimAdventure(world, citizen, store, travel) {
     const dangerousHunt = monsters[monster.species].attack >= monsters.goblin.attack &&
       world.buildings.some(b => b.kind === 'guild' && b.settlementId === quest.settlementId);
     if ((quest.kind === 'clear_nest' || dangerousHunt) && available(store, 'food') >= 1) {
-      const escort = world.citizens.find(c => c !== citizen && c.alive && c.settlementId === citizen.settlementId &&
-        ageYears(world, c) >= ADULT_AGE && c.profession === 'adventurer' && c.action.kind === 'idle' && c.hp >= 70 &&
-        c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && !c.expeditionId &&
-        c.id !== world.nations.find(n => n.id === c.nationId)?.leaderId &&
-        !world.inTransit.some(item => item.carrierId === c.id) &&
-        !assignedAdventure(world, c) && !campaignFor(world, c) && approach(world, c, monster));
+      const escort = findEscort(world, citizen, c => approach(world, c, monster) !== null);
       if (escort) {
         quest.escortId = escort.id;
         store.total.food--;
@@ -343,6 +420,7 @@ function defeat(world, citizen, quest, monster) {
 
 export function continueAdventure(world, citizen, quest, store, origin, travel) {
   if (quest?.status !== 'claimed' || !store) return false;
+  if (quest.kind === 'recover_supplies') return continueRecovery(world, citizen, quest, store, origin, travel);
   const monster = world.monsters.find(m => m.id === quest.targetId);
   const position = tileOf(citizen);
   if (quest.escortId === citizen.id) {

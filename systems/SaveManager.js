@@ -100,6 +100,7 @@ function validate(world) {
   const stores = new Set(world.stockpiles.map(store => store.id));
   const targets = new Set(world.monsters.map(monster => monster.id));
   const techIds = new Set(technologies.map(technology => technology.id));
+  const dropIds = new Set(world.resourceNodes.filter(node => node.dropped).map(node => node.id));
   const accounts = new Set(world.researchStates.map(state => state.ownerId));
   if (!world.constructionSites.every(site => Object.hasOwn(buildings, site.kind) && validTile(site) &&
         settlements.has(site.settlementId) && integer(site.progress, 0) && site.delivered) ||
@@ -111,7 +112,11 @@ function validate(world) {
         (item.carrierId === null ? validTile(item) : people.get(item.carrierId)?.alive)) ||
       !world.monsters.every(m => Object.hasOwn(monsters, m.species) && validTile(m) && validTile(m.homeTile) &&
         typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
-      !world.quests.every(q => targets.has(q.targetId) && settlements.has(q.settlementId) &&
+      !world.quests.every(q => (q.kind === 'recover_supplies'
+        ? dropIds.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&
+          integer(q.pickupAmount, 1) && q.recoveredBy && Object.entries(q.recoveredBy).every(([id, quantity]) =>
+            [q.claimedBy, q.escortId].includes(id) && integer(quantity, 0, q.pickupAmount))))
+        : targets.has(q.targetId)) && settlements.has(q.settlementId) &&
         (q.claimedBy === null || people.has(q.claimedBy)) &&
         (q.escortId === undefined || (people.has(q.escortId) && q.escortId !== q.claimedBy)) &&
         (q.kind !== 'clear_nest' || (validTile(q.nestTile) && Object.hasOwn(monsters, q.species))) &&
