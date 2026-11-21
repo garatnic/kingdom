@@ -159,6 +159,19 @@ test('distant timber uses reachable deposits and conserves stock within storage 
   assert.equal(store.total.wood, 1);
   assert.equal(reachable.quantity, 2);
   assert.equal(blocked.quantity, 3);
+
+  // Seal the remaining deposit behind a new terrain barrier while the camera is near.
+  for (let y = 0; y < world.map.height; y++) {
+    world.map.terrain[y * world.map.width + origin.x + 4] = 'water';
+  }
+  world.map.navigationVersion++;
+  store.capacity += 10;
+  world.worldTimeTick += NEED_HOUR_TICKS;
+  updateCitizens(world, 12, origin);
+  world.worldTimeTick += NEED_HOUR_TICKS;
+  updateCitizens(world, 12, { x: 110, y: 110 });
+  assert.equal(store.total.wood, 1);
+  assert.equal(reachable.quantity, 2);
 });
 
 test('distant construction delivers one reservation and resumes without double charging', async () => {

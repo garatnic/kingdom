@@ -199,6 +199,22 @@ export function farmYield(world, farm, worker) {
   return Math.floor(FARM_YIELD * multiplier) + (farm.arcaneIrrigation ? TECH.arcaneIrrigationYield : 0) + aptitude;
 }
 
+const distantRoutes = new WeakMap();
+
+function distantConnectivity(world, store, origin) {
+  const { navigationVersion } = world.map;
+  let routes = distantRoutes.get(world);
+  if (routes?.version !== navigationVersion) {
+    routes = { version: navigationVersion, depots: new Map() };
+    distantRoutes.set(world, routes);
+  }
+  const cached = routes.depots.get(store.id);
+  if (cached?.x === origin.x && cached.y === origin.y) return cached.tiles;
+  const tiles = reachableTiles(world, origin);
+  routes.depots.set(store.id, { ...origin, tiles });
+  return tiles;
+}
+
 function updateDistantSettlements(world, camera, population) {
   if (!camera) return;
   const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -224,7 +240,7 @@ function updateDistantSettlements(world, camera, population) {
     const hungry = locals.filter(c => c.hunger >= NEEDS.eat).sort((a, b) => b.hunger - a.hunger || a.hp - b.hp);
     let connected;
     if (hungry.length && available(store, 'food') > 0) {
-      connected = reachableTiles(world, origin);
+      connected = distantConnectivity(world, store, origin);
       for (const citizen of hungry) {
         const { x, y } = citizen.lastKnownSafeTile;
         if (connected[y * world.map.width + x] === 1) eat(citizen, store);
@@ -234,7 +250,7 @@ function updateDistantSettlements(world, camera, population) {
     const ready = [];
     for (const citizen of locals) {
       if (resources.some(key => citizen.inventory[key] > 0 && storageRoom(store, key, foodTarget) > 0)) {
-        connected ??= reachableTiles(world, origin);
+        connected ??= distantConnectivity(world, store, origin);
         const { x, y } = citizen.lastKnownSafeTile;
         if (connected[y * world.map.width + x] === 1 && deposit(citizen, store, foodTarget)) {
           citizen.decisionAt = Math.max(citizen.decisionAt, world.worldTimeTick + DECISION_TICKS);
@@ -253,7 +269,7 @@ function updateDistantSettlements(world, camera, population) {
       const crew = ready.filter(c => jobs[c.profession]?.includes(resource) && !dispatched.has(c.id) && c.hp > COMBAT.retreatHp &&
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && !c.inventory[resource]);
       if (!crew.length) continue;
-      connected ??= reachableTiles(world, origin);
+      connected ??= distantConnectivity(world, store, origin);
       const accessible = tile => connected[tile.y * world.map.width + tile.x] === 1;
       if (!crew.some(c => accessible(c.lastKnownSafeTile))) continue;
       const sources = world.resourceNodes.filter(n => n.resource === resource && !n.dropped && n.quantity > 0 &&
@@ -276,7 +292,7 @@ function updateDistantSettlements(world, camera, population) {
         c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep &&
         !world.inTransit.some(item => item.carrierId === c.id));
       if (builders.length) {
-        connected ??= reachableTiles(world, origin);
+        connected ??= distantConnectivity(world, store, origin);
         const builder = builders.find(c => {
           const { x, y } = c.lastKnownSafeTile;
           return connected[y * world.map.width + x] === 1;
