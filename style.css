@@ -54,3 +54,7 @@ summary { min-height: 40px; cursor: pointer; }
 #overview { position: absolute; top: 10px; right: 10px; width: min(48%, 240px); height: auto;
   border: 2px solid #d1bf8c; border-radius: 6px; image-rendering: pixelated; cursor: crosshair; }
 #overview[hidden] { display: none; }
+
+.settlement-records { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.settlement-records caption { text-align: left; padding: 6px 0; }
+.settlement-records th, .settlement-records td { text-align: right; padding: 4px 2px; border-bottom: 1px solid var(--line); }

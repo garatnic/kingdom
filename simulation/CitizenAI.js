@@ -35,8 +35,10 @@ function travel(world, citizen, goal, kind, targetId = null) {
 }
 
 function interruptForFood(world, citizen) {
-  if (citizen.hunger < 95 || citizen.action.phase !== 'travel' ||
-      !['gather', 'haul', 'explore', 'survey', 'deliverMaterials', 'recoverMaterials', 'pickUpMaterials'].includes(citizen.action.kind)) return;
+  const { kind, phase } = citizen.action;
+  const interruptible = phase === 'perform' && kind === 'build' || phase === 'travel' &&
+    ['gather', 'haul', 'explore', 'survey', 'deliverMaterials', 'recoverMaterials', 'pickUpMaterials'].includes(kind);
+  if (citizen.hunger < 95 || !interruptible) return;
   const store = world.stockpiles.find(s => s.settlementId === citizen.settlementId);
   if (!store || available(store, 'food') < 1) return;
   const { x, y } = citizen;

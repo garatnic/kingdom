@@ -216,3 +216,22 @@ test('a starving resident turns back to available food without losing cargo', as
   assert.equal(citizen.inventory.wood, 2);
   await readSnapshot(JSON.stringify(await createSnapshot(world)));
 });
+
+test('a hungry builder leaves a stalled site to eat and preserves completed work', async () => {
+  const { planSite } = await import('../simulation/Construction.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const world = createWorld('builder-break');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const builder = world.citizens.find(c => c.profession === 'builder');
+  const site = planSite(world, home, 'farm', store.x + 4, store.y);
+  site.progress = 50;
+  const tile = { x: site.x - 1, y: site.y };
+  Object.assign(builder, { x: tile.x + 0.5, y: tile.y + 0.5, lastKnownSafeTile: tile, hunger: 94,
+    action: { kind: 'build', phase: 'perform', targetId: site.id } });
+  world.worldTimeTick = NEED_HOUR_TICKS;
+  updateCitizens(world, 12);
+  assert.equal(builder.action.kind, 'eat');
+  assert.equal(site.progress, 50);
+});

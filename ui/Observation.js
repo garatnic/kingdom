@@ -67,6 +67,7 @@ export function observation(getWorld, getCamera, focus) {
   const previousPages = [];
   const body = get('history-body');
   let previousRender = '';
+  let recordsOpenFor = null;
   let observedEvent = '';
   let eventAt = -Infinity;
   let currentEvent = null;
@@ -144,6 +145,31 @@ export function observation(getWorld, getCamera, focus) {
         const shortageDays = recent.filter(day => day.population > 0 &&
           day.food < day.population * FOOD_EMERGENCY_PER_PERSON).length;
         add(body, 'p', `直近${recent.length}日の備蓄不足 ${shortageDays}日 · 最終日 空腹 ${last.hungry}人 / 回収待ち資材 ${last.waitingCargo}`);
+        const open = recordsOpenFor === settlement.id;
+        const toggle = add(body, 'button', open ? '日別記録を閉じる' : '日別記録を開く');
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.onclick = () => {
+          recordsOpenFor = open ? null : settlement.id;
+          render(true);
+          document.querySelector('#history-body [aria-expanded]')?.focus();
+        };
+        if (open) {
+          const table = add(body, 'table', '');
+          table.className = 'settlement-records';
+          add(table, 'caption', '集落の日別記録');
+          const header = add(table.createTHead(), 'tr', '');
+          for (const label of ['日', '備蓄', '空腹', '回収待ち']) {
+            add(header, 'th', label).scope = 'col';
+          }
+          const rows = table.createTBody();
+          for (const day of settlement.dailyRecords.slice().reverse()) {
+            const row = rows.insertRow();
+            add(row, 'th', String(day.day)).scope = 'row';
+            add(row, 'td', String(day.food));
+            add(row, 'td', `${day.hungry}/${day.population}`);
+            add(row, 'td', String(day.waitingCargo));
+          }
+        }
       }
       if (site) {
         add(body, 'p', `建設中 ${facilityNames[site.kind] ?? site.kind} ${Math.floor(100 * site.progress / workTicks(site.kind))}%`);
@@ -383,6 +409,7 @@ export function observation(getWorld, getCamera, focus) {
       camera.y += (target.y - camera.y) * weight;
     },
     reset() {
+      recordsOpenFor = null;
       previousPages.length = 0;
       previousRender = '';
       observedEvent = '';
