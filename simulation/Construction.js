@@ -3,7 +3,7 @@ import { nextId } from './Identity.js';
 import { available, freeCapacity } from './Economy.js';
 import {
   CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON,
-  FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION
+  FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION, OUTER_DISTRICT_POPULATION, OUTER_DISTRICT_RADIUS, SETTLEMENT_RADIUS
 } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
@@ -183,8 +183,9 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   if (!kind) return null;
   const allowForest = population >= LARGE_SETTLEMENT_POPULATION && (kind === 'house' || kind === 'warehouse');
   const { width, height } = world.map;
+  const districtRadius = population >= OUTER_DISTRICT_POPULATION ? OUTER_DISTRICT_RADIUS : SETTLEMENT_RADIUS;
   let connected;
-  for (let radius = 1; radius <= 12; radius++) {
+  for (let radius = 1; radius <= districtRadius; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;

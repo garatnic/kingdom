@@ -1,4 +1,4 @@
-import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
+import { OUTER_DISTRICT_POPULATION, OUTER_DISTRICT_RADIUS, SETTLEMENT_RADIUS, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
@@ -147,7 +147,8 @@ function updateDistantSettlements(world, camera, population) {
     .map(c => c.action.targetId));
   for (const settlement of world.settlements) {
     const residents = population.get(settlement.id) ?? 0;
-    if (residents < 16 || distance(settlement, camera) <= FAR_DISTANCE + 12) continue;
+    const radius = residents >= OUTER_DISTRICT_POPULATION ? OUTER_DISTRICT_RADIUS : SETTLEMENT_RADIUS;
+    if (residents < 16 || distance(settlement, camera) <= FAR_DISTANCE + radius) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     if (!store) continue;
     const origin = storeTile(world, store);

@@ -181,3 +181,22 @@ test('mature settlements can extend housing into forest without building on depo
   assert.equal(world.map.terrain[site.y * world.map.width + site.x], 'forest');
   assert.ok(store.x < site.x || store.x >= site.x + site.width || store.y < site.y || store.y >= site.y + site.height);
 });
+
+
+test('large towns search outer districts when inner plots cannot fit a house', () => {
+  const world = createWorld('outer-district');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('mountain');
+  store.capacity = 550;
+  store.total.food = 400;
+  const x = settlement.x + 14;
+  const y = settlement.y;
+  for (let dy = 0; dy < 2; dy++) {
+    for (let dx = 0; dx < 2; dx++) world.map.terrain[(y + dy) * world.map.width + x + dx] = 'forest';
+  }
+  world.buildings.push({ ...world.buildings[0], kind: 'farm', x: settlement.x + 3, y: settlement.y + 2 });
+  const site = planSettlementConstruction(world, settlement, store, store, 100);
+  assert.equal(site.kind, 'house');
+  assert.deepEqual([site.x, site.y], [x, y]);
+});
