@@ -231,3 +231,27 @@ test('finished buildings extend borders without taking an existing foreign claim
   assert.equal(territoryAt(world, neutral), home.nationId);
   assert.equal(territoryAt(world, contested), foreign.nationId);
 });
+
+test('an arcane capital builds the national farm requirement even with a full food reserve', async () => {
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const world = createWorld('arcane-farm');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('grass');
+  store.capacity = 160;
+  store.total.food = 80;
+  const nation = { id: 'nation:1', capitalId: home.id, settlementIds: [home.id], policy: { primary: 'research' } };
+  home.nationId = nation.id;
+  world.nations.push(nation);
+  const state = ensureResearch(world, nation, ['verdant_1']);
+  state.civilization = 'arcane';
+  world.buildings[0].capacity = 24;
+  world.buildings.push(...[4, 7].map(offset => ({
+    id: 'building:' + world.idCounters.building++, kind: 'farm', settlementId: home.id, width: 2, height: 2, x: home.x + offset, y: home.y
+  })));
+  const guild = planSettlementConstruction(world, home, store, store, 20);
+  assert.equal(guild.kind, 'guild');
+  cancelSite(world, guild);
+  world.buildings.push({ ...guild, id: 'building:' + world.idCounters.building++ });
+  assert.equal(planSettlementConstruction(world, home, store, store, 20).kind, 'farm');
+});

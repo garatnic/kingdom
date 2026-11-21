@@ -6,8 +6,8 @@ import {
   FOOD_TARGET_PER_PERSON, LARGE_SETTLEMENT_POPULATION
 } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
-import { TECH } from '../data/technologies.js';
-import { unlocked } from './Research.js';
+import { TECH, civilizationTransitions } from '../data/technologies.js';
+import { getResearch, unlocked } from './Research.js';
 import { findPath, reachableTiles } from './path.js';
 import { buildingDistance, claimBuilding, territoryAt } from './Territory.js';
 
@@ -168,7 +168,8 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const hasCouples = world.citizens.some(c => c.alive && c.settlementId === settlement.id && c.partnerId);
   const growthReserve = population >= 16 && available(store, 'food') >= population * FOOD_BIRTH_PER_PERSON ? Math.max(2, Math.ceil(population / 12)) : 0;
   const needsHousing = housing < population + growthReserve || (hasCouples && housing === population);
-  const policy = world.nations.find(n => n.id === settlement.nationId)?.policy.primary;
+  const nation = world.nations.find(n => n.id === settlement.nationId);
+  const policy = nation?.policy?.primary;
   const facilityOrder = policy === 'defense'
     ? ['warehouse', 'barracks', 'smithy', 'guild'] : ['warehouse', 'smithy', 'guild', 'barracks'];
   const farmTarget = Math.max(TECH.farmEraFarms, Math.ceil(population / 8));
@@ -190,8 +191,16 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
     if (!urgent || urgent === existing.kind || committed) return existing;
     cancelSite(world, existing);
   }
-  const kind = urgent ?? facilityOrder.find(type => !local.some(b => b.kind === type) &&
-    Object.entries(buildings[type].cost).every(([resource, quantity]) => available(store, resource) >= quantity));
+  const canAfford = type => Object.entries(buildings[type].cost)
+    .every(([resource, quantity]) => available(store, resource) >= quantity);
+  const civilization = nation?.capitalId === settlement.id ? getResearch(world, nation)?.civilization : null;
+  const transition = civilizationTransitions[civilization];
+  const civicFacility = !urgent && transition && unlocked(world, settlement.id, transition.technology)
+    ? ['guild', 'farm'].find(type => transition.buildings[type] && canAfford(type) &&
+      world.buildings.filter(b => b.kind === type && nation.settlementIds.includes(b.settlementId)).length <
+        transition.buildings[type])
+    : undefined;
+  const kind = urgent ?? civicFacility ?? facilityOrder.find(type => !local.some(b => b.kind === type) && canAfford(type));
   if (!kind) return null;
   const allowForest = population >= LARGE_SETTLEMENT_POPULATION && (kind === 'house' || kind === 'warehouse');
   const { width, height } = world.map;
