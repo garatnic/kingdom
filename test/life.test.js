@@ -92,3 +92,23 @@ test('loot cannot consume space reserved for the settlement food target', () => 
   assert.equal(store.total.food, 48);
   assert.equal(freeCapacity(store), 0);
 });
+
+test('urban farmers choose the nearby ripe field over an older distant field', async () => {
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const world = createWorld('urban-farm');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  world.map.terrain.fill('grass');
+  while (world.citizens.length < 32) world.citizens.push(createAdult(world, 'human', store, home));
+  for (const person of world.citizens) person.decisionAt = 1000;
+  const farmer = world.citizens.find(c => c.profession === 'farmer');
+  Object.assign(farmer, { x: store.x + 0.5, y: store.y + 0.5, lastKnownSafeTile: { x: store.x, y: store.y }, decisionAt: 0 });
+  for (const [index, offset] of [14, 4].entries()) {
+    world.buildings.push({ id: 'building:' + (index + 2), kind: 'farm', settlementId: home.id,
+      x: store.x + offset, y: store.y, width: 2, height: 2, harvestAt: 0 });
+  }
+  updateCitizens(world, 12);
+  assert.equal(farmer.action.kind, 'farm');
+  assert.equal(farmer.action.targetId, 'building:3');
+});

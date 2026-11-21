@@ -1,4 +1,4 @@
-import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
+import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, LARGE_SETTLEMENT_POPULATION, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
@@ -16,6 +16,7 @@ import { unlocked } from './Research.js';
 import { assignedAdventure, claimAdventure, continueAdventure, isQuestCargo } from './Adventure.js';
 import { campaignFor, invasionOrder } from './War.js';
 import { recordDeath } from './Population.js';
+import { buildingDistance, tileDistance } from './Territory.js';
 
 const tileOf = citizen => ({ x: Math.floor(citizen.x), y: Math.floor(citizen.y) });
 const idle = tick => ({ kind: 'idle', phase: 'plan', targetId: null, startedAt: tick, progress: 0 });
@@ -103,18 +104,24 @@ function chooseRoute(world, citizen, store, population) {
   if (store && citizen.profession === 'builder' && constructionRoute(world, citizen, store, population)) return;
   if (store && freeCapacity(store) > 0) {
     if (citizen.profession === 'builder') {
-      const dropped = world.resourceNodes.find(node => node.dropped && node.quantity > 0 &&
-        storageRoom(store, node.resource, foodTarget) > 0 &&
-        !isQuestCargo(world, node));
-      if (dropped && travel(world, citizen, dropped, 'gather', dropped.id)) return;
+      const origin = tileOf(citizen);
+      const drops = world.resourceNodes.filter(node => node.dropped && node.quantity > 0 &&
+        storageRoom(store, node.resource, foodTarget) > 0 && !isQuestCargo(world, node));
+      drops.sort((a, b) => tileDistance(origin, a) - tileDistance(origin, b));
+      if (drops.some(node => travel(world, citizen, node, 'gather', node.id))) return;
     }
     if (citizen.profession === 'farmer' && available(store, 'food') < foodTarget && storageRoom(store, 'food', foodTarget) > 0) {
       const assigned = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
         .map(c => c.action.targetId));
-      for (const farm of world.buildings) {
-        if (farm.kind !== 'farm' || farm.settlementId !== citizen.settlementId || assigned.has(farm.id) ||
-            !((farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick)) continue;
-        const goal = workTile(world, tileOf(citizen), farm);
+      const origin = tileOf(citizen);
+      const ripe = world.buildings.filter(farm => farm.kind === 'farm' &&
+        farm.settlementId === citizen.settlementId && !assigned.has(farm.id) &&
+        (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick);
+      if (population >= LARGE_SETTLEMENT_POPULATION) {
+        ripe.sort((a, b) => buildingDistance(origin, a) - buildingDistance(origin, b));
+      }
+      for (const farm of ripe) {
+        const goal = workTile(world, origin, farm);
         if (goal && travel(world, citizen, goal, 'farm', farm.id)) return;
       }
     }
