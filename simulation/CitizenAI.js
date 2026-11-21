@@ -36,7 +36,7 @@ function travel(world, citizen, goal, kind, targetId = null) {
 
 function interruptForFood(world, citizen) {
   if (citizen.hunger < 95 || citizen.action.phase !== 'travel' ||
-      !['gather', 'haul', 'explore', 'survey'].includes(citizen.action.kind)) return;
+      !['gather', 'haul', 'explore', 'survey', 'deliverMaterials', 'recoverMaterials', 'pickUpMaterials'].includes(citizen.action.kind)) return;
   const store = world.stockpiles.find(s => s.settlementId === citizen.settlementId);
   if (!store || available(store, 'food') < 1) return;
   const { x, y } = citizen;
@@ -53,9 +53,13 @@ function constructionRoute(world, citizen, store, population) {
     const goal = site && workTile(world, tileOf(citizen), site);
     return goal && travel(world, citizen, goal, 'deliverMaterials', shipment.id);
   }
-  const abandoned = world.inTransit.find(item => item.carrierId === null &&
+  const originTile = tileOf(citizen);
+  const claimed = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'recoverMaterials')
+    .map(c => c.action.targetId));
+  const abandoned = world.inTransit.filter(item => item.carrierId === null && !claimed.has(item.id) &&
     world.constructionSites.some(site => site.id === item.destinationId && site.settlementId === citizen.settlementId));
-  if (abandoned && travel(world, citizen, abandoned, 'recoverMaterials', abandoned.id)) return true;
+  abandoned.sort((a, b) => tileDistance(originTile, a) - tileDistance(originTile, b));
+  if (abandoned.some(item => travel(world, citizen, item, 'recoverMaterials', item.id))) return true;
   const settlement = world.settlements.find(s => s.id === citizen.settlementId);
   const site = planSettlementConstruction(world, settlement, store, origin, population);
   if (!site) return false;

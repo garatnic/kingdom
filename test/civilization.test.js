@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
-import { ensureResearch, updateResearch } from '../simulation/Research.js';
+import { civilizationProgress, ensureResearch, updateResearch } from '../simulation/Research.js';
 import { nextId } from '../simulation/Identity.js';
 import { NEED_HOUR_TICKS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 
@@ -42,7 +42,10 @@ test('civilization advances per nation, resets interrupted streaks and unlocks l
   };
   advance(9);
   assert.equal(state.civilization, 'agrarian');
+  assert.deepEqual(civilizationProgress(world, first, state), { target: 'iron', days: 9, neededDays: 10, unmet: [] });
   store.reserved.iron = 4;
+  assert.deepEqual(civilizationProgress(world, first, state).unmet,
+    [{ kind: 'resource', id: 'iron', current: 0, needed: 2 }]);
   advance(1);
   assert.equal(state.civilizationDays, 0);
   store.reserved.iron = 0;

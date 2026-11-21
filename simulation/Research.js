@@ -55,17 +55,40 @@ function eligible(technology, context, state) {
     hasResources(context, technology.resources);
 }
 
+function civilizationRequirements(world, owner, state, context, rule) {
+  const requirements = [
+    { kind: 'technology', id: rule.technology, current: Number(state.unlockedIds.includes(rule.technology)), needed: 1 },
+    { kind: 'population', current: context.citizens.length, needed: rule.population }
+  ];
+  if (rule.requiresNation) requirements.push({
+    kind: 'nation', current: Number(world.nations.some(nation => nation.id === owner.id)), needed: 1
+  });
+  for (const [id, needed] of Object.entries(rule.buildings)) {
+    requirements.push({ kind: 'building', id, needed, current: context.buildings.filter(b => b.kind === id).length });
+  }
+  const stock = { ...rule.resources };
+  if (rule.foodPerResident) stock.food = context.citizens.length * rule.foodPerResident;
+  for (const [id, needed] of Object.entries(stock)) {
+    requirements.push({ kind: 'resource', id, needed,
+      current: context.stores.reduce((total, store) => total + available(store, id), 0) });
+  }
+  return requirements;
+}
+
+export function civilizationProgress(world, owner, state) {
+  const rule = civilizationTransitions[state.civilization];
+  if (!rule || owner.fallenAt !== undefined) return null;
+  const days = state.civilization === 'primitive' || state.civilizationTarget === rule.to ? state.civilizationDays : 0;
+  return { target: rule.to, days, neededDays: rule.days,
+    unmet: civilizationRequirements(world, owner, state, localContext(world, owner), rule)
+      .filter(condition => condition.current < condition.needed) };
+}
+
 function advanceCivilization(world, owner, state, context) {
   const rule = civilizationTransitions[state.civilization];
   if (!rule) return;
-  const requirements = { ...rule.resources };
-  if (rule.foodPerResident) requirements.food = context.citizens.length * rule.foodPerResident;
-  const qualifies = state.unlockedIds.includes(rule.technology) &&
-    context.citizens.length >= rule.population &&
-    (!rule.requiresNation || world.nations.some(nation => nation.id === owner.id)) &&
-    Object.entries(rule.buildings).every(([kind, count]) =>
-      context.buildings.filter(building => building.kind === kind).length >= count) &&
-    hasResources(context, requirements);
+  const qualifies = civilizationRequirements(world, owner, state, context, rule)
+    .every(requirement => requirement.current >= requirement.needed);
   const days = state.civilization === 'primitive' || state.civilizationTarget === rule.to ? state.civilizationDays : 0;
   state.civilizationTarget = rule.to;
   state.civilizationDays = qualifies ? days + 1 : 0;

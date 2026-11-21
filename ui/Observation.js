@@ -3,10 +3,11 @@ import { available, freeCapacity } from '../simulation/Economy.js';
 import { citizenRaces, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
 import { adventurerRanks, gear } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
-import { civilizationNames } from '../data/technologies.js';
+import { civilizationNames, technologies } from '../data/technologies.js';
 import { calendar } from '../engine/GameLoop.js';
 import { relationLabel } from '../simulation/Nations.js';
 import { activeNations, truceBetween } from '../simulation/War.js';
+import { civilizationProgress, getResearch, researchOwner } from '../simulation/Research.js';
 import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor } from '../systems/History.js';
 
@@ -28,6 +29,9 @@ const actions = {
 const facilityNames = { house: '住宅', farm: '畑', warehouse: '倉庫', smithy: '鍛冶場', barracks: '兵舎', guild: 'ギルド' };
 const settlementName = settlement => '集落 ' + settlement.id.split(':').at(-1);
 const resources = { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' };
+
+const techNames = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法',
+  steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅', restoration_1: '治癒術', verdant_1: '豊穣魔法' };
 
 export function eventLocation(world, event) {
   if (Number.isFinite(event.x) && Number.isFinite(event.y)) return { x: event.x + 0.5, y: event.y + 0.5 };
@@ -95,6 +99,7 @@ export function observation(getWorld, getCamera, focus) {
       const site = world.constructionSites.find(s => s.settlementId === settlement.id);
       add(body, 'h3', settlementName(settlement));
       add(body, 'p', `人口 ${residents.length}人 · 住宅 ${housed}/${beds}床`);
+      showResearch(world, researchOwner(world, settlement));
       add(body, 'p', Object.entries(jobs).map(([role, label]) =>
         `${label} ${residents.filter(c => c.profession === role).length}`).join(' / '));
       if (store) {
@@ -183,10 +188,7 @@ export function observation(getWorld, getCamera, focus) {
       else if (nation.fallenAt === undefined) add(body, 'p', '指導者 空席');
       const priorities = { food: '農業', housing: '住宅', defense: '防衛', research: '研究', exploration: '探索' };
       add(body, 'p', `主要方針 ${priorities[nation.policy.primary] ?? '選択中'}`);
-      const state = world.researchStates.find(item => item.ownerId === nation.id);
-      const tech = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法', steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅', restoration_1: '治癒術', verdant_1: '豊穣魔法' };
-      if (state) add(body, 'p', civilizationNames[state.civilization] ?? state.civilization);
-      if (state) add(body, 'p', `解禁研究 ${state.unlockedIds.map(id => tech[id]).join('・') || 'なし'}`);
+      showResearch(world, nation);
       const rivals = nation.fallenAt === undefined ? activeNations(world).filter(other => other.id !== nation.id) : [];
       if (rivals.length) {
         add(body, 'h4', '外交');
@@ -205,6 +207,24 @@ export function observation(getWorld, getCamera, focus) {
       }
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);
     } else add(body, 'p', '対象がまだありません。');
+  }
+
+  function showResearch(world, owner) {
+    const state = getResearch(world, owner);
+    if (!state) return;
+    add(body, 'p', civilizationNames[state.civilization] ?? state.civilization);
+    add(body, 'p', `解禁研究 ${state.unlockedIds.map(id => techNames[id] ?? id).join('・') || 'なし'}`);
+    if (owner.fallenAt !== undefined) return;
+    const active = technologies.find(t => t.id === state.activeTechId);
+    if (active) add(body, 'p', `研究中 ${techNames[active.id]} ${state.progressById[active.id] ?? 0}/${active.cost}`);
+    const progress = civilizationProgress(world, owner, state);
+    if (!progress) return;
+    add(body, 'p', `次の時代 ${civilizationNames[progress.target]} · 条件を満たした日数 ${progress.days}/${progress.neededDays}`);
+    const labels = { population: '人口', nation: '国家の成立' };
+    for (const condition of progress.unmet) {
+      const label = labels[condition.kind] ?? techNames[condition.id] ?? facilityNames[condition.id] ?? resources[condition.id];
+      add(body, 'p', `進化条件 ${label} ${condition.current}/${condition.needed}`);
+    }
   }
 
   function showEvent(world, event) {
