@@ -499,7 +499,7 @@ test('an alliance survives reload, supplies a besieged partner and dissolves if 
 
 test('a threatened trade waits for its two escorts to arrive and return after reload', async () => {
   const { updateTrade } = await import('../simulation/Trade.js');
-  const { claimAdventure, continueAdventure, spawnMonster } = await import('../simulation/Adventure.js');
+  const { claimAdventure, continueAdventure, spawnMonster, updateAdventureWorld } = await import('../simulation/Adventure.js');
   const { findPath } = await import('../simulation/path.js');
   const { world, invader, defender, homeStore } = twoNations();
   const home = world.settlements[0];
@@ -524,6 +524,18 @@ test('a threatened trade waits for its two escorts to arrive and return after re
   saved.worldTimeTick = saved.settlements[0].trade.arrivalDay * TIME_TICKS_PER_DAY;
   updateTrade(saved);
   assert.equal(to.total.wood, 0);
+  const enemy = saved.monsters.find(monster => monster.species === 'goblin');
+  for (const id of [persisted.escortId, persisted.claimedBy]) {
+    const citizen = saved.citizens.find(c => c.id === id);
+    citizen.lastKnownSafeTile = { x: enemy.x, y: enemy.y };
+  }
+  const health = enemy.hp;
+  updateAdventureWorld(saved, 1);
+  assert.ok(enemy.hp < health);
+  const afterClash = enemy.hp;
+  updateAdventureWorld(saved, 1);
+  assert.equal(enemy.hp, afterClash);
+  assert.equal(saved.events.filter(e => e.type === 'tradeEscortClash').length, 1);
   for (let i = 0; i < 4; i++) {
     for (const id of [persisted.escortId, persisted.claimedBy]) {
       const citizen = saved.citizens.find(c => c.id === id);

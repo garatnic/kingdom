@@ -442,6 +442,50 @@ function huntPrey(world) {
   }
 }
 
+function resolveEscortEncounter(world, quest, lead) {
+  const partner = world.citizens.find(citizen => citizen.id === quest.escortId && citizen.alive);
+  if (!partner) return;
+  const team = [lead, partner];
+  const enemy = world.monsters.find(monster => monster.alive && world.worldTimeTick >= monster.attackAt &&
+    monsters[monster.species].attack >= monsters.goblin.attack &&
+    team.some(member => distance(tileOf(member), monster) <= COMBAT.rangedDistance));
+  if (!enemy) return;
+  const participants = team.filter(member => distance(tileOf(member), enemy) <= COMBAT.rangedDistance);
+  const target = participants[0];
+  const config = monsters[enemy.species];
+  const attack = participants.reduce((power, member) => power + COMBAT.attack + member.skills.combat, 0);
+  enemy.attackAt = world.worldTimeTick + COMBAT.interval;
+  enemy.hp = Math.max(0, enemy.hp - damage(world, attack, config.defense));
+  emitOnce(world, `${quest.id}/${enemy.id}`, 'tradeEscortClash', {
+    questId: quest.id, settlementId: quest.settlementId, actorIds: participants.map(member => member.id),
+    monsterId: enemy.id, x: enemy.x, y: enemy.y
+  });
+  if (!enemy.hp) {
+    enemy.alive = false;
+    enemy.diedAt = world.worldTimeTick;
+    for (const member of participants) trainCombat(world, member, quest, config.xp);
+    emitOnce(world, `${quest.id}/${enemy.id}`, 'monsterDefeated', {
+      questId: quest.id, settlementId: quest.settlementId, actorIds: participants.map(member => member.id),
+      monsterId: enemy.id, x: enemy.x, y: enemy.y
+    });
+    return;
+  }
+
+  target.hp = Math.max(0, target.hp - damage(world, config.attack, COMBAT.defense));
+  if (!target.hp) recordDeath(world, target, 'combat');
+  if (target.hp <= COMBAT.retreatHp) {
+    quest.retreated = true;
+    quest.stage = 'return';
+    for (const member of team) {
+      const tile = tileOf(member);
+      member.x = tile.x + 0.5;
+      member.y = tile.y + 0.5;
+      member.action = { kind: 'idle', phase: 'plan', targetId: null, startedAt: world.worldTimeTick, progress: 0 };
+      member.decisionAt = world.worldTimeTick;
+    }
+  }
+}
+
 export function updateAdventureWorld(world, ticks) {
   const now = world.worldTimeTick;
   const first = world.nextMonsterSpawnTick === undefined;
@@ -486,6 +530,8 @@ export function updateAdventureWorld(world, ticks) {
       citizen.decisionAt = now;
     } else if (now >= quest.expiresAt + TIME_TICKS_PER_DAY) {
       quest.status = 'failed';
+    } else if (quest.kind === 'escort_trade' && quest.stage === 'survey') {
+      resolveEscortEncounter(world, quest, citizen);
     }
   }
   moveMonsters(world);
