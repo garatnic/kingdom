@@ -139,11 +139,17 @@ test('a nest expedition shares combat, clears all nest members, and restores mid
   first.hasNest = second.hasNest = true;
   second.homeTile = { ...first.homeTile };
   for (const person of world.citizens) person.lastKnownSafeTile = { ...origin };
-  world.citizens.find(c => c !== leader).profession = 'adventurer';
   const quest = issueQuest(world, home, first);
   assert.equal(quest.kind, 'clear_nest');
   assert.equal(issueQuest(world, home, second), null);
   const travel = () => true;
+  for (const person of world.citizens) {
+    if (person !== leader && person.profession === 'adventurer') person.profession = 'farmer';
+  }
+  const provisions = store.total.food;
+  assert.equal(claimAdventure(world, leader, store, () => assert.fail('Raid must wait for an escort')), false);
+  assert.equal(store.total.food, provisions);
+  world.citizens.find(c => c !== leader).profession = 'adventurer';
   assert.ok(claimAdventure(world, leader, store, travel));
   const escort = world.citizens.find(c => c.id === quest.escortId);
   assert.ok(escort);

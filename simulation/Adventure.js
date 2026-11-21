@@ -211,7 +211,7 @@ function mountainSurveyTarget(world, origin, surveys) {
     }
   }
   if (!candidates.length) return null;
-  const reachable = reachableTiles(world, origin, undefined, candidates);
+  const reachable = reachableTiles(world, origin, undefined, candidates.map(tile => tile.y * world.map.width + tile.x));
   candidates.sort((a, b) => distance(origin, a) - distance(origin, b));
   return candidates.find(tile => reachable[tile.y * world.map.width + tile.x] === 1);
 }
@@ -494,12 +494,18 @@ export function updateAdventureWorld(world, ticks) {
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
     if (offerRecovery(world, settlement, store, origin)) slots--;
     if (slots === 0) continue;
-    if (offerSurvey(world, settlement, store, origin, slots === 1)) slots--;
+    const imminentThreat = world.monsters.some(m => m.alive &&
+      monsters[m.species].attack >= monsters.goblin.attack && distance(m, settlement) <= 8);
+    if ((!imminentThreat || slots > 1) && offerSurvey(world, settlement, store, origin, slots === 1)) slots--;
     const nearby = world.monsters.filter(m => m.alive && distance(m, settlement) <= COMBAT.questRadius);
     if (!nearby.length) continue;
     const connected = reachableTiles(world, origin, undefined, nearby.map(m => m.y * world.map.width + m.x));
     const enemies = nearby.filter(m => connected[m.y * world.map.width + m.x] === 1)
-      .sort((a, b) => distance(a, settlement) - distance(b, settlement));
+      .sort((a, b) => {
+        const priority = monster => Number(monsters[monster.species].attack >= monsters.goblin.attack &&
+          distance(monster, settlement) <= 8);
+        return priority(b) - priority(a) || distance(a, settlement) - distance(b, settlement);
+      });
     const raidsAvailable = world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) &&
       world.citizens.filter(c => c.alive && c.settlementId === settlement.id).length >= 16;
     for (const enemy of enemies) {
@@ -543,6 +549,12 @@ export function claimAdventure(world, citizen, store, travel) {
     }
     const monster = world.monsters.find(m => m.id === quest.targetId && m.alive);
     if (!monster || distance(storeTile(world, store), monster) > COMBAT.questRadius) continue;
+    const raid = quest.kind === 'clear_nest';
+    const dangerousHunt = monsters[monster.species].attack >= monsters.goblin.attack &&
+      world.buildings.some(b => b.kind === 'guild' && b.settlementId === quest.settlementId);
+    const escort = (raid || dangerousHunt) && available(store, 'food') >= 2
+      ? findEscort(world, citizen, candidate => approach(world, candidate, monster) !== null) : undefined;
+    if (raid && !escort) continue;
     const goal = approach(world, citizen, monster);
     if (!goal || !travel(goal, 'adventure', quest.id)) continue;
     commissionGear(world, citizen, store);
@@ -553,16 +565,11 @@ export function claimAdventure(world, citizen, store, travel) {
     quest.stage = 'fight';
     quest.strikeAt = null;
     quest.provision = 1;
-    const dangerousHunt = monsters[monster.species].attack >= monsters.goblin.attack &&
-      world.buildings.some(b => b.kind === 'guild' && b.settlementId === quest.settlementId);
-    if ((quest.kind === 'clear_nest' || dangerousHunt) && available(store, 'food') >= 1) {
-      const escort = findEscort(world, citizen, c => approach(world, c, monster) !== null);
-      if (escort) {
-        quest.escortId = escort.id;
-        store.total.food--;
-        escort.inventory.food++;
-        emit(world, 'cooperativeExpedition', quest, tileOf(citizen), { actorIds: [citizen.id, escort.id] });
-      }
+    if (escort) {
+      quest.escortId = escort.id;
+      store.total.food--;
+      escort.inventory.food++;
+      emit(world, 'cooperativeExpedition', quest, tileOf(citizen), { actorIds: [citizen.id, escort.id] });
     }
     emit(world, 'adventureDeparted', quest, tileOf(citizen), { citizenId: citizen.id });
     return true;
@@ -621,7 +628,8 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
   const range = spell ? TECH.spellRange : COMBAT.rangedDistance;
   if (quest.stage === 'fight') {
     const cutoff = COMBAT.retreatHp - (COMBAT.retreatHp - COMBAT.braveRetreatHp) * citizen.traits.bravery;
-    if (citizen.hp <= cutoff || citizen.fear >= COMBAT.fearRetreat || citizen.hunger >= NEEDS.eat ||
+    const unsupportedRaid = quest.kind === 'clear_nest' && quest.escortId && (!escort || quest.escortRetreated);
+    if (unsupportedRaid || citizen.hp <= cutoff || citizen.fear >= COMBAT.fearRetreat || citizen.hunger >= NEEDS.eat ||
         !monster?.alive || distance(origin, monster) > COMBAT.questRadius) {
       quest.stage = 'return';
       quest.retreated = true;
