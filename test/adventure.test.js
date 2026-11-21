@@ -357,3 +357,23 @@ test('a new local threat can replace an unclaimed survey and a dead target frees
   updateAdventureWorld(world, 1);
   assert.equal(response.status, 'expired');
 });
+
+test('a guild with two adults promotes an open notice after a monster forms a nest', () => {
+  const world = createWorld('new-nest-notice');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  world.nextMonsterSpawnTick = Infinity;
+  const target = spawnMonster(world, 'goblin', { x: store.x + 8, y: store.y });
+  target.moveAt = Infinity;
+  const quest = issueQuest(world, home, target);
+  assert.equal(quest.kind, 'clear_monsters');
+  target.hasNest = true;
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'guild', settlementId: home.id,
+    x: store.x + 4, y: store.y, width: 1, height: 1 });
+  world.citizens[0].profession = world.citizens[1].profession = 'adventurer';
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 1);
+  assert.equal(quest.kind, 'clear_nest');
+  assert.deepEqual(quest.nestTile, target.homeTile);
+});

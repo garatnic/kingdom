@@ -143,6 +143,14 @@ function nestQuestFor(world, monster) {
     q.species === monster.species && distance(q.nestTile, monster.homeTile) === 0);
 }
 
+function promoteNestQuest(world, quest, target) {
+  if (!target.hasNest || world.quests.some(other => other !== quest && activeQuest(other) &&
+      world.monsters.some(m => m.id === other.targetId && sameNest(m, target)))) return false;
+  Object.assign(quest, { kind: 'clear_nest', species: target.species, nestTile: { ...target.homeTile },
+    expiresAt: world.worldTimeTick + COMBAT.questDuration * 2, rewardFood: COMBAT.rewardFood * 2 });
+  return true;
+}
+
 export function issueQuest(world, settlement, target, allowNest = true) {
   if (!target?.alive || nestQuestFor(world, target) ||
       world.quests.some(q => q.targetId === target.id && activeQuest(q))) {
@@ -151,11 +159,7 @@ export function issueQuest(world, settlement, target, allowNest = true) {
   const quest = { id: nextId(world, 'quest'), kind: 'clear_monsters', settlementId: settlement.id,
     targetId: target.id, rewardFood: COMBAT.rewardFood, status: 'open', claimedBy: null,
     createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + COMBAT.questDuration, lootIds: [] };
-  if (allowNest && target.hasNest && !world.quests.some(q => activeQuest(q) &&
-      world.monsters.some(m => m.id === q.targetId && sameNest(m, target)))) {
-    Object.assign(quest, { kind: 'clear_nest', species: target.species, nestTile: { ...target.homeTile },
-      expiresAt: world.worldTimeTick + COMBAT.questDuration * 2, rewardFood: COMBAT.rewardFood * 2 });
-  }
+  if (allowNest) promoteNestQuest(world, quest, target);
   world.quests.push(quest);
   return quest;
 }
@@ -555,8 +559,19 @@ export function updateAdventureWorld(world, ticks) {
       if (openRecovery && !world.resourceNodes.some(node => node.id === openRecovery.targetId &&
           node.resource === 'food' && node.quantity >= 4)) openRecovery.status = 'expired';
     }
-    let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
+    const raidsAvailable = store && !settlement.foodWarning && available(store, 'food') >= 2 &&
+      world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) &&
+      world.citizens.filter(c => c.alive && c.settlementId === settlement.id &&
+        c.profession === 'adventurer' && ageYears(world, c) >= ADULT_AGE).length >= 2;
+    if (raidsAvailable) {
+      for (const quest of world.quests) {
+        if (quest.settlementId !== settlement.id || quest.kind !== 'clear_monsters' || quest.status !== 'open') continue;
+        const target = world.monsters.find(monster => monster.id === quest.targetId && monster.alive);
+        if (target) promoteNestQuest(world, quest, target);
+      }
+    }
+    let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length;
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
     const imminentThreat = world.monsters.some(m => m.alive &&
       monsters[m.species].attack >= monsters.goblin.attack && distance(m, settlement) <= 8);
@@ -569,6 +584,17 @@ export function updateAdventureWorld(world, ticks) {
         findPath(world, origin, m) !== null);
       if (survey && unassigned && issueQuest(world, settlement, unassigned, false)) survey.status = 'expired';
     }
+    if (slots <= 0 && !imminentThreat && raidsAvailable && !world.quests.some(q =>
+        q.settlementId === settlement.id && q.kind === 'clear_nest' && activeQuest(q))) {
+      const replaceable = world.quests.find(q => q.settlementId === settlement.id && q.status === 'open' &&
+        q.kind === 'clear_monsters');
+      const target = replaceable && world.monsters.find(monster => monster.alive && monster.hasNest &&
+        distance(origin, monster) <= COMBAT.questRadius &&
+        !world.quests.some(q => activeQuest(q) &&
+          world.monsters.some(m => m.id === q.targetId && sameNest(m, monster))) &&
+        findPath(world, origin, monster) !== null);
+      if (target && issueQuest(world, settlement, target)) replaceable.status = 'expired';
+    }
     if (slots <= 0) continue;
     if (offerRecovery(world, settlement, store, origin)) slots--;
     if (slots === 0) continue;
@@ -580,10 +606,10 @@ export function updateAdventureWorld(world, ticks) {
       .sort((a, b) => {
         const priority = monster => Number(monsters[monster.species].attack >= monsters.goblin.attack &&
           distance(monster, settlement) <= 8);
-        return priority(b) - priority(a) || distance(a, settlement) - distance(b, settlement);
+        return priority(b) - priority(a) ||
+          (raidsAvailable ? Number(Boolean(b.hasNest)) - Number(Boolean(a.hasNest)) : 0) ||
+          distance(a, settlement) - distance(b, settlement);
       });
-    const raidsAvailable = world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) &&
-      world.citizens.filter(c => c.alive && c.settlementId === settlement.id).length >= 16;
     for (const enemy of enemies) {
       if (slots <= 0) break;
       if (issueQuest(world, settlement, enemy, raidsAvailable)) slots--;
