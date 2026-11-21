@@ -9,6 +9,7 @@ import { updateNations } from '../simulation/Nations.js';
 import { updateResearch } from '../simulation/Research.js';
 import { produceMiningTools } from '../simulation/Industry.js';
 import { updateFoodAid } from '../simulation/FoodAid.js';
+import { updateAlliances } from '../simulation/Diplomacy.js';
 import { updateTrade } from '../simulation/Trade.js';
 import { recordSettlements } from '../simulation/SettlementRecords.js';
 import { updatePopulation } from '../simulation/Population.js';
@@ -31,6 +32,7 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
       if (world.worldTimeTick % TIME_TICKS_PER_DAY === 0) {
         produceMiningTools(world);
         recordSettlements(world);
+        updateAlliances(world);
         updateFoodAid(world);
         updateTrade(world);
         trimHistory(world);

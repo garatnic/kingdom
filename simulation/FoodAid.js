@@ -1,5 +1,5 @@
 import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
-import { friendlyNations } from './Diplomacy.js';
+import { alliedNations, friendlyNations } from './Diplomacy.js';
 import { buildings } from '../data/buildings.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
@@ -33,7 +33,8 @@ export function updateFoodAid(world) {
     const residents = population.get(destination.id) ?? 0;
     const partiesValid = source.nationId === aid.nationId &&
       destination.nationId === (aid.recipientNationId ?? aid.nationId) &&
-      (!aid.recipientNationId || friendly(aid.nationId, aid.recipientNationId));
+      (!aid.recipientNationId || friendly(aid.nationId, aid.recipientNationId)) &&
+      (!aid.allianceRelief || alliedNations(world, nations.get(aid.nationId), nations.get(aid.recipientNationId)));
     if (!aid.returning && partiesValid && residents && route(from, to)) {
       const delivered = Math.min(aid[quantityKey], storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (delivered) {
@@ -43,7 +44,8 @@ export function updateFoodAid(world) {
         emitOnce(world, `${destination.id}/${field}/${day}`, food ? (aid.recipientNationId ? 'foreignFoodAidDelivered' : 'foodAidDelivered') : 'materialAidDelivered', {
           settlementId: destination.id, nationId: destination.nationId, sourceSettlementId: source.id,
           x: destination.x, y: destination.y, ...(food ? { food: delivered } : { resource, quantity: delivered }),
-          ...(aid.recipientNationId ? { nationIds: [aid.nationId, aid.recipientNationId] } : {})
+          ...(aid.recipientNationId ? { nationIds: [aid.nationId, aid.recipientNationId] } : {}),
+          ...(aid.allianceRelief ? { allianceRelief: true } : {})
         });
       }
     }
@@ -65,7 +67,8 @@ export function updateFoodAid(world) {
     settle(destination, 'materialAid', destination.materialAid?.resource, 'quantity');
   }
 
-  const recipients = world.settlements.filter(settlement => settlement.foodWarning &&
+  const defended = new Set((world.campaigns ?? []).filter(c => c.status === 'siege').map(c => c.settlementId));
+  const recipients = world.settlements.filter(settlement => (settlement.foodWarning || defended.has(settlement.id)) &&
     settlement.nationId && population.get(settlement.id) && !settlement.foodAid);
   const foodPerResident = settlement => available(stores.get(settlement.id), 'food') / population.get(settlement.id);
   recipients.sort((a, b) => foodPerResident(a) - foodPerResident(b));
@@ -75,9 +78,12 @@ export function updateFoodAid(world) {
     const needed = Math.min(residents * FOOD_BIRTH_PER_PERSON - available(to, 'food'),
       storageRoom(to, 'food', residents * FOOD_TARGET_PER_PERSON));
     if (needed <= 0) continue;
+    const allies = source => alliedNations(world, nations.get(source.nationId), nations.get(destination.nationId));
     const sources = world.settlements.filter(source => source !== destination && !source.foodWarning &&
-      (source.nationId === destination.nationId || friendly(source.nationId, destination.nationId)));
-    sources.sort((a, b) => Number(b.nationId === destination.nationId) - Number(a.nationId === destination.nationId));
+      (destination.foodWarning && source.nationId === destination.nationId ||
+        allies(source) || destination.foodWarning && friendly(source.nationId, destination.nationId)));
+    const priority = source => source.nationId === destination.nationId ? 2 : allies(source) ? 1 : 0;
+    sources.sort((a, b) => priority(b) - priority(a));
     for (const source of sources) {
       const adultsAndChildren = population.get(source.id);
       if (!adultsAndChildren) continue;
@@ -91,6 +97,7 @@ export function updateFoodAid(world) {
       destination.foodAid = { sourceId: source.id, nationId: source.nationId,
         food, travelDays, arrivalDay: day + travelDays, returning: false };
       if (source.nationId !== destination.nationId) destination.foodAid.recipientNationId = destination.nationId;
+      if (!destination.foodWarning) destination.foodAid.allianceRelief = true;
       break;
     }
   }

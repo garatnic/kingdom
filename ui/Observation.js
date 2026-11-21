@@ -1,3 +1,4 @@
+import { alliedNations } from '../simulation/Diplomacy.js';
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
 import { citizenRaces, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
@@ -12,6 +13,7 @@ import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
+  allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換',
   friendshipReached: '国家間の友好が成立',
   foreignFoodAidDelivered: '友好国から食料援助が到着',
@@ -26,7 +28,7 @@ const events = {
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
-  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'internationalTradeCompleted', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
+  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered'],
   adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
@@ -189,9 +191,9 @@ export function observation(getWorld, getCamera, focus) {
         add(body, 'p', `交易 ${settlementName(other)} · ${resources[goods[0]]} ⇄ ${resources[goods[1]]} · ${trade.returning ? '返送中' : '輸送中'}`);
       }
       if (settlement.foodAid) {
-        const { sourceId, food, returning, recipientNationId } = settlement.foodAid;
+        const { sourceId, food, returning, recipientNationId, allianceRelief } = settlement.foodAid;
         const source = world.settlements.find(s => s.id === sourceId);
-        add(body, 'p', `${recipientNationId ? '国際食料援助' : '食料援助'} ${food} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
+        add(body, 'p', `${allianceRelief ? '同盟の防衛補給' : recipientNationId ? '国際食料援助' : '食料援助'} ${food} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
       }
       if (settlement.materialAid) {
         const { sourceId, resource, quantity, returning } = settlement.materialAid;
@@ -336,7 +338,7 @@ export function observation(getWorld, getCamera, focus) {
               (c.defenderId === nation.id && c.attackerId === rival.id)) &&
             (c.status === 'marching' || c.status === 'siege'));
           const status = campaign ? (campaign.status === 'marching' ? ' · 進軍中' : ' · 包囲中') :
-            truce ? ' · 休戦中' : '';
+            truce ? ' · 休戦中' : alliedNations(world, nation, rival) ? ' · 防衛協定' : '';
           add(body, 'p', `${rival.name} ${labels[relationLabel(value)]}（${value}）${status}`);
         }
       }

@@ -457,3 +457,42 @@ test('a capital can exchange surplus reserves for a scarce good even if its part
   const trade = world.settlements[0].trade;
   assert.deepEqual([trade.outgoing, trade.incoming, trade.outgoingQuantity], ['wood', 'manaStone', 2]);
 });
+
+test('an alliance survives reload, supplies a besieged partner and dissolves if friendship breaks', async () => {
+  const { updateAlliances, alliedNations } = await import('../simulation/Diplomacy.js');
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { emitOnce } = await import('../systems/History.js');
+  const { world, invader, defender, away } = twoNations();
+  world.stockpiles[1].total.food = 2;
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  const pair = { nationIds: [invader.id, defender.id] };
+  emitOnce(world, 'first exchange', 'internationalTradeCompleted', pair);
+  updateAlliances(world);
+  assert.equal(alliedNations(world, invader, defender), false);
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  emitOnce(world, 'second exchange', 'foreignFoodAidDelivered', pair);
+  updateAlliances(world);
+  updateAlliances(world);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const [ally, partner] = saved.nations;
+  assert.equal(alliedNations(saved, ally, partner), true);
+  assert.equal(saved.events.filter(e => e.type === 'allianceFormed').length, 1);
+
+  saved.campaigns = [{ attackerId: 'nation:3', defenderId: partner.id, settlementId: away.id, status: 'siege' }];
+  updateFoodAid(saved);
+  const target = saved.settlements[1];
+  assert.equal(target.foodAid.allianceRelief, true);
+  assert.equal(target.foodAid.food, 4);
+  saved.worldTimeTick = target.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(saved);
+  assert.equal(saved.stockpiles[1].total.food, 6);
+  assert.equal(saved.events.find(e => e.type === 'foreignFoodAidDelivered' && e.allianceRelief)?.food, 4);
+
+  partner.relations[ally.id] = 59;
+  updateAlliances(saved);
+  assert.equal(alliedNations(saved, ally, partner), false);
+  assert.equal(saved.events.filter(e => e.type === 'allianceEnded').length, 1);
+  partner.relations[ally.id] = 60;
+  updateAlliances(saved);
+  assert.equal(alliedNations(saved, ally, partner), false);
+});

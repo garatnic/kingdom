@@ -90,6 +90,7 @@ function validate(world) {
         (s.trade === undefined || validTrade(s.trade, s.id)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
         (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1) &&
+          (s.foodAid.allianceRelief === undefined || (s.foodAid.allianceRelief === true && s.foodAid.recipientNationId)) &&
           (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&
             nations.has(s.foodAid.recipientNationId))))) &&
         (s.materialAid === undefined || (validAid(s.materialAid, s.id) &&
@@ -103,6 +104,10 @@ function validate(world) {
         ? integer(n.fallenAt, 0, world.worldTimeTick) && n.capitalId === null && n.settlementIds.length === 0
         : settlements.get(n.capitalId)?.nationId === n.id &&
           n.settlementIds.every(id => settlements.get(id)?.nationId === n.id)) ||
+      !world.nations.every(n => n.alliances === undefined || (n.alliances &&
+        Object.getPrototypeOf(n.alliances) === Object.prototype &&
+        Object.entries(n.alliances).every(([id, since]) => id !== n.id &&
+          integer(since, 0, world.worldTimeTick) && nations.get(id)?.alliances?.[n.id] === since))) ||
       !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId)) ||
       !world.resourceNodes.every(n => passable(n) && resources.includes(n.resource) && integer(n.quantity, 0)) ||
       world.stockpiles.length !== settlements.size ||
