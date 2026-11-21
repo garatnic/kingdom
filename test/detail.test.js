@@ -300,3 +300,36 @@ test('a distant miner delivers rare ore without doing two jobs in the same updat
   assert.equal(store.total.manaStone, 2);
   assert.equal(world.resourceNodes[1].quantity, 0);
 });
+
+test('a reassigned construction carrier still delivers cargo after loading and moving the camera', async () => {
+  const { planSite, reserveMaterials, pickUpMaterials } = await import('../simulation/Construction.js');
+  const { NEED_HOUR_TICKS } = await import('../data/balance.js');
+  const world = createWorld('reassigned-hauler');
+  world.map.terrain.fill('grass');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const origin = { x: store.x, y: store.y };
+  const carrier = world.citizens[0];
+  Object.assign(carrier, { x: origin.x + 0.5, y: origin.y + 0.5,
+    lastKnownSafeTile: origin, profession: 'farmer' });
+  const site = planSite(world, settlement, 'farm', origin.x + 5, origin.y);
+  assert.ok(site);
+  assert.ok(reserveMaterials(world, site, store));
+  const shipment = pickUpMaterials(world, world.reservations[0], carrier);
+  assert.ok(shipment);
+  const missing = structuredClone(world);
+  missing.inTransit.length = 0;
+  await assert.rejects(createSnapshot(missing), /無効/);
+  const mismatched = structuredClone(world);
+  mismatched.inTransit[0].destinationId = settlement.id;
+  await assert.rejects(createSnapshot(mismatched), /無効/);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  for (let i = 0; i < 200 && saved.inTransit.some(item => item.id === shipment.id); i++) {
+    saved.worldTimeTick += 12;
+    updateCitizens(saved, 12, i % 2 ? origin : { x: 220, y: 220 });
+  }
+  assert.ok(saved.worldTimeTick < NEED_HOUR_TICKS * 5);
+  assert.equal(saved.inTransit.some(item => item.id === shipment.id), false);
+  assert.equal(saved.constructionSites.find(item => item.id === site.id)?.delivered.wood, 2);
+  assert.equal(saved.stockpiles[0].total.wood, store.total.wood);
+});

@@ -67,14 +67,18 @@ function takeAbandonedCargo(shipment, citizen) {
   delete shipment.y;
 }
 
-function constructionRoute(world, citizen, store, population) {
-  const origin = storeTile(world, store);
+function resumeConstructionDelivery(world, citizen) {
   const shipment = world.inTransit.find(item => item.carrierId === citizen.id);
   if (shipment) {
     const site = world.constructionSites.find(s => s.id === shipment.destinationId);
     const goal = site && workTile(world, tileOf(citizen), site);
-    return goal && travel(world, citizen, goal, 'deliverMaterials', shipment.id);
+    if (goal) travel(world, citizen, goal, 'deliverMaterials', shipment.id);
   }
+  return Boolean(shipment);
+}
+
+function constructionRoute(world, citizen, store, population) {
+  const origin = storeTile(world, store);
   const originTile = tileOf(citizen);
   const claimed = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'recoverMaterials')
     .map(c => c.action.targetId));
@@ -130,6 +134,7 @@ function chooseRoute(world, citizen, store, population) {
   const invasion = invasionOrder(world, citizen);
   if (invasion && travel(world, citizen, invasion, 'warMarch', invasion.id)) return;
   if (campaign?.arrivedIds.includes(citizen.id)) return;
+  if (resumeConstructionDelivery(world, citizen)) return;
   const foodTarget = population * FOOD_TARGET_PER_PERSON;
   if (store && freeCapacity(store) > 0) {
     if (resources.some(key => citizen.inventory[key] > 0 && storageRoom(store, key, foodTarget) > 0) &&
@@ -218,6 +223,7 @@ function distantConnectivity(world, store, origin) {
 function updateDistantSettlements(world, camera, population) {
   if (!camera) return;
   const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  const carriers = new Set(world.inTransit.map(item => item.carrierId));
   const claimedFarms = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
     .map(c => c.action.targetId));
   const claimedNodes = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'gather')
@@ -236,7 +242,7 @@ function updateDistantSettlements(world, camera, population) {
     const origin = storeTile(world, store);
     const locals = world.citizens.filter(c => c.alive && c.hp > 0 && c.settlementId === settlement.id &&
       c.action.kind === 'idle' && distance(c.lastKnownSafeTile, origin) <= 8 &&
-      !c.expeditionId && !campaignFor(world, c) && !assignedAdventure(world, c));
+      !c.expeditionId && !carriers.has(c.id) && !campaignFor(world, c) && !assignedAdventure(world, c));
     const hungry = locals.filter(c => c.hunger >= NEEDS.eat).sort((a, b) => b.hunger - a.hunger || a.hp - b.hp);
     let connected;
     if (hungry.length && available(store, 'food') > 0) {

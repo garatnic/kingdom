@@ -137,6 +137,8 @@ function validate(world) {
   }
   const sites = new Set(world.constructionSites.map(site => site.id));
   const stores = new Set(world.stockpiles.map(store => store.id));
+  const constructionReservations = new Map(world.reservations.map(r => [r.id, r]));
+  const shippedReservations = new Set(world.inTransit.map(item => item.reservationId));
   const targets = new Set(world.monsters.map(monster => monster.id));
   const techIds = new Set(technologies.map(technology => technology.id));
   const surveyTargets = new Set(world.resourceNodes.filter(node => !node.dropped).map(node => node.id));
@@ -145,11 +147,16 @@ function validate(world) {
   if (!world.constructionSites.every(site => Object.hasOwn(buildings, site.kind) && validTile(site) &&
         settlements.has(site.settlementId) && integer(site.progress, 0) && site.delivered) ||
       !world.reservations.every(r => sites.has(r.siteId) && stores.has(r.sourceId) && resources.includes(r.resource) &&
-        integer(r.quantity, 1) && ['reserved', 'inTransit', 'delivered'].includes(r.state)) ||
-      !world.inTransit.every(item => sites.has(item.destinationId) && stores.has(item.sourceId) &&
-        world.reservations.some(r => r.id === item.reservationId && r.state === 'inTransit' &&
-          r.quantity === item.quantity && r.resource === item.resource) &&
-        (item.carrierId === null ? validTile(item) : people.get(item.carrierId)?.alive)) ||
+        integer(r.quantity, 1) && ['reserved', 'inTransit', 'delivered'].includes(r.state) &&
+        shippedReservations.has(r.id) === (r.state === 'inTransit')) ||
+      shippedReservations.size !== world.inTransit.length ||
+      !world.inTransit.every(item => {
+        const reservation = constructionReservations.get(item.reservationId);
+        return reservation?.state === 'inTransit' && reservation.siteId === item.destinationId &&
+          reservation.sourceId === item.sourceId && reservation.quantity === item.quantity &&
+          reservation.resource === item.resource &&
+          (item.carrierId === null ? validTile(item) : people.get(item.carrierId)?.alive);
+      }) ||
       !world.monsters.every(m => Object.hasOwn(monsters, m.species) && validTile(m) && validTile(m.homeTile) &&
         typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
       !world.quests.every(q => (q.kind === 'recover_supplies'
