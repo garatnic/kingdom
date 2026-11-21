@@ -50,8 +50,11 @@ test('wisps prey on adjacent slimes and close unresolved bounties without awardi
   world.map.terrain.fill('forest');
   world.nextMonsterSpawnTick = Number.MAX_SAFE_INTEGER;
   const slime = spawnMonster(world, 'slime', { x: 8, y: 8 });
-  const wisp = spawnMonster(world, 'wisp', { x: 8, y: 9 });
-  slime.moveAt = wisp.moveAt = Number.MAX_SAFE_INTEGER;
+  const wisp = spawnMonster(world, 'wisp', { x: 8, y: 10 });
+  slime.moveAt = Number.MAX_SAFE_INTEGER;
+  world.worldTimeTick = wisp.moveAt;
+  updateAdventureWorld(world, 12);
+  assert.equal(wisp.y, 9);
   const quest = issueQuest(world, world.settlements[0], slime);
   quest.expiresAt = 4 * TIME_TICKS_PER_DAY;
   const resourceCount = world.resourceNodes.length;

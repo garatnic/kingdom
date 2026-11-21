@@ -394,6 +394,21 @@ function continueRecovery(world, citizen, quest, store, origin, travel) {
   return false;
 }
 
+function pursuePrey(world, predator, config) {
+  const claimed = monster => world.quests.some(q => q.status === 'claimed' && q.targetId === monster.id) ||
+    nestQuestFor(world, monster)?.status === 'claimed';
+  if (!config.prey || claimed(predator)) return null;
+  const targets = world.monsters.filter(m => m.alive && m.species === config.prey &&
+    distance(predator, m) <= config.sight && distance(predator.homeTile, m) <= COMBAT.wanderRadius &&
+    !claimed(m)).sort((a, b) => distance(predator, a) - distance(predator, b));
+  for (const target of targets) {
+    if (distance(predator, target) <= 1) return predator;
+    const next = findPath(world, predator, target)?.[0];
+    if (next && distance(predator.homeTile, next) <= COMBAT.wanderRadius) return next;
+  }
+  return null;
+}
+
 function moveMonsters(world) {
   const reserved = new Set(world.monsters.filter(m => m.alive).map(tileKey));
   for (const monster of world.monsters) {
@@ -410,10 +425,13 @@ function moveMonsters(world) {
     } else if (distance(monster, monster.homeTile) >= COMBAT.wanderRadius) {
       tile = findPath(world, monster, monster.homeTile)?.[0];
     } else {
-      const offsets = [[0, -1], [-1, 0], [1, 0], [0, 1], [0, 0]];
-      const [dx, dy] = offsets[Math.floor(random(world.rngState) * offsets.length)];
-      const goal = { x: monster.x + dx, y: monster.y + dy };
-      tile = findPath(world, goal, goal) === null ? null : goal;
+      tile = pursuePrey(world, monster, config);
+      if (!tile) {
+        const offsets = [[0, -1], [-1, 0], [1, 0], [0, 1], [0, 0]];
+        const [dx, dy] = offsets[Math.floor(random(world.rngState) * offsets.length)];
+        const goal = { x: monster.x + dx, y: monster.y + dy };
+        tile = findPath(world, goal, goal) === null ? null : goal;
+      }
     }
     if (!tile || reserved.has(tileKey(tile)) ||
         world.settlements.some(s => distance(s, tile) < COMBAT.residentSafety)) continue;
