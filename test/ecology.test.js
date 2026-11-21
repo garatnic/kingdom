@@ -106,3 +106,21 @@ test('a new colony at a cleared site is recorded as a separate founding', () => 
   assert.equal(world.events.filter(e => e.type === 'monsterNestFounded' &&
     e.species === 'slime' && e.x === site.x && e.y === site.y).length, 2);
 });
+
+test('goblins can establish a second habitat near an inhabited settlement', () => {
+  const world = createWorld('goblin-dispersal');
+  const [home] = world.settlements;
+  const { terrain, width } = world.map;
+  terrain.fill('forest');
+  for (let i = 0; i < 8; i++) spawnMonster(world, 'slime', { x: i + 3, y: 7 });
+  const original = spawnMonster(world, 'goblin', { x: 3, y: 3 });
+  assert.ok(original);
+  world.worldTimeTick = world.nextMonsterSpawnTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 12);
+  const immigrant = world.monsters.find(m => m.species === 'goblin' && m.id !== original.id);
+  assert.ok(immigrant);
+  const distance = Math.abs(immigrant.homeTile.x - home.x) + Math.abs(immigrant.homeTile.y - home.y);
+  assert.ok(distance >= 10 && distance <= 24);
+  assert.equal(terrain[immigrant.homeTile.y * width + immigrant.homeTile.x], 'forest');
+  assert.equal(immigrant.parentMonsterId, undefined);
+});

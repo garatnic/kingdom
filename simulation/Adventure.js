@@ -53,12 +53,23 @@ function spawnZones(world) {
   return forbidden;
 }
 
-function spawnAway(world, species, forbidden, habitatOnly = false) {
+function spawnAway(world, species, forbidden, habitatOnly = false, settlement = null) {
   const candidates = [];
   const occupied = new Set(world.monsters.filter(m => m.alive).map(tileKey));
-  for (let y = 0; y < (world.map.surveyedHeight ?? world.map.height); y++) {
-    for (let x = 0; x < (world.map.surveyedWidth ?? world.map.width); x++) {
+  const bounds = { width: world.map.surveyedWidth ?? world.map.width,
+    height: world.map.surveyedHeight ?? world.map.height };
+  const radius = COMBAT.dispersalRadius;
+  const minX = settlement ? Math.max(0, settlement.x - radius) : 0;
+  const minY = settlement ? Math.max(0, settlement.y - radius) : 0;
+  const maxX = settlement ? Math.min(bounds.width, settlement.x + radius + 1) : bounds.width;
+  const maxY = settlement ? Math.min(bounds.height, settlement.y + radius + 1) : bounds.height;
+  const store = settlement && world.stockpiles.find(s => s.settlementId === settlement.id);
+  const reachable = settlement && reachableTiles(world, store ? storeTile(world, store) : settlement,
+    null, null, bounds);
+  for (let y = minY; y < maxY; y++) {
+    for (let x = minX; x < maxX; x++) {
       const tile = { x, y };
+      if (settlement && (distance(tile, settlement) > radius || reachable[y * world.map.width + x] !== 1)) continue;
       const terrain = world.map.terrain[y * world.map.width + x];
       const key = tileKey(tile);
       if (!forbidden.has(key) && !occupied.has(key) && terrain !== 'water' &&
@@ -89,6 +100,16 @@ function spawnAway(world, species, forbidden, habitatOnly = false) {
 function replenishSpecies(world, species, forbidden) {
   const config = monsters[species];
   const population = world.monsters.filter(m => m.alive && m.species === species);
+  const lastDeath = world.monsters.reduce((time, m) =>
+    m.species === species && !m.alive ? Math.max(time, m.diedAt ?? 0) : time, 0);
+  const canImmigrate = world.worldTimeTick - lastDeath >= TIME_TICKS_PER_DAY;
+  if (species === 'goblin' && canImmigrate) {
+    for (const settlement of world.settlements) {
+      if (world.citizens.some(c => c.alive && c.settlementId === settlement.id) &&
+          population.every(m => distance(m.homeTile, settlement) > COMBAT.dispersalRadius) &&
+          spawnAway(world, species, forbidden, true, settlement)) return true;
+    }
+  }
   for (const parent of population) {
     const home = parent.homeTile;
     const homeTerrain = world.map.terrain[home.y * world.map.width + home.x];
@@ -120,9 +141,7 @@ function replenishSpecies(world, species, forbidden) {
     }
   }
   // Immigration restores a locally extinct species after a quiet day.
-  const lastDeath = world.monsters.reduce((time, m) =>
-    m.species === species && !m.alive ? Math.max(time, m.diedAt ?? 0) : time, 0);
-  return !population.length && world.worldTimeTick - lastDeath >= TIME_TICKS_PER_DAY &&
+  return !population.length && canImmigrate &&
     Boolean(spawnAway(world, species, forbidden, true));
 }
 
