@@ -179,8 +179,26 @@ test('five nations can handle independent fronts and preserve a fallen nation in
     c.skills.combat = 10;
     incoming.arrivedIds.push(c.id);
   }
+  const { planSite, reserveMaterials, pickUpMaterials, deliverMaterials } = await import('../simulation/Construction.js');
+  const captured = activeSave.settlements.find(s => s.id === incoming.settlementId);
+  const depotBefore = activeSave.stockpiles.find(s => s.settlementId === captured.id);
+  const localCarrier = activeSave.citizens.find(c => c.alive && c.settlementId === captured.id &&
+    !outbound.memberIds.includes(c.id));
+  depotBefore.total.wood = 12;
+  depotBefore.capacity += 20;
+  const site = planSite(activeSave, captured, 'farm', captured.x + 5, captured.y);
+  assert.ok(site && localCarrier);
+  assert.ok(reserveMaterials(activeSave, site, depotBefore));
+  const cargo = pickUpMaterials(activeSave, activeSave.reservations.find(r => r.siteId === site.id), localCarrier);
+  assert.ok(cargo);
   updateWar(activeSave);
   assert.equal(incoming.status, 'occupied');
+  assert.equal(localCarrier.nationId, multiEast.id);
+  const capturedSave = await readSnapshot(JSON.stringify(await createSnapshot(activeSave)));
+  assert.ok(deliverMaterials(capturedSave, capturedSave.inTransit.find(item => item.id === cargo.id),
+    capturedSave.citizens.find(c => c.id === localCarrier.id)));
+  assert.equal(capturedSave.constructionSites.find(item => item.id === site.id).delivered.wood, 2);
+  assert.equal(capturedSave.stockpiles.find(s => s.id === depotBefore.id).total.wood, 10);
   assert.equal(outbound.status, 'repelled');
   assert.equal(outbound.rations, 0);
   assert.equal(truceBetween(activeSave, multiInvader, multiDefender), undefined);

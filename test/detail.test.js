@@ -176,23 +176,33 @@ test('distant timber uses reachable deposits and conserves stock within storage 
 
 test('distant construction delivers one reservation and resumes without double charging', async () => {
   const { createAdult } = await import('../simulation/CreateAdult.js');
-  const { planSite } = await import('../simulation/Construction.js');
+  const { planSite, reserveMaterials, pickUpMaterials } = await import('../simulation/Construction.js');
+  const { recordDeath } = await import('../simulation/Population.js');
   const { NEED_HOUR_TICKS } = await import('../data/balance.js');
   const world = createWorld('distant-build');
   world.map.terrain.fill('grass');
   const [settlement] = world.settlements;
   const [store] = world.stockpiles;
   const origin = { x: store.x, y: store.y };
-  for (let i = 0; i < 4; i++) world.citizens.push(createAdult(world, 'human', origin, settlement));
+  for (let i = 0; i < 5; i++) world.citizens.push(createAdult(world, 'human', origin, settlement));
   for (const citizen of world.citizens) citizen.profession = 'farmer';
   world.citizens.at(-1).profession = 'builder';
   const site = planSite(world, settlement, 'farm', origin.x + 5, origin.y);
   assert.ok(site);
   const wood = store.total.wood;
+  const lostCarrier = world.citizens.at(-2);
+  assert.ok(reserveMaterials(world, site, store));
+  assert.ok(pickUpMaterials(world, world.reservations[0], lostCarrier));
+  lostCarrier.lastKnownSafeTile = { x: origin.x + 10, y: origin.y };
+  recordDeath(world, lostCarrier, 'combat');
+  assert.equal(world.inTransit[0].carrierId, null);
   const far = { x: 110, y: 110 };
   for (const citizen of world.citizens) citizen.decisionAt = NEED_HOUR_TICKS * 10;
   world.worldTimeTick = NEED_HOUR_TICKS;
+  const before = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  updateCitizens(before, 12, far);
   updateCitizens(world, 12, far);
+  assert.deepEqual(before, world);
   assert.equal(store.total.wood, wood - 2);
   assert.deepEqual(site.delivered, { wood: 2 });
   assert.equal(world.inTransit.length, 0);

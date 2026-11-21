@@ -239,6 +239,7 @@ export function cancelSite(world, site) {
   const index = world.constructionSites.indexOf(site);
   if (index < 0) return false;
   const reservations = world.reservations.filter(r => r.siteId === site.id);
+  const cancelled = new Set([site.id, ...reservations.map(r => r.id)]);
   const dropMaterials = (resource, quantity, tile) => {
     world.resourceNodes.push({ id: nextId(world, 'node'), resource, quantity,
       x: tile.x, y: tile.y, dropped: true });
@@ -250,6 +251,7 @@ export function cancelSite(world, site) {
     if (state === 'delivered') dropMaterials(resource, quantity, site);
     if (state === 'inTransit') {
       const shipment = world.inTransit.find(s => s.reservationId === reservation.id);
+      cancelled.add(shipment.id);
       const carrier = world.citizens.find(person => person.id === shipment.carrierId);
       dropMaterials(resource, quantity, carrier?.lastKnownSafeTile ?? shipment);
       world.inTransit.splice(world.inTransit.indexOf(shipment), 1);
@@ -257,5 +259,14 @@ export function cancelSite(world, site) {
   }
   world.reservations = world.reservations.filter(r => r.siteId !== site.id);
   world.constructionSites.splice(index, 1);
+  for (const citizen of world.citizens) {
+    if (!citizen.alive || !cancelled.has(citizen.action.targetId)) continue;
+    const { x, y } = citizen.lastKnownSafeTile;
+    citizen.x = x + 0.5;
+    citizen.y = y + 0.5;
+    citizen.action = { kind: 'idle', phase: 'plan', targetId: null,
+      startedAt: world.worldTimeTick, progress: 0 };
+    citizen.decisionAt = world.worldTimeTick;
+  }
   return true;
 }

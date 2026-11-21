@@ -310,7 +310,7 @@ function updateDistantSettlements(world, camera, population) {
               buildAtSite(world, site, NEED_HOUR_TICKS / 2, builder);
             } else {
               const abandoned = world.inTransit.find(item => item.destinationId === site.id &&
-                item.carrierId === null && distance(item, origin) <= 8 &&
+                item.carrierId === null && distance(item, settlement) <= radius &&
                 connected[item.y * world.map.width + item.x] === 1);
               reserveMaterials(world, site, store);
               const reservation = world.reservations.find(r => r.siteId === site.id && r.state === 'reserved');

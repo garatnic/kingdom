@@ -87,8 +87,12 @@ test('cancellation releases reserved stone and drops in-transit wood once', () =
   const site = planSite(world, world.settlements[0], 'house', 30, 30);
   assert.ok(site);
   assert.equal(reserveMaterials(world, site, store), true);
-  pickUpMaterials(world, world.reservations[0], world.citizens[0]);
+  const carrier = world.citizens[0];
+  const shipment = pickUpMaterials(world, world.reservations[0], carrier);
+  carrier.action = { kind: 'deliverMaterials', phase: 'travel', targetId: shipment.id };
   assert.equal(cancelSite(world, site), true);
+  assert.equal(carrier.action.kind, 'idle');
+  assert.equal(carrier.decisionAt, world.worldTimeTick);
   assert.equal(cancelSite(world, site), false);
   assert.equal(store.reserved.stone, 0);
   assert.equal(store.total.stone, 10);
