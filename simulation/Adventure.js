@@ -6,7 +6,7 @@ import { COMBAT, gear, monsters } from '../data/combat.js';
 import { ADULT_AGE, START_REGION_SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, GATHER_BATCH, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
-import { available, deposit, storeTile } from './Economy.js';
+import { available, deposit, storageRoom, storeTile } from './Economy.js';
 import { recordDeath } from './Population.js';
 import { campaignFor } from './War.js';
 import { findPath, reachableTiles } from './path.js';
@@ -149,11 +149,14 @@ export function isQuestCargo(world, node) {
     (q.id === node.questId || (q.kind === 'recover_supplies' && q.targetId === node.id)));
 }
 
-function offerRecovery(world, settlement, origin) {
-  if (!world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
+function offerRecovery(world, settlement, store, origin) {
+  if (!store || !world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
       world.citizens.filter(c => c.alive && c.settlementId === settlement.id && c.profession === 'adventurer').length < 2 ||
       world.quests.some(q => q.kind === 'recover_supplies' && q.settlementId === settlement.id && activeQuest(q))) return false;
-  const piles = world.resourceNodes.filter(n => n.dropped && !n.questId && n.quantity >= 2 &&
+  const foodTarget = world.citizens.filter(c => c.alive && c.settlementId === settlement.id).length * FOOD_TARGET_PER_PERSON;
+  const minimum = settlement.foodWarning ? 4 : 2;
+  const piles = world.resourceNodes.filter(n => n.dropped && !n.questId && n.quantity >= minimum &&
+    (!settlement.foodWarning || n.resource === 'food') && storageRoom(store, n.resource, foodTarget) >= minimum &&
     distance(origin, n) >= 8 && distance(origin, n) <= 32 &&
     !world.quests.some(q => q.targetId === n.id && activeQuest(q)));
   const target = piles.sort((a, b) => distance(origin, a) - distance(origin, b))
@@ -177,13 +180,19 @@ function findEscort(world, citizen, reachable) {
 function claimRecovery(world, citizen, quest, store, travel) {
   const node = world.resourceNodes.find(n => n.id === quest.targetId);
   if (!node || node.quantity < 2 || available(store, 'food') < 2) return false;
+  const home = world.settlements.find(s => s.id === quest.settlementId);
+  if (home?.foodWarning && (node.resource !== 'food' || node.quantity < 4)) return false;
+  const foodTarget = world.citizens.filter(c => c.alive && c.settlementId === quest.settlementId).length * FOOD_TARGET_PER_PERSON;
+  const room = storageRoom(store, node.resource, foodTarget);
+  const pickupAmount = Math.min(GATHER_BATCH, Math.floor(Math.min(node.quantity, room) / 2));
+  if (pickupAmount < (home?.foodWarning ? 2 : 1)) return false;
   const escort = findEscort(world, citizen, c => findPath(world, tileOf(c), node) !== null);
   if (!escort || !travel(node, 'adventure', quest.id)) return false;
   store.total.food -= 2;
   citizen.inventory.food++;
   escort.inventory.food++;
   Object.assign(quest, { status: 'claimed', stage: 'recover', claimedBy: citizen.id,
-    escortId: escort.id, provision: 1, recoveredBy: {}, pickupAmount: Math.min(GATHER_BATCH, Math.floor(node.quantity / 2)) });
+    escortId: escort.id, provision: 1, recoveredBy: {}, pickupAmount });
   emit(world, 'supplyRecoveryDeparted', quest, tileOf(citizen), { actorIds: [citizen.id, escort.id] });
   return true;
 }
@@ -331,11 +340,17 @@ export function updateAdventureWorld(world, ticks) {
         });
       }
     }
+    if (settlement.foodWarning) {
+      const openRecovery = world.quests.find(q => q.settlementId === settlement.id &&
+        q.kind === 'recover_supplies' && q.status === 'open');
+      if (openRecovery && !world.resourceNodes.some(node => node.id === openRecovery.targetId &&
+          node.resource === 'food' && node.quantity >= 4)) openRecovery.status = 'expired';
+    }
     let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length;
     if (slots <= 0) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
-    if (offerRecovery(world, settlement, origin)) slots--;
+    if (offerRecovery(world, settlement, store, origin)) slots--;
     if (slots === 0) continue;
     const nearby = world.monsters.filter(m => m.alive && distance(m, settlement) <= COMBAT.questRadius);
     if (!nearby.length) continue;

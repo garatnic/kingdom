@@ -224,6 +224,12 @@ test('guild partners recover abandoned cargo once across save and reload', async
   world.idCounters.building = 3;
   const node = { id: 'node:' + world.idCounters.node++, resource: 'wood', quantity: 4, x: store.x + 10, y: store.y, dropped: true };
   world.resourceNodes.push(node);
+  const famine = structuredClone(world);
+  famine.settlements[0].foodWarning = true;
+  const food = { ...node, id: 'node:' + famine.idCounters.node++, resource: 'food', x: node.x + 5 };
+  famine.resourceNodes.push(food);
+  updateAdventureWorld(famine, 12);
+  assert.equal(famine.quests.find(q => q.kind === 'recover_supplies')?.targetId, food.id);
   updateAdventureWorld(world, 12);
   const recovery = world.quests.find(q => q.kind === 'recover_supplies');
   assert.ok(recovery);
