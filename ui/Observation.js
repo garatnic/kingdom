@@ -240,6 +240,12 @@ export function observation(getWorld, getCamera, focus) {
           focus({ x: target.x + 0.5, y: target.y + 0.5 }, 'manualOverride');
         };
       }
+      const reports = world.events.filter(event => event.type === 'resourceSurveyReturned' &&
+        event.settlementId === settlement.id).slice(-3).reverse();
+      if (reports.length) {
+        add(body, 'h4', '最近の資源調査');
+        for (const report of reports) showEvent(world, report);
+      }
       const center = add(body, 'button', '地図で見る');
       center.onclick = () => {
         markManual();
