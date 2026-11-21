@@ -1,4 +1,5 @@
 import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { NATIONS } from '../data/nations.js';
 import { buildings } from '../data/buildings.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
@@ -20,6 +21,18 @@ export function updateFoodAid(world) {
     return findPath(world, storeTile(world, from), storeTile(world, to));
   }
 
+  const nations = new Map(world.nations.map(nation => [nation.id, nation]));
+  function friendly(sourceId, destinationId) {
+    const source = nations.get(sourceId);
+    const destination = nations.get(destinationId);
+    return source && destination && source.fallenAt === undefined && destination.fallenAt === undefined &&
+      (source.relations?.[destinationId] ?? 0) >= NATIONS.friendly &&
+      (destination.relations?.[sourceId] ?? 0) >= NATIONS.friendly &&
+      !world.campaigns?.some(c => (c.status === 'marching' || c.status === 'siege') &&
+        ((c.attackerId === sourceId && c.defenderId === destinationId) ||
+          (c.attackerId === destinationId && c.defenderId === sourceId)));
+  }
+
   function settle(destination, field, resource, quantityKey) {
     const aid = destination[field];
     if (!aid || day < aid.arrivalDay) return;
@@ -27,16 +40,19 @@ export function updateFoodAid(world) {
     const from = stores.get(aid.sourceId);
     const to = stores.get(destination.id);
     const residents = population.get(destination.id) ?? 0;
-    const sameNation = source.nationId === aid.nationId && destination.nationId === aid.nationId;
-    if (!aid.returning && sameNation && residents && route(from, to)) {
+    const partiesValid = source.nationId === aid.nationId &&
+      destination.nationId === (aid.recipientNationId ?? aid.nationId) &&
+      (!aid.recipientNationId || friendly(aid.nationId, aid.recipientNationId));
+    if (!aid.returning && partiesValid && residents && route(from, to)) {
       const delivered = Math.min(aid[quantityKey], storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (delivered) {
         to.total[resource] += delivered;
         aid[quantityKey] -= delivered;
         const food = resource === 'food';
-        emitOnce(world, `${destination.id}/${field}/${day}`, food ? 'foodAidDelivered' : 'materialAidDelivered', {
+        emitOnce(world, `${destination.id}/${field}/${day}`, food ? (aid.recipientNationId ? 'foreignFoodAidDelivered' : 'foodAidDelivered') : 'materialAidDelivered', {
           settlementId: destination.id, nationId: destination.nationId, sourceSettlementId: source.id,
-          x: destination.x, y: destination.y, ...(food ? { food: delivered } : { resource, quantity: delivered })
+          x: destination.x, y: destination.y, ...(food ? { food: delivered } : { resource, quantity: delivered }),
+          ...(aid.recipientNationId ? { nationIds: [aid.nationId, aid.recipientNationId] } : {})
         });
       }
     }
@@ -68,8 +84,10 @@ export function updateFoodAid(world) {
     const needed = Math.min(residents * FOOD_BIRTH_PER_PERSON - available(to, 'food'),
       storageRoom(to, 'food', residents * FOOD_TARGET_PER_PERSON));
     if (needed <= 0) continue;
-    for (const source of world.settlements) {
-      if (source === destination || source.nationId !== destination.nationId || source.foodWarning) continue;
+    const sources = world.settlements.filter(source => source !== destination && !source.foodWarning &&
+      (source.nationId === destination.nationId || friendly(source.nationId, destination.nationId)));
+    sources.sort((a, b) => Number(b.nationId === destination.nationId) - Number(a.nationId === destination.nationId));
+    for (const source of sources) {
       const adultsAndChildren = population.get(source.id);
       if (!adultsAndChildren) continue;
       const from = stores.get(source.id);
@@ -81,6 +99,7 @@ export function updateFoodAid(world) {
       from.total.food -= food;
       destination.foodAid = { sourceId: source.id, nationId: source.nationId,
         food, travelDays, arrivalDay: day + travelDays, returning: false };
+      if (source.nationId !== destination.nationId) destination.foodAid.recipientNationId = destination.nationId;
       break;
     }
   }

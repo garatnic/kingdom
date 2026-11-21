@@ -292,21 +292,20 @@ test('the scarcest reserve per resident receives limited food aid first', async 
 test('domestic material aid supplies a real construction reservation after reloading', async () => {
   const { updateFoodAid } = await import('../simulation/FoodAid.js');
   const { planSite, reserveMaterials } = await import('../simulation/Construction.js');
-  const { world, invader, defender, away, homeStore } = twoNations();
+  const { world, invader, away, homeStore } = twoNations();
   const awayStore = world.stockpiles[1];
-  awayStore.total.wood = 0;
+  updateWar(world);
+  world.gameSpeed = 20;
+  for (let i = 0; i < 300 && world.campaigns[0].status !== 'occupied'; i++) advanceFrame(world, 100);
+  assert.equal(away.nationId, invader.id);
+  const { cancelSite, pickUpMaterials, deliverMaterials, buildAtSite } = await import('../simulation/Construction.js');
+  const existing = world.constructionSites.find(site => site.settlementId === away.id);
+  if (existing) cancelSite(world, existing);
+  away.foodWarning = false;
+  Object.assign(awayStore.total, { wood: 0, stone: 5, food: 24 });
   homeStore.total.wood = 24;
-  const site = planSite(world, away, 'house', away.x + 2, away.y);
+  const site = planSite(world, away, 'house', away.x + 4, away.y);
   assert.ok(site);
-  updateFoodAid(world);
-  assert.equal(away.materialAid, undefined);
-
-  away.nationId = invader.id;
-  invader.settlementIds.push(away.id);
-  defender.settlementIds = [];
-  defender.capitalId = null;
-  defender.fallenAt = 0;
-  for (const citizen of world.citizens.slice(-2)) citizen.nationId = invader.id;
   assert.equal(reserveMaterials(world, site, awayStore), false);
   updateFoodAid(world);
   assert.equal(away.materialAid.quantity, 8);
@@ -322,6 +321,47 @@ test('domestic material aid supplies a real construction reservation after reloa
   assert.equal(destination.materialAid, undefined);
   assert.equal(store.total.wood, 8);
   assert.equal(saved.events.filter(e => e.type === 'materialAidDelivered').length, 1);
-  assert.equal(reserveMaterials(saved, saved.constructionSites[0], store), true);
+  assert.equal(reserveMaterials(saved, saved.constructionSites.find(item => item.id === site.id), store), true);
   assert.equal(store.reserved.wood, 8);
+  const builtSite = saved.constructionSites.find(item => item.id === site.id);
+  const carrier = saved.citizens.find(c => c.alive && c.settlementId === destination.id);
+  for (const reservation of saved.reservations.filter(r => r.siteId === builtSite.id)) {
+    const cargo = pickUpMaterials(saved, reservation, carrier);
+    assert.ok(cargo);
+    assert.equal(deliverMaterials(saved, cargo, carrier), true);
+  }
+  assert.equal(buildAtSite(saved, builtSite, TIME_TICKS_PER_DAY)?.kind, 'house');
+
+});
+
+test('friendly emergency aid survives saving but turns back when relations break during transit', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const awayStore = world.stockpiles[1];
+  awayStore.total.food = 0;
+  away.foodWarning = true;
+  invader.relations[defender.id] = 60;
+  defender.relations[invader.id] = 59;
+  updateFoodAid(world);
+  assert.equal(away.foodAid, undefined);
+  defender.relations[invader.id] = 60;
+  updateFoodAid(world);
+  assert.equal(away.foodAid.recipientNationId, defender.id);
+  assert.equal(homeStore.total.food, 46);
+
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  saved.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(saved);
+  assert.equal(saved.stockpiles[1].total.food, 6);
+  assert.deepEqual(saved.events.find(e => e.type === 'foreignFoodAidDelivered').nationIds, [invader.id, defender.id]);
+
+  defender.relations[invader.id] = -60;
+  world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
+  assert.equal(away.foodAid.returning, true);
+  world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(world);
+  assert.equal(awayStore.total.food, 0);
+  assert.equal(homeStore.total.food, 52);
+  assert.equal(away.foodAid, undefined);
 });

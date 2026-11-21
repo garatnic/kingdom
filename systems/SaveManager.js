@@ -79,7 +79,9 @@ function validate(world) {
     typeof aid.returning === 'boolean';
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
-        (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1))) &&
+        (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1) &&
+          (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&
+            nations.has(s.foodAid.recipientNationId))))) &&
         (s.materialAid === undefined || (validAid(s.materialAid, s.id) &&
           ['wood', 'stone', 'iron'].includes(s.materialAid.resource) && integer(s.materialAid.quantity, 1))) &&
         (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&

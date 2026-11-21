@@ -12,6 +12,7 @@ import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
+  foreignFoodAidDelivered: '友好国から食料援助が到着',
   materialAidDelivered: '同じ国の集落から資材が到着',
   manaVeinDiscovered: '協力調査で魔石鉱脈を発見', resourceSurveyDeparted: '資源調査に出発', resourceSurveyReturned: '資源調査を報告',
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
@@ -25,7 +26,7 @@ const events = {
 const eventGroups = {
   nations: ['founding', 'leaderSucceeded', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
-  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'materialAidDelivered'],
+  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered'],
   adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
@@ -179,9 +180,9 @@ export function observation(getWorld, getCamera, focus) {
         }
       }
       if (settlement.foodAid) {
-        const { sourceId, food, returning } = settlement.foodAid;
+        const { sourceId, food, returning, recipientNationId } = settlement.foodAid;
         const source = world.settlements.find(s => s.id === sourceId);
-        add(body, 'p', `食料援助 ${food} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
+        add(body, 'p', `${recipientNationId ? '国際食料援助' : '食料援助'} ${food} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
       }
       if (settlement.materialAid) {
         const { sourceId, resource, quantity, returning } = settlement.materialAid;
@@ -370,7 +371,7 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
     if (['supplyRecoveryReturned', 'resourceSurveyReturned'].includes(event.type)) title += `（${resources[event.resource]} ${event.quantity}）`;
     if (event.type === 'materialAidDelivered') title += `（${resources[event.resource]} ${event.quantity}）`;
-    if (event.type === 'foodAidDelivered') title += `（食料 ${event.food}）`;
+    if (['foodAidDelivered', 'foreignFoodAidDelivered'].includes(event.type)) title += `（食料 ${event.food}）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);
     if (!target) { add(body, 'p', label); return; }
