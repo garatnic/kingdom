@@ -150,3 +150,26 @@ test('favorite citizens persist in a snapshot and reference existing residents',
   loaded.settings.favoriteCitizenIds = ['citizen:999999'];
   await assert.rejects(createSnapshot(loaded), /注目人物/);
 });
+
+test('frost pauses wild food regeneration through save and leaves dropped food untouched', async () => {
+  const { renewNodes } = await import('../simulation/Economy.js');
+  const world = createWorld('frost');
+  const wild = world.resourceNodes.find(node => node.resource === 'food');
+  const drop = command('frost-provisions', 'resource', wild, 'food', 3);
+  assert.equal(applyGodCommand(world, drop), null);
+  const frost = command('first-frost', 'disaster', wild, 'frost');
+  assert.equal(applyGodCommand(world, frost), null);
+  assert.equal(wild.quantity, 0);
+  assert.equal(wild.renewAt, TIME_TICKS_PER_DAY);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.equal(applyGodCommand(saved, frost), 'DUPLICATE');
+  const savedWild = saved.resourceNodes.find(node => node.id === wild.id);
+  const dropped = saved.resourceNodes.find(node => node.dropped && node.resource === 'food');
+  saved.worldTimeTick = TIME_TICKS_PER_DAY - 1;
+  renewNodes(saved);
+  assert.equal(savedWild.quantity, 0);
+  saved.worldTimeTick++;
+  renewNodes(saved);
+  assert.ok(savedWild.quantity > 0);
+  assert.equal(dropped.quantity, 3);
+});

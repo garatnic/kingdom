@@ -391,7 +391,8 @@ export function observation(getWorld, getCamera, focus) {
       title = event.value === 'fertility' ? `豊穣の祝福（畑${event.quantity}棟）` : `回復の祝福（${event.quantity}人）`;
     }
     if (event.type === 'god_intervention' && event.kind === 'terrain' && event.value === 'undo') title = '地形編集を取り消し';
-    if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
+    if (event.type === 'god_intervention' && event.kind === 'disaster') title = event.value === 'frost'
+      ? '霜害（野生食料' + event.quantity + 'か所）' : '干ばつ（畑' + event.quantity + '棟）';
     if (['supplyRecoveryReturned', 'resourceSurveyReturned'].includes(event.type)) title += `（${resources[event.resource]} ${event.quantity}）`;
     if (event.type === 'materialAidDelivered') title += `（${resources[event.resource]} ${event.quantity}）`;
     if (['foodAidDelivered', 'foreignFoodAidDelivered'].includes(event.type)) title += `（食料 ${event.food}）`;

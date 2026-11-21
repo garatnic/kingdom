@@ -79,8 +79,18 @@ export function applyGodCommand(world, command) {
   const { value, quantity } = payload;
   let affectedCitizenIds;
   let affectedFarms;
+  let affectedFoodNodes;
   let terrainChange;
-  if (kind === 'disaster') {
+  if (kind === 'disaster' && value === 'frost') {
+    const until = world.worldTimeTick + TIME_TICKS_PER_DAY;
+    affectedFoodNodes = world.resourceNodes.filter(node => node.resource === 'food' && !node.dropped &&
+      sumDistance(node, tile) <= 5 && (node.quantity > 0 || (node.renewAt ?? until) < until));
+    if (!affectedFoodNodes.length) return 'NO_TARGET';
+    for (const node of affectedFoodNodes) {
+      node.quantity = 0;
+      node.renewAt = Math.max(node.renewAt ?? 0, until);
+    }
+  } else if (kind === 'disaster') {
     if (value !== 'drought') return 'INVALID_KIND';
     const until = world.worldTimeTick + TIME_TICKS_PER_DAY;
     affectedFarms = world.buildings.filter(b => b.kind === 'farm' && sumDistance(b, tile) <= 5 &&
@@ -145,9 +155,10 @@ export function applyGodCommand(world, command) {
     }
   }
   emitOnce(world, commandId, 'god_intervention', {
-    ...tile, kind, value, quantity: affectedCitizenIds?.length ?? affectedFarms?.length ?? (kind === 'terrain' ? 0 : quantity),
+    ...tile, kind, value, quantity: affectedCitizenIds?.length ?? affectedFarms?.length ?? affectedFoodNodes?.length ?? (kind === 'terrain' ? 0 : quantity),
     ...(terrainChange && { terrainChange }),
     ...(affectedCitizenIds && { affectedCitizenIds }),
+    ...(affectedFoodNodes && { affectedNodeIds: affectedFoodNodes.map(node => node.id) }),
     ...(affectedFarms && {
       affectedBuildingIds: affectedFarms.map(b => b.id),
       nationIds: [...new Set(world.settlements.filter(s =>
