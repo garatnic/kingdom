@@ -147,6 +147,10 @@ test('a large settlement below the family food reserve plans an additional farm'
   store.total.food = 80;
   world.buildings.push({ ...world.buildings[0], kind: 'farm', x: settlement.x + 3, y: settlement.y + 2 });
   assert.equal(planSettlementConstruction(world, settlement, store, store, 32).kind, 'farm');
+  world.constructionSites.length = 0;
+  store.capacity = 135;
+  settlement.foodWarning = true;
+  assert.equal(planSettlementConstruction(world, settlement, store, store, 32).kind, 'farm');
 });
 
 test('growing towns keep room for warehouse materials before the food target fills the depot', async () => {

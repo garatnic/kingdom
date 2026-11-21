@@ -132,3 +132,22 @@ test('a critically hungry resident scavenges nearby food when the depot is empty
   assert.equal(citizen.hunger, 55);
   assert.equal(citizen.inventory.food, 1);
 });
+
+
+test('an idle adventurer helps harvest during a food warning and keeps the profession', async () => {
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const world = createWorld('harvest-relief');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const helper = world.citizens.find(c => c.profession === 'adventurer');
+  world.citizens = [helper];
+  home.foodWarning = true;
+  store.total.food = 0;
+  helper.decisionAt = 0;
+  world.buildings.push({ id: 'building:2', kind: 'farm', settlementId: home.id,
+    x: store.x + 4, y: store.y, width: 2, height: 2, harvestAt: 0 });
+  updateCitizens(world, 12);
+  assert.equal(helper.action.kind, 'farm');
+  assert.equal(helper.profession, 'adventurer');
+});

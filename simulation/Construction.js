@@ -181,7 +181,9 @@ export function planSettlementConstruction(world, settlement, store, origin, pop
   const emergencySpace = population * (population >= 24 ? FOOD_BIRTH_PER_PERSON : FOOD_EMERGENCY_PER_PERSON);
   const needsGrowthStorage = population >= LARGE_SETTLEMENT_POPULATION &&
     store.capacity < population * FOOD_TARGET_PER_PERSON + CONSTRUCTION_STORAGE_RESERVE.wood + CONSTRUCTION_STORAGE_RESERVE.stone;
-  const cramped = needsGrowthStorage || freeCapacity(store) + store.total.food < emergencySpace;
+  const emergencyFarm = settlement.foodWarning && requiresFarms &&
+    freeCapacity(store) + store.total.food >= emergencySpace;
+  const cramped = (needsGrowthStorage && !emergencyFarm) || freeCapacity(store) + store.total.food < emergencySpace;
   const urgent = cramped ? 'warehouse' : farms === 0 || requiresFarms ? 'farm' : needsHousing ? 'house' : null;
   if (existing) {
     const committed = world.reservations.some(r => r.siteId === existing.id);

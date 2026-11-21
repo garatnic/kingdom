@@ -128,7 +128,9 @@ function chooseRoute(world, citizen, store, population) {
       drops.sort((a, b) => tileDistance(origin, a) - tileDistance(origin, b));
       if (drops.some(node => travel(world, citizen, node, 'gather', node.id))) return;
     }
-    if (citizen.profession === 'farmer' && available(store, 'food') < foodTarget && storageRoom(store, 'food', foodTarget) > 0) {
+    const helpsHarvest = citizen.profession === 'farmer' || (citizen.profession === 'adventurer' &&
+      !active && !campaign && world.settlements.some(s => s.id === citizen.settlementId && s.foodWarning));
+    if (helpsHarvest && available(store, 'food') < foodTarget && storageRoom(store, 'food', foodTarget) > 0) {
       const assigned = new Set(world.citizens.filter(c => c.alive && c.action.kind === 'farm')
         .map(c => c.action.targetId));
       const origin = tileOf(citizen);
@@ -222,7 +224,8 @@ function updateDistantSettlements(world, camera, population) {
       }
       ready.push(citizen);
     }
-    const workers = ready.filter(c => c.profession === 'farmer' && c.hp > COMBAT.retreatHp &&
+    const workers = ready.filter(c => (c.profession === 'farmer' ||
+      (settlement.foodWarning && c.profession === 'adventurer')) && c.hp > COMBAT.retreatHp &&
       c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && c.inventory.food === 0);
     const yieldPerFarm = farmYield(world, settlement.id);
     for (const [resource, role, target] of [['wood', 'woodcutter', 24], ['stone', 'miner', 12]]) {
