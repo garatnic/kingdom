@@ -746,7 +746,8 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
       quest.retreated = true;
     } else {
       const config = monsters[monster.species];
-      if (quest.strikeAt === null) {
+      if (quest.strikeAt === null ||
+          (!quest.casting && canCast && world.worldTimeTick >= quest.strikeAt)) {
         quest.casting = spell;
         quest.strikeAt = world.worldTimeTick + (spell ? TECH.spellCastTicks : COMBAT.strikeDelay);
       }
@@ -761,7 +762,17 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
         const equipment = gear[citizen.gearId];
         const attack = quest.casting ? TECH.spellAttack + arcane + (equipment?.spellAttack ?? 0)
           : COMBAT.attack + citizen.skills.combat + weapon + steel + (equipment?.attack ?? 0);
-        if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
+        if (quest.casting && quest.boundTargetId !== monster.id && config.attack >= monsters.goblin.attack &&
+            unlocked(world, citizen.settlementId, 'binding_1')) {
+          const until = world.worldTimeTick + COMBAT.interval;
+          monster.moveAt = Math.max(monster.moveAt, until);
+          monster.attackAt = Math.max(monster.attackAt, until);
+          quest.boundTargetId = monster.id;
+          emitOnce(world, quest.id + '/' + monster.id, 'monsterBound', {
+            citizenId: citizen.id, settlementId: citizen.settlementId, questId: quest.id,
+            monsterId: monster.id, x: monster.x, y: monster.y
+          });
+        } else if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
           const support = escort && !quest.escortRetreated && escort.hp > COMBAT.retreatHp &&
             distance(tileOf(escort), monster) <= COMBAT.rangedDistance;
           const bonus = support ? Math.floor(COMBAT.attack / 2) + escort.skills.combat : 0;

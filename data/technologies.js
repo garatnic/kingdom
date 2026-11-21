@@ -10,7 +10,9 @@ export const technologies = [
   { id: 'restoration_1', cost: 850, era: 'kingdom', requires: 'magic_1', requiresAffinity: true,
     building: 'guild', resources: { manaStone: 1 } },
   { id: 'verdant_1', cost: 3000, era: 'arcane', requires: 'irrigation_1', requiresAffinity: true,
-    building: 'guild', resources: { manaStone: 5 } }
+    building: 'guild', resources: { manaStone: 5 } },
+  { id: 'binding_1', cost: 1800, era: 'arcane', requires: 'magic_2', requiresAffinity: true,
+    building: 'guild', resources: { manaStone: 2 } }
 ];
 
 export const TECH = {
