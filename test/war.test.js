@@ -533,10 +533,11 @@ test('a threat that appears after trade dispatch makes the shipment wait for its
   world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
   updateTrade(world);
   assert.equal(home.trade.escortQuestId, undefined);
+  home.trade.arrivalDay += 2;
   const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   const [from, to] = saved.stockpiles;
   const shipment = saved.settlements[0].trade;
-  saved.worldTimeTick = shipment.arrivalDay * TIME_TICKS_PER_DAY;
+  saved.worldTimeTick = (shipment.arrivalDay - 1) * TIME_TICKS_PER_DAY;
   const enemy = spawnMonster(saved, 'goblin', path[Math.floor(path.length / 2)]);
   assert.ok(enemy);
   updateTrade(saved);
@@ -572,6 +573,9 @@ test('a threat that appears after trade dispatch makes the shipment wait for its
     }
   }
   assert.equal(persisted.status, 'completed');
+  updateTrade(saved);
+  assert.equal(to.total.wood, 0);
+  saved.worldTimeTick = shipment.arrivalDay * TIME_TICKS_PER_DAY;
   updateTrade(saved);
   assert.equal(to.total.wood, 2);
   assert.equal(saved.events.filter(e => e.type === 'tradeEscortReturned').length, 1);

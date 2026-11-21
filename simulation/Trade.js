@@ -50,7 +50,8 @@ export function updateTrade(world) {
     const second = stores.get(b.id);
     busy.add(a.id);
     busy.add(b.id);
-    if (trade.arrivalDay > day) continue;
+    const arrived = trade.arrivalDay <= day;
+    if (!arrived && (trade.returning || trade.escortQuestId)) continue;
     if (!trade.returning) {
       const valid = a.nationId === trade.firstNationId && b.nationId === trade.secondNationId &&
         friendlyNations(world, nations.get(a.nationId), nations.get(b.nationId)) &&
@@ -64,6 +65,7 @@ export function updateTrade(world) {
         recruitEscort(world, a, b, first, second, path);
         if (trade.escortQuestId) continue;
       }
+      if (!arrived) continue;
       if (path && escort && ['open', 'claimed'].includes(escort.status) &&
           world.worldTimeTick < escort.expiresAt + TIME_TICKS_PER_DAY) continue;
       if (path && (!trade.escortQuestId || escort?.status === 'completed')) {
