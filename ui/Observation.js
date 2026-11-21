@@ -221,6 +221,7 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'god_intervention' && event.kind === 'blessing') {
       title = event.value === 'fertility' ? `豊穣の祝福（畑${event.quantity}棟）` : `回復の祝福（${event.quantity}人）`;
     }
+    if (event.type === 'god_intervention' && event.kind === 'terrain' && event.value === 'undo') title = '地形編集を取り消し';
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
     if (event.type === 'supplyRecoveryReturned') title += `（${resources[event.resource]} ${event.quantity}）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;

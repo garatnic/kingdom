@@ -111,6 +111,17 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     assert.equal(snapshot.world.citizens.length, 12);
     assert.equal(snapshot.world.settings.camera.zoom, 1.25);
     assert.ok(snapshot.world.settings.camera.x < 32.5);
+    await evaluate("document.querySelector('#overview-toggle').click()");
+    await poll(() => evaluate("!document.querySelector('#overview').hidden && document.querySelector('#overview').width === 256"));
+    const beforeOverviewJump = await evaluate(canvasImage);
+    await evaluate(`(() => {
+      const map = document.querySelector('#overview');
+      const box = map.getBoundingClientRect();
+      map.dispatchEvent(new MouseEvent('click', { clientX: box.left + box.width * 0.75, clientY: box.top + box.height * 0.75 }));
+    })()`);
+    await poll(async () => (await evaluate(canvasImage)) !== beforeOverviewJump);
+    await evaluate("document.querySelector('#overview-toggle').click()");
+
     await evaluate("document.querySelector('#seed').value = 'new-seed'; document.querySelector('form').requestSubmit()");
     const { root } = await send('DOM.getDocument');
     const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#file' });

@@ -40,9 +40,11 @@
     <div class="game-layout">
     <div class="viewport">
       <canvas id="map" aria-label="世界地図。ドラッグで移動、ホイールまたはピンチで拡大縮小"></canvas>
+      <canvas id="overview" tabindex="0" aria-label="全体地図。クリックまたは矢印キーで地図を移動" hidden></canvas>
       <div class="zoom group" role="group" aria-label="カメラ">
         <button type="button" id="zoom-out" aria-label="縮小">−</button>
         <button type="button" id="center" aria-label="集落に戻る">集落</button>
+        <button type="button" id="overview-toggle" aria-controls="overview" aria-pressed="false">全体地図</button>
         <button type="button" id="zoom-in" aria-label="拡大">＋</button>
       </div>
     </div>

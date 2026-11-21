@@ -6,7 +6,7 @@ import { createAdult } from '../simulation/CreateAdult.js';
 import { spawnMonster } from '../simulation/Adventure.js';
 import { resources } from '../simulation/Economy.js';
 import { nextId } from '../simulation/Identity.js';
-import { findPath } from '../simulation/path.js';
+import { reachableTiles } from '../simulation/path.js';
 import { emitOnce } from './History.js';
 
 const scope = 8;
@@ -49,14 +49,21 @@ function editTerrain(world, tile, terrain) {
       world.stockpiles.some(s => same(s, tile)))) return 'OCCUPIED';
   const map = { ...world.map, terrain: world.map.terrain.slice() };
   map.terrain[tile.y * map.width + tile.x] = terrain;
-  const candidate = { ...world, map };
-  for (const settlement of world.settlements) {
-    const store = world.stockpiles.find(s => s.settlementId === settlement.id);
-    const anchor = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
-    const targets = [...world.resourceNodes.filter(n => !n.dropped),
-      ...world.citizens.filter(c => c.alive && c.settlementId === settlement.id).map(cell)];
-    if (findPath(candidate, anchor, anchor) === null || targets.some(target =>
-      findPath(world, anchor, target) !== null && findPath(candidate, anchor, target) === null)) return 'PATH_DISCONNECTED';
+  if (terrain === 'water' && terrainAt(world, tile) !== 'water') {
+    const candidate = { ...world, map };
+    const index = point => point.y * map.width + point.x;
+    const nodes = world.resourceNodes.filter(node => !node.dropped);
+    for (const settlement of world.settlements) {
+      const store = world.stockpiles.find(s => s.settlementId === settlement.id);
+      const anchor = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
+      if (same(anchor, tile)) return 'OCCUPIED';
+      const targets = [...nodes, ...world.citizens.filter(c => c.alive && c.settlementId === settlement.id).map(cell)]
+        .map(index);
+      const before = reachableTiles(world, anchor, undefined, targets);
+      const preserved = targets.filter(target => before[target] === 1);
+      const after = reachableTiles(candidate, anchor, undefined, preserved);
+      if (preserved.some(target => after[target] !== 1)) return 'PATH_DISCONNECTED';
+    }
   }
   world.map.terrain = map.terrain;
   world.map.navigationVersion++;
@@ -72,6 +79,7 @@ export function applyGodCommand(world, command) {
   const { value, quantity } = payload;
   let affectedCitizenIds;
   let affectedFarms;
+  let terrainChange;
   if (kind === 'disaster') {
     if (value !== 'drought') return 'INVALID_KIND';
     const until = world.worldTimeTick + TIME_TICKS_PER_DAY;
@@ -95,8 +103,19 @@ export function applyGodCommand(world, command) {
     }
     affectedCitizenIds = affected.map(c => c.id);
   } else if (kind === 'terrain') {
-    const error = editTerrain(world, tile, value);
+    const before = terrainAt(world, tile);
+    let terrain = value;
+    if (value === 'undo') {
+      const previous = world.events.findLast(event => event.type === 'god_intervention' &&
+        event.kind === 'terrain' && same(event, tile));
+      if (!previous?.terrainChange || previous.value === 'undo' || previous.terrainChange.after !== before) {
+        return 'NO_TARGET';
+      }
+      terrain = previous.terrainChange.before;
+    }
+    const error = editTerrain(world, tile, terrain);
     if (error) return error;
+    terrainChange = { before, after: terrain };
   } else {
     const maxima = { life: 10, resource: 100, monster: 5 };
     if (!Object.hasOwn(maxima, kind)) return 'INVALID_KIND';
@@ -127,6 +146,7 @@ export function applyGodCommand(world, command) {
   }
   emitOnce(world, commandId, 'god_intervention', {
     ...tile, kind, value, quantity: affectedCitizenIds?.length ?? affectedFarms?.length ?? (kind === 'terrain' ? 0 : quantity),
+    ...(terrainChange && { terrainChange }),
     ...(affectedCitizenIds && { affectedCitizenIds }),
     ...(affectedFarms && {
       affectedBuildingIds: affectedFarms.map(b => b.id),

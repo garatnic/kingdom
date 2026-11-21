@@ -1,7 +1,8 @@
 import { monsters } from '../data/combat.js';
 import { NEED_HOUR_TICKS, TILE, citizenRaces } from '../data/balance.js';
 
-const colors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
+export const terrainColors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
+export const nationColor = id => `hsl(${(Number(id.split(':')[1]) * 137 + 248) % 360} 70% 72%)`;
 const resourceColors = { food: '#d88479', wood: '#99bb72', stone: '#bbc5c1', iron: '#db926b', manaStone: '#c6a7e8' };
 
 export class Renderer {
@@ -34,7 +35,7 @@ export class Renderer {
     ctx.scale(scale / TILE, scale / TILE);
     const owners = new Map(world.settlements.map(s => [s.id, s.nationId]));
     const borders = new Map(world.nations.map(n =>
-      [n.id, `hsl(${(Number(n.id.split(':')[1]) * 137 + 248) % 360} 70% 72%)`]));
+      [n.id, nationColor(n.id)]));
     const { territory, map } = world;
     const nationAt = (x, y) => x < 0 || x >= map.width || y < 0 || y >= map.height
       ? null : owners.get(territory?.[y * map.width + x]) ?? null;
@@ -153,7 +154,7 @@ export class Renderer {
     const px = x * TILE;
     const py = y * TILE;
     const pattern = ((x * 37) ^ (y * 53)) & 15;
-    ctx.fillStyle = colors[terrain];
+    ctx.fillStyle = terrainColors[terrain];
     ctx.fillRect(px, py, TILE, TILE);
     if (terrain === 'forest') {
       ctx.fillStyle = '#294d3a';

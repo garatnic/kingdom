@@ -55,6 +55,12 @@ test('terrain changes reject blocked routes and allow cost changes without movin
   assert.equal(applyGodCommand(world, command('new-cost', 'terrain', tile, 'forest')), null);
   assert.equal(world.map.navigationVersion, 1);
   assert.equal(world.map.terrain[10 * world.map.width + 10], 'forest');
+  const undo = command('undo-cost', 'terrain', tile, 'undo');
+  assert.equal(applyGodCommand(world, undo), null);
+  assert.equal(world.map.terrain[10 * world.map.width + 10], 'grass');
+  assert.equal(world.map.navigationVersion, 2);
+  assert.equal(applyGodCommand(world, undo), 'DUPLICATE');
+  assert.equal(applyGodCommand(world, command('undo-again', 'terrain', tile, 'undo')), 'NO_TARGET');
 });
 
 test('history ignores duplicate transaction types and retains important events despite trimming', () => {

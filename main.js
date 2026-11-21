@@ -7,6 +7,7 @@ import { activeNations } from './simulation/War.js';
 import { createWorld } from './engine/World.js';
 import { advanceFrame, calendar, setSpeed } from './engine/GameLoop.js';
 import { createCamera, pan, zoomAt } from './engine/Camera.js';
+import { WorldOverview } from './ui/WorldOverview.js';
 import { Renderer } from './engine/Renderer.js';
 import { createSnapshot, readSnapshot } from './systems/SaveManager.js';
 
@@ -27,6 +28,13 @@ const viewer = observation(() => world, () => camera, (target, mode) => {
   camera.x = target.x;
   camera.y = target.y;
   camera.mode = mode;
+});
+
+const overview = new WorldOverview(get('overview'), get('overview-toggle'), canvas, () => world, () => camera, (x, y) => {
+  viewer.markManual();
+  camera.x = Math.max(0.5, Math.min(world.map.width - 0.5, x));
+  camera.y = Math.max(0.5, Math.min(world.map.height - 0.5, y));
+  camera.mode = 'manualOverride';
 });
 
 function keepGeneration(snapshot) {
@@ -87,6 +95,7 @@ function frame(now) {
     if (Number(coordinate.max) !== max) coordinate.max = max;
   }
   renderer.draw(world, camera);
+  overview.draw();
   requestAnimationFrame(frame);
 }
 
@@ -224,7 +233,7 @@ const godOptions = {
   blessing: { recovery: '回復（周囲3タイル）', fertility: '豊穣（周囲5タイル）' },
   life: Object.fromEntries(Object.entries(citizenRaces).map(([id, race]) => [id, race.label])),
   resource: { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' },
-  terrain: { grass: '草原', forest: '森', mountain: '山', water: '水' },
+  terrain: { grass: '草原', forest: '森', mountain: '山', water: '水', undo: 'この地点の直前の地形編集を戻す' },
   monster: Object.fromEntries(Object.entries(monsters).map(([id, config]) => [id, config.label]))
 };
 function showGodOptions() {
