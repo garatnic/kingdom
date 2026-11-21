@@ -1,4 +1,5 @@
 import { FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { buildings } from '../data/buildings.js';
 import { emitOnce } from '../systems/History.js';
 import { friendlyNations } from './Diplomacy.js';
 import { available, storageRoom, storeTile } from './Economy.js';
@@ -6,9 +7,11 @@ import { findPath } from './path.js';
 
 const targets = { wood: 10, stone: 5, iron: 4, manaStone: 5 };
 
-function exchange(first, second) {
-  return Object.entries(targets).find(([resource, target]) =>
-    available(first, resource) >= target + 2 && available(second, resource) < target)?.[0];
+function exchange(source, destination, sourceTargets, destinationTargets, foodTarget) {
+  return Object.keys(targets).find(resource =>
+    available(source, resource) >= sourceTargets[resource] + 2 &&
+    available(destination, resource) < destinationTargets[resource] &&
+    storageRoom(destination, resource, foodTarget) > 0);
 }
 
 export function updateTrade(world) {
@@ -68,19 +71,27 @@ export function updateTrade(world) {
   if (day % 5 !== 0) return;
   const capitals = world.nations.filter(n => n.fallenAt === undefined).map(n => settlements.get(n.capitalId))
     .filter(s => s && population.has(s.id) && !s.foodWarning);
+  const reserves = new Map(capitals.map(capital => {
+    const site = world.constructionSites.find(item => item.settlementId === capital.id);
+    const cost = site && !world.reservations.some(reservation => reservation.siteId === site.id)
+      ? buildings[site.kind].cost : {};
+    return [capital.id, Object.fromEntries(Object.entries(targets)
+      .map(([resource, target]) => [resource, Math.max(target, cost[resource] ?? 0)]))];
+  }));
   for (const [index, a] of capitals.entries()) {
     if (busy.has(a.id)) continue;
     for (const b of capitals.slice(index + 1)) {
       if (busy.has(b.id) || !friendlyNations(world, nations.get(a.nationId), nations.get(b.nationId))) continue;
       const first = stores.get(a.id);
       const second = stores.get(b.id);
-      const outgoing = exchange(first, second);
-      const incoming = exchange(second, first);
+      const firstTargets = reserves.get(a.id);
+      const secondTargets = reserves.get(b.id);
+      const outgoing = exchange(first, second, firstTargets, secondTargets, foodTarget(b.id));
+      const incoming = exchange(second, first, secondTargets, firstTargets, foodTarget(a.id));
       if (!outgoing || !incoming) continue;
-      const quantity = Math.min(2, targets[incoming] - available(first, incoming),
-        targets[outgoing] - available(second, outgoing));
-      if (storageRoom(first, incoming, foodTarget(a.id)) < quantity ||
-          storageRoom(second, outgoing, foodTarget(b.id)) < quantity) continue;
+      const quantity = Math.min(2, firstTargets[incoming] - available(first, incoming),
+        secondTargets[outgoing] - available(second, outgoing),
+        storageRoom(first, incoming, foodTarget(a.id)), storageRoom(second, outgoing, foodTarget(b.id)));
       const path = route(first, second);
       if (!path) continue;
       const travelDays = Math.max(1, Math.ceil(path.length / 32));

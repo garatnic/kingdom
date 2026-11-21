@@ -416,3 +416,19 @@ test('barter delivers both loads exactly once or returns both after hostilities'
   assert.equal(awayStore.total.stone, 10);
   assert.equal(away.nationId, defender.id);
 });
+
+test('barter sees shortages above normal reserve when a capital has unreserved construction', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { planSite } = await import('../simulation/Construction.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const home = world.settlements[0];
+  Object.assign(homeStore.total, { food: 36, wood: 20, stone: 7, iron: 3 });
+  Object.assign(world.stockpiles[1].total, { wood: 4, stone: 16 });
+  assert.ok(planSite(world, home, 'barracks', home.x + 4, home.y));
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  assert.equal(home.trade.incoming, 'stone');
+  assert.equal(home.trade.partnerId, away.id);
+  assert.equal(home.trade.incomingQuantity, 2);
+});
