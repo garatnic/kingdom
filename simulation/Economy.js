@@ -1,6 +1,6 @@
 import {
   CONSTRUCTION_STORAGE_RESERVE, FOOD_TARGET_PER_PERSON, GATHER_BATCH, LARGE_SETTLEMENT_POPULATION,
-  LAYOUT, NODE_RENEWAL_TICKS
+  citizenRaces, LAYOUT, NODE_RENEWAL_TICKS
 } from '../data/balance.js';
 import { TECH } from '../data/technologies.js';
 
@@ -31,7 +31,9 @@ export function storageRoom(store, resource, foodTarget = 0) {
 
 function gatherBatch(worker, resource) {
   const usesTools = worker?.steelMiningTools && worker.profession === 'miner' && (resource === 'iron' || resource === 'manaStone');
-  return GATHER_BATCH + (usesTools ? TECH.miningToolBonus : 0);
+  const raceBonus = worker?.profession === 'miner' && resource === 'stone'
+    ? citizenRaces[worker.race]?.stoneGatherBonus ?? 0 : 0;
+  return GATHER_BATCH + (usesTools ? TECH.miningToolBonus : 0) + raceBonus;
 }
 
 export function harvest(world, worker, node) {

@@ -4,6 +4,7 @@ import { emitOnce } from '../systems/History.js';
 import { available, storeTile } from './Economy.js';
 import { ageYears } from './Identity.js';
 import { unlocked } from './Research.js';
+import { workTile } from './Construction.js';
 import { findPath } from './path.js';
 
 export function produceMiningTools(world) {
@@ -24,6 +25,27 @@ export function produceMiningTools(world) {
     equippedSettlements.add(id);
     emitOnce(world, miner.id, 'miningToolsForged', {
       citizenId: miner.id, settlementId: id, nationId: miner.nationId, x: smithy.x, y: smithy.y
+    });
+  }
+}
+
+export function installArcaneIrrigation(world) {
+  for (const settlement of world.settlements) {
+    const id = settlement.id;
+    if (!unlocked(world, id, 'magic_2') || !unlocked(world, id, 'irrigation_1') ||
+        !world.buildings.some(b => b.kind === 'guild' && b.settlementId === id)) continue;
+    const store = world.stockpiles.find(s => s.settlementId === id);
+    if (!store || available(store, 'stone') < TECH.arcaneIrrigationStone ||
+        available(store, 'manaStone') < TECH.arcaneIrrigationMana + TECH.arcaneIrrigationReserve) continue;
+    const depot = storeTile(world, store);
+    const farm = world.buildings.find(b => b.kind === 'farm' && b.settlementId === id &&
+      !b.arcaneIrrigation && workTile(world, depot, b));
+    if (!farm) continue;
+    store.total.stone -= TECH.arcaneIrrigationStone;
+    store.total.manaStone -= TECH.arcaneIrrigationMana;
+    farm.arcaneIrrigation = true;
+    emitOnce(world, farm.id, 'arcaneIrrigationInstalled', {
+      settlementId: id, nationId: settlement.nationId, x: farm.x, y: farm.y
     });
   }
 }

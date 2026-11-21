@@ -111,7 +111,8 @@ function validate(world) {
         Object.getPrototypeOf(n.alliances) === Object.prototype &&
         Object.entries(n.alliances).every(([id, since]) => id !== n.id &&
           integer(since, 0, world.worldTimeTick) && nations.get(id)?.alliances?.[n.id] === since))) ||
-      !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId)) ||
+      !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId) &&
+        (b.arcaneIrrigation === undefined || (b.kind === 'farm' && typeof b.arcaneIrrigation === 'boolean'))) ||
       !world.resourceNodes.every(n => passable(n) && resources.includes(n.resource) && integer(n.quantity, 0)) ||
       world.stockpiles.length !== settlements.size ||
       new Set(world.stockpiles.map(p => p.settlementId)).size !== settlements.size ||

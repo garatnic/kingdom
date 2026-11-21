@@ -21,6 +21,7 @@ const events = {
   materialAidDelivered: '同じ国の集落から資材が到着',
   manaVeinDiscovered: '協力調査で魔石鉱脈を発見', resourceSurveyDeparted: '資源調査に出発', resourceSurveyReturned: '資源調査を報告',
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
+  arcaneIrrigationInstalled: '農地に魔導灌漑を設置',
   constructionCompleted: '施設が完成', foodShortage: '集落で食料難', foodRecovered: '集落の食料備蓄が回復', foodAidDelivered: '同じ国の集落から食料が到着', monsterDefeated: '魔物を討伐', monsterThreat: '集落に魔物が接近', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', supplyRecoveryDeparted: '物資回収に出発', supplyRecoveryReturned: '物資回収隊が帰還', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', founding: '建国', leaderSucceeded: '指導者が交代',
@@ -171,6 +172,8 @@ export function observation(getWorld, getCamera, focus) {
       showResearch(world, researchOwner(world, settlement));
       add(body, 'p', Object.entries(jobs).map(([role, label]) =>
         `${label} ${residents.filter(c => c.profession === role).length}`).join(' / '));
+      const irrigated = facilities.filter(b => b.kind === 'farm' && b.arcaneIrrigation).length;
+      if (irrigated) add(body, 'p', `魔導灌漑 ${irrigated}か所（収穫量が増加）`);
       const equippedMiners = residents.filter(c => c.profession === 'miner' && c.steelMiningTools).length;
       if (equippedMiners) add(body, 'p', `鋼鉄の採掘道具 ${equippedMiners}人（鉄・魔石の採掘量が増加）`);
       if (store) {

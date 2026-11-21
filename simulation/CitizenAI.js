@@ -190,11 +190,12 @@ function chooseRoute(world, citizen, store, population) {
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
 }
 
-function farmYield(world, settlementId) {
+export function farmYield(world, farm) {
+  const { settlementId } = farm;
   let multiplier = unlocked(world, settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
   if (unlocked(world, settlementId, 'irrigation_1')) multiplier += TECH.irrigationBonus;
   if (unlocked(world, settlementId, 'verdant_1')) multiplier += TECH.verdantBonus;
-  return Math.floor(FARM_YIELD * multiplier);
+  return Math.floor(FARM_YIELD * multiplier) + (farm.arcaneIrrigation ? TECH.arcaneIrrigationYield : 0);
 }
 
 function updateDistantSettlements(world, camera, population) {
@@ -244,7 +245,6 @@ function updateDistantSettlements(world, camera, population) {
     const workers = ready.filter(c => (c.profession === 'farmer' ||
       (settlement.foodWarning && c.profession === 'adventurer')) && c.hp > COMBAT.retreatHp &&
       c.hunger < NEEDS.eat && c.fatigue < NEEDS.sleep && c.inventory.food === 0);
-    const yieldPerFarm = farmYield(world, settlement.id);
     const dispatched = new Set();
     for (const resource of ['wood', 'stone', 'iron', 'manaStone']) {
       const target = resource === 'wood' ? 24 : 12;
@@ -312,6 +312,7 @@ function updateDistantSettlements(world, camera, population) {
       if (worker === -1) continue;
       const [farmer] = workers.splice(worker, 1);
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
+      const yieldPerFarm = farmYield(world, farm);
       const delivered = Math.min(yieldPerFarm, room, foodTarget - available(store, 'food'));
       store.total.food += delivered;
       farmer.inventory.food += yieldPerFarm - delivered;
@@ -358,7 +359,7 @@ function perform(world, citizen, store, ticks, population) {
     const farm = world.buildings.find(b => b.id === action.targetId);
     if (farm && (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick) {
       farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      citizen.inventory.food += farmYield(world, citizen.settlementId);
+      citizen.inventory.food += farmYield(world, farm);
       if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     }
   }

@@ -165,3 +165,45 @@ test('steel industry equips miners after research and improves both mining paths
   assert.equal(ore.quantity, 0);
   assert.equal(savedStore.capacity, capacity + 20);
 });
+
+test('arcane irrigation upgrades one reachable farm and preserves the research reserve after reload', async () => {
+  const { installArcaneIrrigation } = await import('../simulation/Industry.js');
+  const { farmYield } = await import('../simulation/CitizenAI.js');
+  const { createSnapshot, readSnapshot } = await import('../systems/SaveManager.js');
+  const world = createWorld('arcane-irrigation');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  const [store] = world.stockpiles;
+  const farm = { id: nextId(world, 'building'), kind: 'farm', settlementId: home.id, x: 1, y: 1, width: 2, height: 2, completedAt: 0 };
+  world.buildings.push(farm, { id: nextId(world, 'building'), kind: 'guild',
+    settlementId: home.id, x: 5, y: 1, width: 2, height: 2, completedAt: 0 });
+  ensureResearch(world, home, ['irrigation_1', 'magic_2']);
+  store.capacity += 20;
+  Object.assign(store.total, { stone: 5, manaStone: 5 });
+  const before = farmYield(world, farm);
+  installArcaneIrrigation(world);
+  assert.equal(farm.arcaneIrrigation, undefined);
+  store.total.manaStone++;
+  installArcaneIrrigation(world);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  installArcaneIrrigation(saved);
+  assert.equal(saved.stockpiles[0].total.stone, 3);
+  assert.equal(saved.stockpiles[0].total.manaStone, 5);
+  assert.equal(farmYield(saved, saved.buildings.find(b => b.id === farm.id)), before + 1);
+  assert.equal(saved.events.filter(event => event.type === 'arcaneIrrigationInstalled').length, 1);
+});
+
+test('dwarf miners carry extra stone in both individual and distant gathering', async () => {
+  const { gatherForStore, harvest } = await import('../simulation/Economy.js');
+  const world = createWorld('stoneworkers');
+  const miner = world.citizens.find(c => c.profession === 'miner');
+  miner.race = 'dwarf';
+  const store = world.stockpiles[0];
+  const quarry = { ...miner.lastKnownSafeTile, quantity: 6, resource: 'stone' };
+  const before = store.total.stone;
+  assert.equal(harvest(world, miner, quarry), true);
+  assert.equal(miner.inventory.stone, 3);
+  assert.equal(gatherForStore(world, quarry, store, 0, miner), true);
+  assert.equal(store.total.stone, before + 3);
+  assert.equal(quarry.quantity, 0);
+});

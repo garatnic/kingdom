@@ -60,7 +60,7 @@ export const ADULT_AGE = 16;
 export const citizenRaces = {
   human: { label: '人間', color: '#e2b56b', lifespan: [30, 45] },
   elf: { label: 'エルフ', color: '#a9d592', lifespan: [50, 80] },
-  dwarf: { label: 'ドワーフ', color: '#dd9979', lifespan: [40, 60] },
+  dwarf: { label: 'ドワーフ', color: '#dd9979', lifespan: [40, 60], stoneGatherBonus: 1 },
   orc: { label: 'オーク', color: '#9ccc70', lifespan: [35, 55] },
   halfling: { label: 'ハーフリング', color: '#edc68f', lifespan: [45, 65] },
   fairy: { label: '妖精', color: '#ed9cde', lifespan: [60, 95], minMagicAffinity: 0.75 }
