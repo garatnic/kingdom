@@ -151,3 +151,26 @@ test('a mature settlement admits a bounded group between regular migration days'
   assert.ok(world.citizens.every(c => c.homeBuildingId === home.id));
   assert.equal(store.total.food, 150);
 });
+
+test('daily matchmaking skips parents and siblings and leaves unrelated adults eligible', () => {
+  const world = createWorld('family-matching');
+  const [parent, first, sibling, unrelated] = world.citizens;
+  for (const citizen of [parent, first, sibling, unrelated]) {
+    citizen.race = 'human';
+    citizen.birthWorldTimeTick = -20 * TIME_TICKS_PER_YEAR;
+    citizen.relationships = {};
+  }
+  parent.birthWorldTimeTick = -36 * TIME_TICKS_PER_YEAR;
+  first.parentIds = sibling.parentIds = [parent.id];
+  parent.childIds = [first.id, sibling.id];
+  world.citizens = [parent, first, sibling, unrelated];
+  for (const [a, b] of [[parent, first], [first, sibling], [first, unrelated]]) {
+    a.relationships[b.id] = b.relationships[a.id] = 60;
+  }
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updatePopulation(world, 12);
+  assert.equal(first.partnerId, unrelated.id);
+  assert.equal(unrelated.partnerId, first.id);
+  assert.equal(parent.partnerId, null);
+  assert.equal(sibling.partnerId, null);
+});

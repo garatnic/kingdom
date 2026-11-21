@@ -1,5 +1,6 @@
-import { ADULT_AGE, NEEDS } from '../data/balance.js';
+import { ADULT_AGE, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { ageYears } from './Identity.js';
+import { campaignFor } from './War.js';
 import { workTile } from './Construction.js';
 import { COMBAT, gear } from '../data/combat.js';
 import { emitOnce } from '../systems/History.js';
@@ -55,16 +56,18 @@ export function commissionGear(world, citizen, store, only = null) {
 }
 
 export function trainGuildApprentices(world) {
-  const led = new Set();
+  const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
   const assigned = new Set(world.quests.filter(q => q.status === 'claimed')
     .flatMap(q => [q.claimedBy, q.escortId]));
   for (const guild of world.buildings) {
     const id = guild.settlementId;
-    if (guild.kind !== 'guild' || led.has(id) ||
-        world.settlements.find(s => s.id === id)?.foodWarning) continue;
+    if (guild.kind !== 'guild') continue;
+    const home = world.settlements.find(s => s.id === id);
+    if (!home || home.foodWarning || home.lastGuildLessonDay === day) continue;
     const local = world.citizens.filter(c => c.alive && c.settlementId === id && c.profession === 'adventurer' &&
       ageYears(world, c) >= ADULT_AGE && c.hp > COMBAT.retreatHp && c.hunger < NEEDS.eat &&
       c.fatigue < NEEDS.sleep && c.action.kind === 'idle' && !assigned.has(c.id) && !c.expeditionId &&
+      !campaignFor(world, c) &&
       Math.abs(c.lastKnownSafeTile.x - guild.x) + Math.abs(c.lastKnownSafeTile.y - guild.y) <= 8);
     const mentor = local.find(c => c.skills.combat >= 2 && (c.adventuresCompleted ?? 0) >= 5 &&
       workTile(world, c.lastKnownSafeTile, guild));
@@ -81,6 +84,6 @@ export function trainGuildApprentices(world) {
         level: apprentice.skills.combat, x: guild.x, y: guild.y
       });
     }
-    led.add(id);
+    home.lastGuildLessonDay = day;
   }
 }

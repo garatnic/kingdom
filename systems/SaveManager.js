@@ -91,6 +91,7 @@ function validate(world) {
         (q.settlementId === trade.partnerId && q.partnerId === id))));
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.trade === undefined || validTrade(s.trade, s.id)) &&
+        (s.lastGuildLessonDay === undefined || integer(s.lastGuildLessonDay, 0, Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY))) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
         (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1) &&
           (s.foodAid.allianceRelief === undefined || (s.foodAid.allianceRelief === true && s.foodAid.recipientNationId)) &&

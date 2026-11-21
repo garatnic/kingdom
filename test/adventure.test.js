@@ -427,6 +427,11 @@ test('an experienced adventurer can train an idle adult apprentice in the guild'
   assert.equal(apprentice.combatXp, 2);
   const lesson = world.events.find(event => event.type === 'guildApprenticeAdvanced');
   assert.deepEqual(lesson.actorIds, [mentor.id, apprentice.id]);
+  trainGuildApprentices(world);
+  assert.equal(apprentice.combatXp, 2);
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  trainGuildApprentices(world);
+  assert.equal(apprentice.combatXp, 6);
 });
 
 test('binding magic delays a dangerous monster once and resumed casting deals damage', async () => {

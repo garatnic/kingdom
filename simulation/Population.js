@@ -49,6 +49,8 @@ function marry(world, first, second) {
 }
 
 function dailyRelationships(world, citizens) {
+  const people = new Map(citizens.map(c => [c.id, c]));
+  const ancestors = citizen => new Set(citizen.parentIds.flatMap(id => [id, ...(people.get(id)?.parentIds ?? [])]));
   const groups = new Map();
   const adults = [];
   for (const citizen of citizens) {
@@ -56,12 +58,13 @@ function dailyRelationships(world, citizens) {
     const key = citizen.settlementId + '/' + citizen.race;
     if (!groups.has(key)) groups.set(key, []);
     const group = groups.get(key);
-    adults.push({ citizen, group, index: group.length });
-    group.push(citizen);
+    const entry = { citizen, ancestors: ancestors(citizen), group, index: group.length };
+    adults.push(entry);
+    group.push(entry);
   }
-  for (const { citizen: first, group, index } of adults) {
+  for (const { citizen: first, ancestors: firstAncestors, group, index } of adults) {
     for (let i = index + 1; i < group.length; i++) {
-      const second = group[i];
+      const { citizen: second, ancestors: secondAncestors } = group[i];
       first.relationships ??= {};
       second.relationships ??= {};
       const newScore = score => Math.min(100, (score ?? 0) + FAMILY.relationshipPerDay);
@@ -69,6 +72,8 @@ function dailyRelationships(world, citizens) {
       const b = second.relationships[first.id] = newScore(second.relationships[first.id]);
       if (first.partnerId || second.partnerId || a < FAMILY.marriageThreshold || b < FAMILY.marriageThreshold ||
           Math.abs(ageYears(world, first) - ageYears(world, second)) > FAMILY.maxAgeGap) continue;
+      if (firstAncestors.has(second.id) || secondAncestors.has(first.id) ||
+          first.parentIds.some(id => second.parentIds.includes(id))) continue;
       marry(world, first, second);
     }
   }
