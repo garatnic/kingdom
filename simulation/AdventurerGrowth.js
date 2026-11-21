@@ -34,10 +34,10 @@ export function recordAdventureSuccess(world, citizen, quest) {
   }
 }
 
-export function commissionGear(world, citizen, store) {
+export function commissionGear(world, citizen, store, only = null) {
   if (!world.buildings.some(b => b.kind === 'smithy' && b.settlementId === citizen.settlementId)) return;
   for (const [id, item] of Object.entries(gear)) {
-    if ((gear[citizen.gearId]?.attack ?? 0) >= item.attack ||
+    if ((only && id !== only) || (gear[citizen.gearId]?.attack ?? 0) >= item.attack ||
         citizen.skills.combat < item.requiredLevel ||
         !unlocked(world, citizen.settlementId, item.technology) ||
         available(store, 'iron') < item.iron ||

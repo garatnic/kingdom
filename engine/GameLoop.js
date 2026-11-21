@@ -7,7 +7,7 @@ import { updateAdventureWorld } from '../simulation/Adventure.js';
 import { updateCitizens } from '../simulation/CitizenAI.js';
 import { updateNations } from '../simulation/Nations.js';
 import { updateResearch } from '../simulation/Research.js';
-import { installArcaneIrrigation, produceMiningTools } from '../simulation/Industry.js';
+import { installArcaneIrrigation, prepareArcaneGear, produceMiningTools } from '../simulation/Industry.js';
 import { updateFoodAid } from '../simulation/FoodAid.js';
 import { updateAlliances } from '../simulation/Diplomacy.js';
 import { updateTrade } from '../simulation/Trade.js';
@@ -31,6 +31,7 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
       updateResearch(world, TICKS_PER_STEP_AT_1X);
       if (world.worldTimeTick % TIME_TICKS_PER_DAY === 0) {
         produceMiningTools(world);
+        prepareArcaneGear(world);
         installArcaneIrrigation(world);
         recordSettlements(world);
         updateAlliances(world);

@@ -379,6 +379,7 @@ test('a guild with two adults promotes an open notice after a monster forms a ne
 });
 
 test('an arcane smithy commission protects mana reserves and persists its equipment', async () => {
+  const { prepareArcaneGear } = await import('../simulation/Industry.js');
   const world = createWorld('arcane-equipment');
   const [home] = world.settlements;
   const [store] = world.stockpiles;
@@ -391,8 +392,8 @@ test('an arcane smithy commission protects mana reserves and persists its equipm
   commissionGear(world, adventurer, store);
   assert.equal(adventurer.gearId, 'steel');
   store.total.manaStone++;
-  commissionGear(world, adventurer, store);
-  commissionGear(world, adventurer, store);
+  prepareArcaneGear(world);
+  prepareArcaneGear(world);
   assert.equal(adventurer.gearId, 'arcane');
   assert.equal(store.total.iron, 2);
   assert.equal(store.total.manaStone, 5);
