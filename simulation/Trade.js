@@ -7,11 +7,16 @@ import { findPath } from './path.js';
 
 const targets = { wood: 10, stone: 5, iron: 4, manaStone: 5 };
 
-function exchange(source, destination, sourceTargets, destinationTargets, foodTarget) {
-  return Object.keys(targets).find(resource =>
-    available(source, resource) >= sourceTargets[resource] + 2 &&
-    available(destination, resource) < destinationTargets[resource] &&
-    storageRoom(destination, resource, foodTarget) > 0);
+function exchange(source, destination, sourceTargets, destinationTargets, foodTarget, reciprocal = false) {
+  for (const resource of Object.keys(targets)) {
+    const stock = available(source, resource);
+    const received = available(destination, resource);
+    const wanted = reciprocal ? Math.floor((stock - received) / 2) : destinationTargets[resource] - received;
+    const quantity = Math.min(2, stock - sourceTargets[resource], wanted,
+      storageRoom(destination, resource, foodTarget));
+    if (quantity > 0) return { resource, quantity };
+  }
+  return null;
 }
 
 export function updateTrade(world) {
@@ -86,12 +91,15 @@ export function updateTrade(world) {
       const second = stores.get(b.id);
       const firstTargets = reserves.get(a.id);
       const secondTargets = reserves.get(b.id);
-      const outgoing = exchange(first, second, firstTargets, secondTargets, foodTarget(b.id));
-      const incoming = exchange(second, first, secondTargets, firstTargets, foodTarget(a.id));
-      if (!outgoing || !incoming) continue;
-      const quantity = Math.min(2, firstTargets[incoming] - available(first, incoming),
-        secondTargets[outgoing] - available(second, outgoing),
-        storageRoom(first, incoming, foodTarget(a.id)), storageRoom(second, outgoing, foodTarget(b.id)));
+      const firstOffer = exchange(first, second, firstTargets, secondTargets, foodTarget(b.id));
+      const secondOffer = exchange(second, first, secondTargets, firstTargets, foodTarget(a.id));
+      if (!firstOffer && !secondOffer) continue;
+      const outgoingOffer = firstOffer ?? exchange(first, second, firstTargets, secondTargets, foodTarget(b.id), true);
+      const incomingOffer = secondOffer ?? exchange(second, first, secondTargets, firstTargets, foodTarget(a.id), true);
+      if (!outgoingOffer || !incomingOffer || outgoingOffer.resource === incomingOffer.resource) continue;
+      const outgoing = outgoingOffer.resource;
+      const incoming = incomingOffer.resource;
+      const quantity = Math.min(outgoingOffer.quantity, incomingOffer.quantity);
       const path = route(first, second);
       if (!path) continue;
       const travelDays = Math.max(1, Math.ceil(path.length / 32));

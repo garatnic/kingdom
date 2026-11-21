@@ -432,3 +432,16 @@ test('barter sees shortages above normal reserve when a capital has unreserved c
   assert.equal(home.trade.partnerId, away.id);
   assert.equal(home.trade.incomingQuantity, 2);
 });
+
+test('a capital can exchange surplus reserves for a scarce good even if its partner meets ordinary targets', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { world, invader, defender, homeStore } = twoNations();
+  const other = world.stockpiles[1];
+  Object.assign(homeStore.total, { food: 36, wood: 20, stone: 10, iron: 7, manaStone: 0 });
+  Object.assign(other.total, { food: 30, wood: 16, stone: 10, iron: 7, manaStone: 9 });
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  const trade = world.settlements[0].trade;
+  assert.deepEqual([trade.outgoing, trade.incoming, trade.outgoingQuantity], ['wood', 'manaStone', 2]);
+});
