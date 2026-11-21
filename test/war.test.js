@@ -381,3 +381,38 @@ test('peaceful nation relations can reach friendship through reachable capitals'
   assert.equal(defender.relations[invader.id], 60);
   assert.equal(world.events.filter(e => e.type === 'friendshipReached').length, 1);
 });
+
+test('barter delivers both loads exactly once or returns both after hostilities', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const awayStore = world.stockpiles[1];
+  Object.assign(homeStore.total, { wood: 20, stone: 0 });
+  Object.assign(awayStore.total, { wood: 0, stone: 10 });
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  const home = world.settlements[0];
+  assert.equal(home.trade.outgoing, 'wood');
+  assert.equal(home.trade.incoming, 'stone');
+  assert.equal(homeStore.total.wood, 18);
+  assert.equal(awayStore.total.stone, 8);
+
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  saved.worldTimeTick = home.trade.arrivalDay * TIME_TICKS_PER_DAY;
+  updateTrade(saved);
+  updateTrade(saved);
+  assert.equal(saved.stockpiles[0].total.stone, 2);
+  assert.equal(saved.stockpiles[1].total.wood, 2);
+  assert.equal(saved.events.filter(e => e.type === 'internationalTradeCompleted').length, 1);
+
+  invader.relations[defender.id] = defender.relations[invader.id] = -60;
+  world.worldTimeTick = home.trade.arrivalDay * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  assert.equal(home.trade.returning, true);
+  world.worldTimeTick = home.trade.arrivalDay * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  assert.equal(home.trade, undefined);
+  assert.equal(homeStore.total.wood, 20);
+  assert.equal(awayStore.total.stone, 10);
+  assert.equal(away.nationId, defender.id);
+});

@@ -1,5 +1,5 @@
 import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
-import { NATIONS } from '../data/nations.js';
+import { friendlyNations } from './Diplomacy.js';
 import { buildings } from '../data/buildings.js';
 import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
@@ -22,16 +22,7 @@ export function updateFoodAid(world) {
   }
 
   const nations = new Map(world.nations.map(nation => [nation.id, nation]));
-  function friendly(sourceId, destinationId) {
-    const source = nations.get(sourceId);
-    const destination = nations.get(destinationId);
-    return source && destination && source.fallenAt === undefined && destination.fallenAt === undefined &&
-      (source.relations?.[destinationId] ?? 0) >= NATIONS.friendly &&
-      (destination.relations?.[sourceId] ?? 0) >= NATIONS.friendly &&
-      !world.campaigns?.some(c => (c.status === 'marching' || c.status === 'siege') &&
-        ((c.attackerId === sourceId && c.defenderId === destinationId) ||
-          (c.attackerId === destinationId && c.defenderId === sourceId)));
-  }
+  const friendly = (from, to) => friendlyNations(world, nations.get(from), nations.get(to));
 
   function settle(destination, field, resource, quantityKey) {
     const aid = destination[field];

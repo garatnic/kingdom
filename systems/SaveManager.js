@@ -77,7 +77,17 @@ function validate(world) {
     settlements.has(aid.sourceId) && nations.has(aid.nationId) &&
     integer(aid.travelDays, 1, map.width * map.height) && integer(aid.arrivalDay, 1) &&
     typeof aid.returning === 'boolean';
+  const tradeGoods = ['wood', 'stone', 'iron', 'manaStone'];
+  const validTrade = (trade, id) => trade && trade.partnerId !== id && settlements.has(trade.partnerId) &&
+    nations.has(trade.firstNationId) && nations.has(trade.secondNationId) && trade.firstNationId !== trade.secondNationId &&
+    tradeGoods.includes(trade.outgoing) && tradeGoods.includes(trade.incoming) && trade.outgoing !== trade.incoming &&
+    integer(trade.outgoingQuantity, 0, 2) && integer(trade.incomingQuantity, 0, 2) &&
+    (trade.returning ? trade.outgoingQuantity + trade.incomingQuantity > 0 :
+      trade.outgoingQuantity > 0 && trade.outgoingQuantity === trade.incomingQuantity) &&
+    integer(trade.arrivalDay, 1) && integer(trade.travelDays, 1, map.width * map.height) &&
+    typeof trade.returning === 'boolean';
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
+        (s.trade === undefined || validTrade(s.trade, s.id)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
         (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1) &&
           (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&

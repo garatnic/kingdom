@@ -9,6 +9,7 @@ import { updateNations } from '../simulation/Nations.js';
 import { updateResearch } from '../simulation/Research.js';
 import { produceMiningTools } from '../simulation/Industry.js';
 import { updateFoodAid } from '../simulation/FoodAid.js';
+import { updateTrade } from '../simulation/Trade.js';
 import { recordSettlements } from '../simulation/SettlementRecords.js';
 import { updatePopulation } from '../simulation/Population.js';
 
@@ -31,6 +32,7 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
         produceMiningTools(world);
         recordSettlements(world);
         updateFoodAid(world);
+        updateTrade(world);
         trimHistory(world);
       }
     }
