@@ -64,3 +64,20 @@ test('wisps prey on adjacent slimes and close unresolved bounties without awardi
   assert.equal(world.resourceNodes.length, resourceCount);
   assert.equal(world.events.find(e => e.type === 'monsterPredation').predatorId, wisp.id);
 });
+
+
+test('a dangerous monster near a settlement is recorded once per day', () => {
+  const world = createWorld('threat');
+  const [home] = world.settlements;
+  world.map.terrain.fill('grass');
+  world.nextMonsterSpawnTick = Number.MAX_SAFE_INTEGER;
+  const goblin = spawnMonster(world, 'goblin', { x: home.x + 7, y: home.y });
+  goblin.moveAt = Number.MAX_SAFE_INTEGER;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 12);
+  updateAdventureWorld(world, 12);
+  const threats = world.events.filter(event => event.type === 'monsterThreat');
+  assert.equal(threats.length, 1);
+  assert.equal(threats[0].settlementId, home.id);
+  assert.equal(threats[0].monsterId, goblin.id);
+});

@@ -77,9 +77,10 @@ function choosePolicy(world, nation) {
   const store = depot(world, nation.capitalId);
   const capacity = world.buildings.filter(b => b.kind === 'house' && b.settlementId === nation.capitalId)
     .reduce((sum, b) => sum + b.capacity, 0);
-  const recentThreats = world.events.filter(e => e.type === 'adventureReturned' && e.retreated &&
+  const recentThreats = world.events.filter(e =>
     world.worldTimeTick - e.worldTimeTick <= 3 * TIME_TICKS_PER_DAY &&
-    people.some(c => c.id === e.citizenId)).length;
+    ((e.type === 'adventureReturned' && e.retreated && people.some(c => c.id === e.citizenId)) ||
+      (e.type === 'monsterThreat' && nation.settlementIds.includes(e.settlementId)))).length;
   const candidates = [
     ['food', Math.max(0, 1 - available(store, 'food') / Math.max(1, people.length * FOOD_EMERGENCY_PER_PERSON)) * nation.weights.food],
     ['housing', Math.max(0, 1 - capacity / Math.max(1, people.length))],

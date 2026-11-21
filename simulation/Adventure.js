@@ -321,6 +321,16 @@ export function updateAdventureWorld(world, ticks) {
   if (day) huntPrey(world);
   if (!first && !day) return;
   for (const settlement of world.settlements) {
+    if (day) {
+      const threat = world.monsters.find(monster => monster.alive &&
+        monsters[monster.species].attack >= monsters.goblin.attack && distance(settlement, monster) <= 8);
+      if (threat) {
+        emitOnce(world, `${settlement.id}/${Math.floor(now / TIME_TICKS_PER_DAY)}`, 'monsterThreat', {
+          settlementId: settlement.id, nationId: settlement.nationId, monsterId: threat.id,
+          species: threat.species, x: threat.x, y: threat.y
+        });
+      }
+    }
     let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length;
     if (slots <= 0) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
