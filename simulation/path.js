@@ -1,5 +1,7 @@
 import { TERRAIN_COST } from '../data/balance.js';
 
+const pathWorkspaces = new WeakMap();
+
 const verticalFirst = [[0, -1], [-1, 0], [1, 0], [0, 1]];
 const horizontalFirst = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
@@ -44,26 +46,40 @@ export function findPath(world, start, goal) {
   const index = ({ x, y }) => y * width + x;
   const origin = index(start);
   const destination = index(goal);
-  const blocked = new Set();
+  const size = width * height;
+  let workspace = pathWorkspaces.get(world);
+  if (workspace?.visited.length !== size) {
+    workspace = { visited: new Uint32Array(size), blocked: new Uint32Array(size),
+      costs: new Float64Array(size), previous: new Uint32Array(size), order: new Uint32Array(size), stamp: 0 };
+    pathWorkspaces.set(world, workspace);
+  }
+  const { visited, blocked, costs, previous, order } = workspace;
+  if (workspace.stamp === 0xffffffff) {
+    visited.fill(0);
+    blocked.fill(0);
+    workspace.stamp = 0;
+  }
+  const stamp = ++workspace.stamp;
   for (const building of world.buildings) {
     for (let y = building.y; y < building.y + (building.height ?? 1); y++) {
-      for (let x = building.x; x < building.x + (building.width ?? 1); x++) blocked.add(y * width + x);
+      for (let x = building.x; x < building.x + (building.width ?? 1); x++) blocked[y * width + x] = stamp;
     }
   }
-  if (blocked.has(destination) || !Number.isFinite(TERRAIN_COST[terrain[destination]])) return null;
+  if (blocked[destination] === stamp || !Number.isFinite(TERRAIN_COST[terrain[destination]])) return null;
 
   const heuristic = tile => Math.abs(tile % width - goal.x) + Math.abs(Math.floor(tile / width) - goal.y);
-  const costs = new Map([[origin, 0]]);
-  const previous = new Map();
+  visited[origin] = stamp;
+  costs[origin] = 0;
+  order[origin] = 0;
+  let frontierOrder = 1;
   const pending = [{ tile: origin, cost: 0, score: heuristic(origin), order: 0 }];
-  const order = new Map([[origin, 0]]);
   while (pending.length) {
     const next = pop(pending);
     const current = next.tile;
-    if (next.cost !== costs.get(current)) continue;
+    if (next.cost !== costs[current]) continue;
     if (current === destination) {
       const path = [];
-      for (let tile = destination; tile !== origin; tile = previous.get(tile)) {
+      for (let tile = destination; tile !== origin; tile = previous[tile]) {
         path.push({ x: tile % width, y: Math.floor(tile / width) });
       }
       return path.reverse();
@@ -76,11 +92,15 @@ export function findPath(world, start, goal) {
       if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
       const tile = ny * width + nx;
       const cost = next.cost + TERRAIN_COST[terrain[tile]];
-      if (blocked.has(tile) || !(cost < (costs.get(tile) ?? Infinity))) continue;
-      costs.set(tile, cost);
-      previous.set(tile, current);
-      if (!order.has(tile)) order.set(tile, order.size);
-      push(pending, { tile, cost, score: cost + heuristic(tile), order: order.get(tile) });
+      const seen = visited[tile] === stamp;
+      if (blocked[tile] === stamp || !(cost < (seen ? costs[tile] : Infinity))) continue;
+      costs[tile] = cost;
+      previous[tile] = current;
+      if (!seen) {
+        visited[tile] = stamp;
+        order[tile] = frontierOrder++;
+      }
+      push(pending, { tile, cost, score: cost + heuristic(tile), order: order[tile] });
     }
   }
   return null;
