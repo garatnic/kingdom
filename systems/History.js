@@ -17,14 +17,16 @@ export function emitOnce(world, sourceTransactionId, type, detail) {
   return true;
 }
 
+export function involvesCitizen(event, id) {
+  return event.citizenId === id || event.leaderId === id || event.citizenIds?.includes(id) ||
+    event.parentIds?.includes(id) || event.actorIds?.includes(id) || event.affectedCitizenIds?.includes(id);
+}
+
 export function historyFor(world, kind, id) {
   if (!id && kind !== 'world') return [];
   return world.events.filter(e => {
     if (kind === 'world') return eventImportance(e) >= 2;
-    if (kind === 'citizen') {
-      return e.citizenId === id || e.leaderId === id || e.citizenIds?.includes(id) ||
-        e.parentIds?.includes(id) || e.actorIds?.includes(id) || e.affectedCitizenIds?.includes(id);
-    }
+    if (kind === 'citizen') return involvesCitizen(e, id);
     const nation = world.nations.find(n => n.id === id);
     const research = world.researchStates.find(state => state.ownerId === id);
     return e.nationId === id || e.ownerId === id || e.nationIds?.includes(id) ||

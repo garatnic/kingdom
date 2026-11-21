@@ -141,3 +141,12 @@ test('drought delays local harvests and remains idempotent after restoration', a
   const revived = await readSnapshot(JSON.stringify(await createSnapshot(restored)));
   assert.equal(applyGodCommand(revived, fertility), 'DUPLICATE');
 });
+
+test('favorite citizens persist in a snapshot and reference existing residents', async () => {
+  const world = createWorld('favorite-save');
+  world.settings.favoriteCitizenIds = [world.citizens[0].id];
+  const loaded = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  assert.deepEqual(loaded.settings.favoriteCitizenIds, world.settings.favoriteCitizenIds);
+  loaded.settings.favoriteCitizenIds = ['citizen:999999'];
+  await assert.rejects(createSnapshot(loaded), /注目人物/);
+});

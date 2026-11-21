@@ -9,7 +9,7 @@ import { relationLabel } from '../simulation/Nations.js';
 import { activeNations, truceBetween } from '../simulation/War.js';
 import { civilizationProgress, getResearch, researchOwner } from '../simulation/Research.js';
 import { ageYears } from '../simulation/Identity.js';
-import { eventImportance, historyFor } from '../systems/History.js';
+import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
@@ -63,6 +63,7 @@ export function observation(getWorld, getCamera, focus) {
   const tab = get('history-tab');
   const subjects = get('history-subject');
   const search = get('history-search');
+  const favoriteOnly = get('favorite-only');
   const eventFilter = get('event-filter');
   const previousPages = [];
   const body = get('history-body');
@@ -83,7 +84,9 @@ export function observation(getWorld, getCamera, focus) {
     if (!force && key === previousRender) return;
     previousRender = key;
     const citizenMode = mode === 'citizen' || mode === 'family';
-    const candidates = citizenMode ? world.citizens :
+    get('favorite-filter').hidden = !citizenMode;
+    const favorites = world.settings.favoriteCitizenIds ?? [];
+    const candidates = citizenMode ? (favoriteOnly.checked ? world.citizens.filter(c => favorites.includes(c.id)) : world.citizens) :
       mode === 'nation' ? world.nations : mode === 'settlement' ? world.settlements : [];
     search.hidden = mode === 'world';
     const choices = query ? candidates.filter(entry =>
@@ -206,8 +209,8 @@ export function observation(getWorld, getCamera, focus) {
       return;
     }
 
-    if (query && !choices.length) {
-      add(body, 'p', '検索に一致する対象はありません。');
+    if (!choices.length && (query || citizenMode && favoriteOnly.checked)) {
+      add(body, 'p', query ? '検索に一致する対象はありません。' : '注目人物はまだいません。');
       return;
     }
     const person = world.citizens.find(c => c.id === subjects.value);
@@ -224,6 +227,15 @@ export function observation(getWorld, getCamera, focus) {
       }
       const inventory = Object.entries(person.inventory).filter(([, qty]) => qty > 0);
       if (inventory.length) add(body, 'p', inventory.map(([key, qty]) => `${resources[key]} ${qty}`).join(' / '));
+      const starred = favorites.includes(person.id);
+      const favorite = add(body, 'button', starred ? '注目人物から外す' : '注目人物に登録');
+      favorite.id = 'favorite-citizen';
+      favorite.setAttribute('aria-pressed', String(starred));
+      favorite.onclick = () => {
+        world.settings.favoriteCitizenIds = starred ? favorites.filter(id => id !== person.id) : [...favorites, person.id];
+        render(true);
+        get('favorite-citizen')?.focus();
+      };
       if (mode === 'family') {
         const fields = [['親', person.parentIds], ['子', person.childIds], ['配偶者', [person.partnerId].filter(Boolean)]];
         for (const [label, ids] of fields) {
@@ -315,6 +327,7 @@ export function observation(getWorld, getCamera, focus) {
   tab.onchange = () => { search.value = ''; previousPages.length = 0; render(true); };
   eventFilter.onchange = () => { previousPages.length = 0; render(true); };
   search.oninput = () => render(true);
+  favoriteOnly.onchange = () => render(true);
   subjects.onchange = () => render(true);
   get('follow').onclick = () => {
     const camera = getCamera();
@@ -332,6 +345,7 @@ export function observation(getWorld, getCamera, focus) {
 
   function selectCitizen(id) {
     search.value = '';
+    if (!getWorld().settings.favoriteCitizenIds?.includes(id)) favoriteOnly.checked = false;
     render(true);
     subjects.value = id;
     render(true);
@@ -389,8 +403,9 @@ export function observation(getWorld, getCamera, focus) {
         if (seat) target = { x: seat.x + 0.5, y: seat.y + 0.5 };
       }
       if (camera.mode === 'autoEvent') {
+        const favorites = world.settings.favoriteCitizenIds ?? [];
         const score = event => eventImportance(event) * 10 + 5 +
-          (event.citizenId === camera.subjectId ? 8 : 0) - (event.type === currentEvent?.type ? 10 : 0);
+          (favorites.some(id => involvesCitizen(event, id)) ? 8 : 0) - (event.type === currentEvent?.type ? 10 : 0);
         const candidates = world.events.slice(-40).reverse().filter(e =>
           eventImportance(e) >= 4 && !seen.has(e.id) && eventLocation(world, e));
         const candidate = candidates.sort((a, b) => score(b) - score(a))[0];
@@ -409,6 +424,7 @@ export function observation(getWorld, getCamera, focus) {
       camera.y += (target.y - camera.y) * weight;
     },
     reset() {
+      favoriteOnly.checked = false;
       recordsOpenFor = null;
       previousPages.length = 0;
       previousRender = '';

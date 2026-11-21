@@ -195,6 +195,14 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     await poll(() => evaluate("document.querySelector('#history-subject').options.length === 1 && document.querySelector('#history-body').textContent.includes('ミラ')"));
     await evaluate(`(() => {
+      document.querySelector('#favorite-citizen').click();
+      const search = document.querySelector('#history-search');
+      search.value = '';
+      search.dispatchEvent(new Event('input'));
+      document.querySelector('#favorite-only').click();
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-subject').options.length === 1 && document.querySelector('#favorite-citizen').getAttribute('aria-pressed') === 'true'"));
+    await evaluate(`(() => {
       const tab = document.querySelector('#history-tab');
       tab.value = 'family';
       tab.dispatchEvent(new Event('change'));

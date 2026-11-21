@@ -95,6 +95,9 @@ function validate(world) {
     throw new Error('保存データの集落・資源が無効です。');
   }
   const people = new Map(world.citizens.map(c => [c.id, c]));
+  const favorites = world.settings.favoriteCitizenIds;
+  if (favorites !== undefined && (!Array.isArray(favorites) || new Set(favorites).size !== favorites.length ||
+      !favorites.every(id => people.has(id)))) throw new Error('保存データの注目人物が無効です。');
   if (world.campaigns?.some(c => !['marching', 'siege', 'occupied', 'repelled'].includes(c.status) ||
       !nations.has(c.attackerId) || !nations.has(c.defenderId) || !settlements.has(c.settlementId) ||
       (['marching', 'siege'].includes(c.status) &&
