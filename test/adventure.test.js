@@ -163,3 +163,30 @@ test('a nest expedition shares combat, clears all nest members, and restores mid
   assert.equal(escort.adventuresCompleted, 1);
   assert.equal(world.events.filter(e => e.type === 'monsterNestCleared').length, 1);
 });
+
+test('a traveling adventurer eats the quest ration once when hunger rises', async () => {
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const world = createWorld('rations');
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const adventurer = world.citizens.find(c => c.profession === 'adventurer');
+  const tile = { x: settlement.x + 4, y: settlement.y };
+  world.map.terrain[tile.y * world.map.width + tile.x] = 'grass';
+  const target = spawnMonster(world, 'slime', tile);
+  const quest = issueQuest(world, settlement, target);
+  const food = store.total.food;
+  assert.ok(claimAdventure(world, adventurer, store, () => true));
+  assert.equal(adventurer.inventory.food, 1);
+  assert.equal(store.total.food, food - 1);
+  adventurer.hunger = 79;
+  adventurer.decisionAt = 2400;
+  world.worldTimeTick = 600;
+  updateCitizens(world, 12);
+  assert.equal(quest.provision, 0);
+  assert.equal(adventurer.inventory.food, 0);
+  assert.equal(adventurer.hunger, 42);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick = 1200;
+  updateCitizens(restored, 12);
+  assert.equal(restored.citizens.find(c => c.id === adventurer.id).hunger, 45);
+});

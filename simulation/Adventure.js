@@ -6,7 +6,7 @@ import { COMBAT, gear, monsters } from '../data/combat.js';
 import { ADULT_AGE, START_REGION_SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
-import { available, deposit } from './Economy.js';
+import { available, deposit, storeTile } from './Economy.js';
 import { recordDeath } from './Population.js';
 import { campaignFor } from './War.js';
 import { findPath, reachableTiles } from './path.js';
@@ -249,8 +249,10 @@ export function updateAdventureWorld(world, ticks) {
     if (slots <= 0) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
-    const connected = reachableTiles(world, origin);
-    const enemies = world.monsters.filter(m => m.alive && connected[m.y * world.map.width + m.x] === 1)
+    const nearby = world.monsters.filter(m => m.alive && distance(m, settlement) <= COMBAT.questRadius);
+    if (!nearby.length) continue;
+    const connected = reachableTiles(world, origin, undefined, nearby.map(m => m.y * world.map.width + m.x));
+    const enemies = nearby.filter(m => connected[m.y * world.map.width + m.x] === 1)
       .sort((a, b) => distance(a, settlement) - distance(b, settlement));
     const raidsAvailable = world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) &&
       world.citizens.filter(c => c.alive && c.settlementId === settlement.id).length >= 16;
@@ -286,7 +288,8 @@ export function claimAdventure(world, citizen, store, travel) {
   for (const quest of world.quests) {
     if (quest.status !== 'open' || quest.settlementId !== citizen.settlementId) continue;
     const monster = world.monsters.find(m => m.id === quest.targetId && m.alive);
-    const goal = monster && approach(world, citizen, monster);
+    if (!monster || distance(storeTile(world, store), monster) > COMBAT.questRadius) continue;
+    const goal = approach(world, citizen, monster);
     if (!goal || !travel(goal, 'adventure', quest.id)) continue;
     commissionGear(world, citizen, store);
     store.total.food--;
@@ -341,10 +344,11 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
   const monster = world.monsters.find(m => m.id === quest.targetId);
   const position = tileOf(citizen);
   if (quest.escortId === citizen.id) {
-    if (citizen.hp <= COMBAT.retreatHp || citizen.fear >= COMBAT.fearRetreat) quest.escortRetreated = true;
+    if (citizen.hp <= COMBAT.retreatHp || citizen.fear >= COMBAT.fearRetreat || citizen.hunger >= NEEDS.eat ||
+        (monster?.alive && distance(origin, monster) > COMBAT.questRadius)) quest.escortRetreated = true;
     if (quest.escortRetreated || quest.stage === 'return') {
       if (distance(position, origin) > 0) return travel(origin, 'adventure', quest.id);
-      if (!quest.escortReturned && citizen.inventory.food > 0) {
+      if (!quest.escortReturned && !quest.escortAteProvision && citizen.inventory.food > 0) {
         citizen.inventory.food--;
         citizen.hunger = Math.max(0, citizen.hunger - FOOD_HUNGER_RESTORED);
       }
@@ -364,7 +368,8 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
   const range = spell ? TECH.spellRange : COMBAT.rangedDistance;
   if (quest.stage === 'fight') {
     const cutoff = COMBAT.retreatHp - (COMBAT.retreatHp - COMBAT.braveRetreatHp) * citizen.traits.bravery;
-    if (citizen.hp <= cutoff || citizen.fear >= COMBAT.fearRetreat || !monster?.alive) {
+    if (citizen.hp <= cutoff || citizen.fear >= COMBAT.fearRetreat || citizen.hunger >= NEEDS.eat ||
+        !monster?.alive || distance(origin, monster) > COMBAT.questRadius) {
       quest.stage = 'return';
       quest.retreated = true;
     } else if (distance(position, monster) > range) {

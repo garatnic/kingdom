@@ -1,4 +1,4 @@
-import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
+import { DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
@@ -309,7 +309,17 @@ export function updateCitizens(world, ticks, camera) {
   if (Math.floor(world.worldTimeTick / NEED_HOUR_TICKS) >
       Math.floor((world.worldTimeTick - ticks) / NEED_HOUR_TICKS)) {
     for (const citizen of world.citizens) {
-      if (citizen.alive) updateNeeds(world, citizen, ticks);
+      if (!citizen.alive) continue;
+      if (citizen.hunger >= NEEDS.eat - FOOD_HUNGER_PER_HOUR && citizen.inventory.food > 0) {
+        const quest = assignedAdventure(world, citizen);
+        if (quest) {
+          citizen.inventory.food--;
+          citizen.hunger -= FOOD_HUNGER_RESTORED;
+          if (quest.claimedBy === citizen.id) quest.provision = 0;
+          else quest.escortAteProvision = true;
+        }
+      }
+      updateNeeds(world, citizen, ticks);
     }
     updateDistantSettlements(world, camera, population);
   }
