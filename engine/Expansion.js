@@ -69,7 +69,9 @@ export function surveyRoute(world, citizen) {
   }
   if (!candidates.length) return null;
   const cost = tile => Math.abs(tile.x - origin.x) + Math.abs(tile.y - origin.y);
-  candidates.sort((a, b) => cost(a) - cost(b));
+  const preferred = map.surveyedWidth <= map.surveyedHeight ? 'east' : 'south';
+  candidates.sort((a, b) => Number(b.direction === preferred) - Number(a.direction === preferred) ||
+    cost(a) - cost(b));
   const reachable = reachableTiles(world, origin);
   const goal = candidates.find(tile => reachable[tile.y * map.width + tile.x] === 1);
   if (goal) return { goal, path: findPath(world, origin, goal) };

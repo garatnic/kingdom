@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
-import { discoverFrontier } from '../engine/Expansion.js';
+import { discoverFrontier, surveyRoute } from '../engine/Expansion.js';
 import { advanceFrame } from '../engine/GameLoop.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { findPath } from '../simulation/path.js';
+import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 
 test('legacy terrain and coordinates migrate to a fixed map without consuming simulation randomness', async () => {
   const world = createWorld('world-tree');
@@ -65,4 +66,20 @@ test('frontier surveys reveal reachable ore and old exhausted iron workings reop
   const reopened = restored.resourceNodes.find(n => n.id === iron.id);
   assert.equal(reopened.quantity, quantity);
   assert.equal(reopened.renewAt, undefined);
+});
+
+test('surveys advance the shorter discovered axis and can fall back around a blocked edge', () => {
+  const world = createWorld('balanced-frontier');
+  const { map } = world;
+  map.terrain.fill('grass');
+  map.surveyedWidth = 96;
+  world.worldTimeTick = 2 * TIME_TICKS_PER_DAY;
+  const scout = world.citizens.find(c => c.profession === 'adventurer');
+  scout.lastKnownSafeTile = { x: 92, y: 10 };
+  assert.equal(surveyRoute(world, scout).goal.direction, 'south');
+
+  for (let x = 0; x < map.surveyedWidth; x++) {
+    map.terrain[(map.surveyedHeight - 1) * map.width + x] = 'water';
+  }
+  assert.equal(surveyRoute(world, scout).goal.direction, 'east');
 });
