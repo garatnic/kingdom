@@ -532,8 +532,13 @@ test('a threat that appears after trade dispatch makes the shipment wait for its
     const citizen = saved.citizens.find(c => c.id === id);
     citizen.lastKnownSafeTile = { x: enemy.x, y: enemy.y };
   }
+  const unarmored = structuredClone(saved);
+  const baselineEnemy = unarmored.monsters.find(m => m.id === enemy.id);
+  updateAdventureWorld(unarmored, 1);
+  saved.citizens.find(c => c.id === persisted.claimedBy).gearId = 'arcane';
   const health = enemy.hp;
   updateAdventureWorld(saved, 1);
+  assert.ok(enemy.hp < baselineEnemy.hp);
   assert.ok(enemy.hp < health);
   const afterClash = enemy.hp;
   updateAdventureWorld(saved, 1);

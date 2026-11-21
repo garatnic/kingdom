@@ -458,7 +458,8 @@ function resolveEscortEncounter(world, quest, lead) {
   const participants = team.filter(member => distance(tileOf(member), enemy) <= COMBAT.rangedDistance);
   const target = participants[0];
   const config = monsters[enemy.species];
-  const attack = participants.reduce((power, member) => power + COMBAT.attack + member.skills.combat, 0);
+  const attack = participants.reduce((power, member) =>
+    power + COMBAT.attack + member.skills.combat + (gear[member.gearId]?.attack ?? 0), 0);
   enemy.attackAt = world.worldTimeTick + COMBAT.interval;
   enemy.hp = Math.max(0, enemy.hp - damage(world, attack, config.defense));
   emitOnce(world, `${quest.id}/${enemy.id}`, 'tradeEscortClash', {
@@ -476,7 +477,7 @@ function resolveEscortEncounter(world, quest, lead) {
     return;
   }
 
-  target.hp = Math.max(0, target.hp - damage(world, config.attack, COMBAT.defense));
+  target.hp = Math.max(0, target.hp - damage(world, config.attack, COMBAT.defense + (gear[target.gearId]?.defense ?? 0)));
   if (!target.hp) recordDeath(world, target, 'combat');
   if (target.hp <= COMBAT.retreatHp) {
     quest.retreated = true;
