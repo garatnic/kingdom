@@ -114,7 +114,8 @@ function validate(world) {
         typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
       !world.quests.every(q => (q.kind === 'recover_supplies'
         ? dropIds.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&
-          integer(q.pickupAmount, 1) && q.recoveredBy && Object.entries(q.recoveredBy).every(([id, quantity]) =>
+          integer(q.pickupAmount, 1) && q.recoveredBy && Object.getPrototypeOf(q.recoveredBy) === Object.prototype &&
+          Object.entries(q.recoveredBy).every(([id, quantity]) =>
             [q.claimedBy, q.escortId].includes(id) && integer(quantity, 0, q.pickupAmount))))
         : targets.has(q.targetId)) && settlements.has(q.settlementId) &&
         (q.claimedBy === null || people.has(q.claimedBy)) &&

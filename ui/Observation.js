@@ -1,6 +1,6 @@
-import { workTicks } from '../data/buildings.js';
+import { buildings, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
-import { citizenRaces } from '../data/balance.js';
+import { citizenRaces, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
 import { adventurerRanks, gear } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
 import { civilizationNames } from '../data/technologies.js';
@@ -95,8 +95,40 @@ export function observation(getWorld, getCamera, focus) {
         add(body, 'p', `倉庫 ${store.capacity - freeCapacity(store)}/${store.capacity}`);
         add(body, 'p', Object.entries(resources).map(([key, label]) =>
           `${label} ${available(store, key)}`).join(' / '));
+        const food = available(store, 'food');
+        const hungry = residents.filter(c => c.hunger >= NEEDS.eat).length;
+        if (residents.length) {
+          const shortage = food < residents.length * FOOD_EMERGENCY_PER_PERSON ? ' · 備蓄不足' : '';
+          add(body, 'p', `食料備蓄 ${food}/${residents.length * FOOD_TARGET_PER_PERSON}（目標） · 空腹 ${hungry}人${shortage}`);
+        }
       }
-      if (site) add(body, 'p', `建設中 ${facilityNames[site.kind] ?? site.kind} ${Math.floor(100 * site.progress / workTicks(site.kind))}%`);
+      if (site) {
+        add(body, 'p', `建設中 ${facilityNames[site.kind] ?? site.kind} ${Math.floor(100 * site.progress / workTicks(site.kind))}%`);
+        const shipments = world.inTransit.filter(item => item.destinationId === site.id);
+        for (const [key, required] of Object.entries(buildings[site.kind].cost)) {
+          const delivered = site.delivered[key] ?? 0;
+          const moving = shipments.filter(item => item.resource === key && item.carrierId !== null)
+            .reduce((sum, item) => sum + item.quantity, 0);
+          const dropped = shipments.filter(item => item.resource === key && item.carrierId === null)
+            .reduce((sum, item) => sum + item.quantity, 0);
+          if (delivered < required) add(body, 'p',
+            `${resources[key]} ${delivered}/${required} 搬入済み · 運搬中 ${moving} · 回収待ち ${dropped}`);
+        }
+      }
+      const quests = world.quests.filter(q => q.settlementId === settlement.id && ['open', 'claimed'].includes(q.status));
+      if (quests.length) add(body, 'h4', '依頼');
+      for (const quest of quests) {
+        const recovery = quest.kind === 'recover_supplies';
+        const target = (recovery ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
+        const type = recovery ? '物資回収' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
+        const status = quest.status === 'open' ? '募集中' : quest.stage === 'return' ? '帰還中' : '進行中';
+        const cargo = recovery && target ? ` · ${resources[target.resource]}` : '';
+        const details = add(body, target ? 'button' : 'p', `${type} · ${status}${cargo}`);
+        if (target) details.onclick = () => {
+          markManual();
+          focus({ x: target.x + 0.5, y: target.y + 0.5 }, 'manualOverride');
+        };
+      }
       const center = add(body, 'button', '地図で見る');
       center.onclick = () => {
         markManual();
@@ -180,6 +212,7 @@ export function observation(getWorld, getCamera, focus) {
       title = event.value === 'fertility' ? `豊穣の祝福（畑${event.quantity}棟）` : `回復の祝福（${event.quantity}人）`;
     }
     if (event.type === 'god_intervention' && event.kind === 'disaster') title = '干ばつ（畑' + event.quantity + '棟）';
+    if (event.type === 'supplyRecoveryReturned') title += `（${resources[event.resource]} ${event.quantity}）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);
     if (!target) { add(body, 'p', label); return; }
