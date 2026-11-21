@@ -1,4 +1,5 @@
-import { NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { FOOD_BIRTH_PER_PERSON, FOOD_EMERGENCY_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { emitOnce } from '../systems/History.js';
 import { available } from './Economy.js';
 
 export const RECORD_DAYS = 30;
@@ -22,7 +23,24 @@ export function recordSettlements(world) {
     if (!store) continue;
     const records = settlement.dailyRecords ??= [];
     if (records.at(-1)?.day === day) continue;
-    records.push({ day, food: available(store, 'food'), ...counts.get(settlement.id) });
+    const current = { day, food: available(store, 'food'), ...counts.get(settlement.id) };
+    const previous = records.at(-1);
+    records.push(current);
+    if (!current.population) delete settlement.foodWarning;
+    if (current.population) {
+      const short = record => record && record.population > 0 &&
+        record.food < record.population * FOOD_EMERGENCY_PER_PERSON;
+      const alert = settlement.foodWarning === true;
+      const nextAlert = alert ? current.food < current.population * FOOD_BIRTH_PER_PERSON :
+        previous?.day === day - 1 && short(previous) && short(current);
+      if (nextAlert !== alert) {
+        settlement.foodWarning = nextAlert;
+        emitOnce(world, `${settlement.id}/food/${day}`, nextAlert ? 'foodShortage' : 'foodRecovered', {
+          settlementId: settlement.id, nationId: settlement.nationId, x: settlement.x, y: settlement.y,
+          food: current.food, population: current.population
+        });
+      }
+    }
     if (records.length > RECORD_DAYS) records.shift();
   }
 }

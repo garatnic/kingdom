@@ -126,3 +126,26 @@ test('snapshot restores mid-movement and reproduces future state; rejects corrup
   world.citizens[0].x = NaN;
   await assert.rejects(createSnapshot(world));
 });
+
+test('settlement food alerts are recorded on persistent shortage and recovery after loading', async () => {
+  const { recordSettlements } = await import('../simulation/SettlementRecords.js');
+  const { TIME_TICKS_PER_DAY } = await import('../data/balance.js');
+  const world = createWorld('food-history');
+  world.stockpiles[0].total.food = 0;
+  for (let day = 1; day <= 2; day++) {
+    world.worldTimeTick = day * TIME_TICKS_PER_DAY;
+    recordSettlements(world);
+  }
+  assert.equal(world.events.filter(e => e.type === 'foodShortage').length, 1);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const [store] = restored.stockpiles;
+  restored.worldTimeTick += TIME_TICKS_PER_DAY;
+  store.total.food = 24;
+  recordSettlements(restored);
+  assert.equal(restored.events.filter(e => e.type === 'foodRecovered').length, 0);
+  restored.worldTimeTick += TIME_TICKS_PER_DAY;
+  store.total.food = 36;
+  recordSettlements(restored);
+  assert.equal(restored.events.filter(e => e.type === 'foodRecovered').length, 1);
+  assert.equal(restored.settlements[0].dailyRecords.length, 4);
+});

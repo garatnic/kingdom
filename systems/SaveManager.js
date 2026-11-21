@@ -74,6 +74,7 @@ function validate(world) {
   const passable = tile => validTile(tile) && terrainAt(tile) !== 'water' &&
     !world.buildings.some(building => footprint(building, tile));
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
+        (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
         (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&
           s.dailyRecords.every((r, i, records) => r && integer(r.day, (records[i - 1]?.day ?? 0) + 1,
               Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY)) &&
