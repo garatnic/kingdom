@@ -497,7 +497,7 @@ test('an alliance survives reload, supplies a besieged partner and dissolves if 
   assert.equal(alliedNations(saved, ally, partner), false);
 });
 
-test('a threatened trade waits for its two escorts to arrive and return after reload', async () => {
+test('a threat that appears after trade dispatch makes the shipment wait for its two escorts to arrive and return after reload', async () => {
   const { updateTrade } = await import('../simulation/Trade.js');
   const { claimAdventure, continueAdventure, spawnMonster, updateAdventureWorld } = await import('../simulation/Adventure.js');
   const { findPath } = await import('../simulation/path.js');
@@ -511,20 +511,23 @@ test('a threatened trade waits for its two escorts to arrive and return after re
   const team = world.citizens.filter(c => c.settlementId === home.id && c.id !== invader.leaderId).slice(0, 2);
   for (const c of team) c.profession = 'adventurer';
   const path = findPath(world, homeStore, awayStore);
-  assert.ok(spawnMonster(world, 'goblin', path[Math.floor(path.length / 2)]));
   invader.relations[defender.id] = defender.relations[invader.id] = 60;
   world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
   updateTrade(world);
-  const quest = world.quests.find(q => q.id === home.trade.escortQuestId);
-  assert.equal(quest.kind, 'escort_trade');
-  assert.ok(claimAdventure(world, team[0], homeStore, () => true));
+  assert.equal(home.trade.escortQuestId, undefined);
   const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
-  const persisted = saved.quests.find(q => q.id === quest.id);
   const [from, to] = saved.stockpiles;
-  saved.worldTimeTick = saved.settlements[0].trade.arrivalDay * TIME_TICKS_PER_DAY;
+  const shipment = saved.settlements[0].trade;
+  saved.worldTimeTick = shipment.arrivalDay * TIME_TICKS_PER_DAY;
+  const enemy = spawnMonster(saved, 'goblin', path[Math.floor(path.length / 2)]);
+  assert.ok(enemy);
   updateTrade(saved);
+  updateTrade(saved);
+  const persisted = saved.quests.find(q => q.id === shipment.escortQuestId);
+  assert.equal(persisted.kind, 'escort_trade');
+  assert.equal(saved.quests.filter(q => q.kind === 'escort_trade').length, 1);
   assert.equal(to.total.wood, 0);
-  const enemy = saved.monsters.find(monster => monster.species === 'goblin');
+  assert.ok(claimAdventure(saved, saved.citizens.find(c => c.id === team[0].id), from, () => true));
   for (const id of [persisted.escortId, persisted.claimedBy]) {
     const citizen = saved.citizens.find(c => c.id === id);
     citizen.lastKnownSafeTile = { x: enemy.x, y: enemy.y };

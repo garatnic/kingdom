@@ -20,6 +20,14 @@ function exchange(source, destination, sourceTargets, destinationTargets, foodTa
   return null;
 }
 
+function recruitEscort(world, a, b, first, second, path) {
+  const firstDepot = storeTile(world, first);
+  const secondDepot = storeTile(world, second);
+  const escortQuestId = offerTradeEscort(world, a, b, secondDepot, path) ??
+    offerTradeEscort(world, b, a, firstDepot, [...path.slice(0, -1)].reverse().concat(firstDepot));
+  if (escortQuestId) a.trade.escortQuestId = escortQuestId;
+}
+
 export function updateTrade(world) {
   if (world.nations.length < 2) return;
   const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
@@ -50,6 +58,11 @@ export function updateTrade(world) {
         storageRoom(second, trade.outgoing, foodTarget(b.id)) >= trade.outgoingQuantity;
       const escort = trade.escortQuestId && world.quests.find(q => q.id === trade.escortQuestId);
       const path = valid && route(first, second);
+      // A monster can reach the road after dispatch, including after a save and reload.
+      if (path && !trade.escortQuestId) {
+        recruitEscort(world, a, b, first, second, path);
+        if (trade.escortQuestId) continue;
+      }
       if (path && escort && ['open', 'claimed'].includes(escort.status) &&
           world.worldTimeTick < escort.expiresAt + TIME_TICKS_PER_DAY) continue;
       if (path && (!trade.escortQuestId || escort?.status === 'completed')) {
@@ -118,11 +131,7 @@ export function updateTrade(world) {
       a.trade = { partnerId: b.id, firstNationId: a.nationId, secondNationId: b.nationId,
         outgoing, incoming, outgoingQuantity: quantity, incomingQuantity: quantity,
         travelDays, arrivalDay: day + travelDays, returning: false };
-      const firstDepot = storeTile(world, first);
-      const secondDepot = storeTile(world, second);
-      const escortQuestId = offerTradeEscort(world, a, b, secondDepot, path) ??
-        offerTradeEscort(world, b, a, firstDepot, [...path.slice(0, -1)].reverse().concat(firstDepot));
-      if (escortQuestId) a.trade.escortQuestId = escortQuestId;
+      recruitEscort(world, a, b, first, second, path);
       busy.add(b.id);
       break;
     }
