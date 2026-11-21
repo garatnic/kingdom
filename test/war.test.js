@@ -410,10 +410,22 @@ test('barter delivers both loads exactly once or returns both after hostilities'
   updateTrade(world);
   assert.equal(home.trade.returning, true);
   world.worldTimeTick = home.trade.arrivalDay * TIME_TICKS_PER_DAY;
+  const originalCapacity = homeStore.capacity;
+  homeStore.capacity = Object.values(homeStore.total).reduce((sum, quantity) => sum + quantity, 0);
   updateTrade(world);
-  assert.equal(home.trade, undefined);
-  assert.equal(homeStore.total.wood, 20);
+  assert.equal(home.trade.outgoingQuantity, 2);
+  assert.equal(home.trade.incomingQuantity, 0);
   assert.equal(awayStore.total.stone, 10);
+  const returned = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const returnedHome = returned.settlements[0];
+  const returnedStore = returned.stockpiles[0];
+  returnedStore.capacity = originalCapacity;
+  returned.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateTrade(returned);
+  updateTrade(returned);
+  assert.equal(returnedHome.trade, undefined);
+  assert.equal(returnedStore.total.wood, 20);
+  assert.equal(returned.stockpiles[1].total.stone, 10);
   assert.equal(away.nationId, defender.id);
 });
 
