@@ -90,6 +90,7 @@ export function applyGodCommand(world, command) {
     for (const node of affectedFoodNodes) {
       node.quantity = 0;
       node.renewAt = Math.max(node.renewAt ?? 0, until);
+      node.frostCommandId = commandId;
     }
   } else if (kind === 'disaster') {
     if (value !== 'drought') return 'INVALID_KIND';

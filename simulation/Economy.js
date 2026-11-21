@@ -2,6 +2,7 @@ import {
   CONSTRUCTION_STORAGE_RESERVE, FOOD_TARGET_PER_PERSON, GATHER_BATCH, LARGE_SETTLEMENT_POPULATION,
   citizenRaces, LAYOUT, NODE_RENEWAL_TICKS
 } from '../data/balance.js';
+import { emitOnce } from '../systems/History.js';
 import { TECH } from '../data/technologies.js';
 
 export const resources = Object.keys(LAYOUT.provisions);
@@ -73,6 +74,7 @@ export function deposit(worker, store, foodTarget = 0) {
 }
 
 export function renewNodes(world) {
+  const frostRecoveries = new Map();
   for (const node of world.resourceNodes) {
     if ((node.resource === 'stone' || node.resource === 'iron') && !node.dropped &&
         node.quantity === 0 && node.renewAt === undefined) {
@@ -81,6 +83,20 @@ export function renewNodes(world) {
     if (node.renewAt !== undefined && world.worldTimeTick >= node.renewAt) {
       node.quantity = LAYOUT.nodes.find(([resource]) => resource === node.resource)[2];
       delete node.renewAt;
+      if (node.frostCommandId) {
+        const id = node.frostCommandId;
+        const recovery = frostRecoveries.get(id) ?? { x: node.x, y: node.y, affectedNodeIds: [] };
+        recovery.affectedNodeIds.push(node.id);
+        frostRecoveries.set(id, recovery);
+        delete node.frostCommandId;
+      }
     }
+  }
+  for (const [id, recovery] of frostRecoveries) {
+    const frost = world.events.find(e => e.type === 'god_intervention' && e.sourceTransactionId === id);
+    emitOnce(world, 'frost-recovery/' + id + '/' + world.worldTimeTick, 'frostRecovered', {
+      ...recovery, causeEventId: frost?.id, nationIds: frost?.nationIds,
+      quantity: recovery.affectedNodeIds.length
+    });
   }
 }

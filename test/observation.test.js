@@ -172,6 +172,11 @@ test('frost pauses wild food regeneration through save and leaves dropped food u
   renewNodes(saved);
   assert.ok(savedWild.quantity > 0);
   assert.equal(dropped.quantity, 3);
+  renewNodes(saved);
+  const recovery = saved.events.filter(event => event.type === 'frostRecovered');
+  assert.equal(recovery.length, 1);
+  assert.ok(recovery[0].affectedNodeIds.includes(savedWild.id));
+  assert.equal(recovery[0].causeEventId, saved.events.find(event => event.value === 'frost').id);
 });
 
 test('frost is recorded in the history of the nation that owns the affected tile', () => {
