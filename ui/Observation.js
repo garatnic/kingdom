@@ -310,12 +310,18 @@ export function observation(getWorld, getCamera, focus) {
         get('favorite-citizen')?.focus();
       };
       if (mode === 'family') {
-        const fields = [['親', person.parentIds], ['子', person.childIds], ['配偶者', [person.partnerId].filter(Boolean)]];
+        const members = new Map(world.citizens.map(c => [c.id, c]));
+        const relatives = (ids, field) => [...new Set(ids.flatMap(id => members.get(id)?.[field] ?? []))];
+        const fields = [
+          ['祖父母', relatives(person.parentIds, 'parentIds')],
+          ['親', person.parentIds], ['配偶者', [person.partnerId].filter(Boolean)],
+          ['子', person.childIds], ['孫', relatives(person.childIds, 'childIds')]
+        ];
         for (const [label, ids] of fields) {
           add(body, 'h4', label);
           if (!ids.length) add(body, 'p', '記録なし');
           for (const id of ids) {
-            const member = world.citizens.find(c => c.id === id);
+            const member = members.get(id);
             const button = add(body, 'button', member?.name ?? id);
             button.onclick = () => selectCitizen(id);
           }
