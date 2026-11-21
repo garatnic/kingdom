@@ -1,3 +1,5 @@
+import { arcaneGearDemand } from './Industry.js';
+import { gear } from '../data/combat.js';
 import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { alliedNations, friendlyNations } from './Diplomacy.js';
 import { buildings } from '../data/buildings.js';
@@ -114,12 +116,14 @@ export function updateFoodAid(world) {
     }
   }
 
+  const arcaneNeeds = new Map(world.stockpiles.map(store => [store.settlementId, arcaneGearDemand(world, store)]));
   for (const destination of world.settlements) {
     const residents = population.get(destination.id);
     if (!residents || destination.foodWarning || !destination.nationId || destination.materialAid) continue;
     const to = stores.get(destination.id);
     const demand = { ...projectNeeds.get(destination.id) };
-    demand.iron = Math.max(demand.iron ?? 0, industrialNeeds.get(destination.id) ?? 0);
+    demand.iron = Math.max(demand.iron ?? 0, industrialNeeds.get(destination.id) ?? 0, arcaneNeeds.get(destination.id).iron ?? 0);
+    demand.manaStone = arcaneNeeds.get(destination.id).manaStone ?? 0;
     for (const [resource, target] of Object.entries(demand)) {
       const needed = Math.min(target - available(to, resource), storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (needed <= 0) continue;
@@ -127,7 +131,8 @@ export function updateFoodAid(world) {
         if (source === destination || source.nationId !== destination.nationId || source.foodWarning ||
             !population.has(source.id)) continue;
         const from = stores.get(source.id);
-        const reserve = Math.max(CONSTRUCTION_STORAGE_RESERVE[resource] ?? TECH.miningToolIronReserve,
+        const reserve = Math.max(CONSTRUCTION_STORAGE_RESERVE[resource] ?? (resource === 'manaStone' ? gear.arcane.manaStoneReserve : TECH.miningToolIronReserve),
+          arcaneNeeds.get(source.id)[resource] ?? 0,
           projectNeeds.get(source.id)?.[resource] ?? 0, resource === 'iron' ? industrialNeeds.get(source.id) ?? 0 : 0);
         const quantity = Math.min(needed, available(from, resource) - reserve);
         if (quantity <= 0) continue;

@@ -583,3 +583,60 @@ test('a destination guild can escort a longer trade when the originating guild i
   assert.equal(quest.partnerId, saved.settlements[0].id);
   assert.deepEqual(quest.escortGoal, { x: homeStore.x, y: homeStore.y });
 });
+
+test('a veteran receives domestic mana stone and equips arcane gear after cargo reload', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { prepareArcaneGear } = await import('../simulation/Industry.js');
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const store = world.stockpiles[1];
+  away.nationId = invader.id;
+  invader.settlementIds.push(away.id);
+  Object.assign(defender, { capitalId: null, settlementIds: [], fallenAt: 0 });
+  const veterans = world.citizens.filter(c => c.settlementId === away.id);
+  for (const citizen of veterans) citizen.nationId = invader.id;
+  const veteran = veterans[0];
+  veteran.profession = 'adventurer';
+  veteran.skills.combat = 5;
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'smithy', settlementId: away.id,
+    x: 2, y: 2, width: 2, height: 2 });
+  ensureResearch(world, invader, ['magic_2']);
+  Object.assign(store.total, { iron: 3, manaStone: 5, food: 8 });
+  homeStore.capacity += 20;
+  homeStore.total.manaStone = 6;
+  updateFoodAid(world);
+  assert.equal(away.materialAid.resource, 'manaStone');
+  assert.equal(homeStore.total.manaStone, 5);
+
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  saved.worldTimeTick = saved.settlements[1].materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(saved);
+  prepareArcaneGear(saved);
+  assert.equal(saved.citizens.find(c => c.id === veteran.id).gearId, 'arcane');
+  assert.equal(saved.stockpiles[1].total.manaStone, 5);
+  assert.equal(saved.events.filter(e => e.type === 'materialAidDelivered').length, 1);
+});
+
+test('friendly trade buys the last mana stone needed by a capital smithy', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const { world, invader, defender, homeStore } = twoNations();
+  const home = world.settlements[0];
+  const other = world.stockpiles[1];
+  const veteran = world.citizens.find(c => c.settlementId === home.id && c.id !== invader.leaderId);
+  veteran.profession = 'adventurer';
+  veteran.skills.combat = 5;
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'smithy', settlementId: home.id,
+    x: 2, y: 2, width: 2, height: 2 });
+  ensureResearch(world, invader, ['magic_2']);
+  homeStore.capacity += 30;
+  other.capacity += 30;
+  Object.assign(homeStore.total, { wood: 20, iron: 3, manaStone: 5 });
+  Object.assign(other.total, { wood: 0, manaStone: 7 });
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  assert.equal(home.trade?.incoming, 'manaStone');
+  assert.equal(home.trade.incomingQuantity, 1);
+  assert.equal(other.total.manaStone, 6);
+});

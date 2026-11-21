@@ -97,7 +97,7 @@ function validate(world) {
           (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&
             nations.has(s.foodAid.recipientNationId))))) &&
         (s.materialAid === undefined || (validAid(s.materialAid, s.id) &&
-          ['wood', 'stone', 'iron'].includes(s.materialAid.resource) && integer(s.materialAid.quantity, 1))) &&
+          ['wood', 'stone', 'iron', 'manaStone'].includes(s.materialAid.resource) && integer(s.materialAid.quantity, 1))) &&
         (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&
           s.dailyRecords.every((r, i, records) => r && integer(r.day, (records[i - 1]?.day ?? 0) + 1,
               Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY)) &&

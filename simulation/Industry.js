@@ -53,6 +53,22 @@ export function installArcaneIrrigation(world) {
 }
 
 
+function arcaneGearCandidate(world, id, depot) {
+  return world.citizens.find(c => c.alive && c.settlementId === id &&
+    c.profession === 'adventurer' && c.skills.combat >= gear.arcane.requiredLevel &&
+    c.gearId !== 'arcane' && ageYears(world, c) >= ADULT_AGE && !c.expeditionId &&
+    !world.quests.some(q => q.status === 'claimed' && (q.claimedBy === c.id || q.escortId === c.id)) &&
+    findPath(world, c.lastKnownSafeTile, depot) !== null);
+}
+
+export function arcaneGearDemand(world, store) {
+  const id = store.settlementId;
+  if (!unlocked(world, id, gear.arcane.technology) ||
+      !world.buildings.some(b => b.kind === 'smithy' && b.settlementId === id) ||
+      !arcaneGearCandidate(world, id, storeTile(world, store))) return {};
+  return { iron: gear.arcane.iron, manaStone: gear.arcane.manaStone + gear.arcane.manaStoneReserve };
+}
+
 export function prepareArcaneGear(world) {
   for (const settlement of world.settlements) {
     const id = settlement.id;
@@ -61,11 +77,7 @@ export function prepareArcaneGear(world) {
     if (!store || available(store, 'iron') < gear.arcane.iron ||
         available(store, 'manaStone') < gear.arcane.manaStone + gear.arcane.manaStoneReserve) continue;
     const depot = storeTile(world, store);
-    const candidate = world.citizens.find(c => c.alive && c.settlementId === id &&
-      c.profession === 'adventurer' && c.skills.combat >= gear.arcane.requiredLevel &&
-      c.gearId !== 'arcane' && ageYears(world, c) >= ADULT_AGE && !c.expeditionId &&
-      !world.quests.some(q => q.status === 'claimed' && (q.claimedBy === c.id || q.escortId === c.id)) &&
-      findPath(world, c.lastKnownSafeTile, depot) !== null);
+    const candidate = arcaneGearCandidate(world, id, depot);
     if (candidate) commissionGear(world, candidate, store, 'arcane');
   }
 }

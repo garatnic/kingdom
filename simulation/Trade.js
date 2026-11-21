@@ -1,3 +1,4 @@
+import { arcaneGearDemand } from './Industry.js';
 import { FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { offerTradeEscort } from './Adventure.js';
 import { buildings } from '../data/buildings.js';
@@ -103,8 +104,9 @@ export function updateTrade(world) {
     const site = world.constructionSites.find(item => item.settlementId === capital.id);
     const cost = site && !world.reservations.some(reservation => reservation.siteId === site.id)
       ? buildings[site.kind].cost : {};
+    const industry = arcaneGearDemand(world, stores.get(capital.id));
     return [capital.id, Object.fromEntries(Object.entries(targets)
-      .map(([resource, target]) => [resource, Math.max(target, cost[resource] ?? 0)]))];
+      .map(([resource, target]) => [resource, Math.max(target, cost[resource] ?? 0, industry[resource] ?? 0)]))];
   }));
   for (const [index, a] of capitals.entries()) {
     if (busy.has(a.id)) continue;
