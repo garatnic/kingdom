@@ -87,7 +87,8 @@ function validate(world) {
     integer(trade.arrivalDay, 1) && integer(trade.travelDays, 1, map.width * map.height) &&
     typeof trade.returning === 'boolean' &&
     (trade.escortQuestId === undefined || world.quests.some(q => q.id === trade.escortQuestId &&
-      q.kind === 'escort_trade' && q.settlementId === id && q.partnerId === trade.partnerId));
+      q.kind === 'escort_trade' && ((q.settlementId === id && q.partnerId === trade.partnerId) ||
+        (q.settlementId === trade.partnerId && q.partnerId === id))));
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.trade === undefined || validTrade(s.trade, s.id)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&

@@ -120,7 +120,7 @@ const activeQuest = quest => quest.status === 'open' || quest.status === 'claime
 const sameNest = (a, b) => a.species === b.species && distance(a.homeTile, b.homeTile) === 0;
 
 export function offerTradeEscort(world, settlement, partner, destination, path) {
-  if (path.length > COMBAT.questRadius ||
+  if (path.length > COMBAT.tradeEscortRadius ||
       !world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
       world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length >= COMBAT.questLimit ||
       world.citizens.filter(c => c.alive && c.profession === 'adventurer' &&
@@ -129,7 +129,7 @@ export function offerTradeEscort(world, settlement, partner, destination, path) 
         path.some(tile => distance(tile, monster) <= 5))) return;
   const quest = { id: nextId(world, 'quest'), kind: 'escort_trade', settlementId: settlement.id,
     partnerId: partner.id, escortGoal: { x: destination.x, y: destination.y }, status: 'open',
-    claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + 4 * COMBAT.questDuration, lootIds: [] };
+    claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + Math.max(4, Math.ceil(path.length / 12)) * COMBAT.questDuration, lootIds: [] };
   world.quests.push(quest);
   return quest.id;
 }

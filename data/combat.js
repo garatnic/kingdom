@@ -11,7 +11,7 @@ export const COMBAT = {
   fearRetreat: 80, dangerMultiplier: 1.5, interval: 10 * TIME_TICKS_PER_MINUTE,
   strikeDelay: 2 * TIME_TICKS_PER_MINUTE, xpPerLevel: 20, maxLevel: 10,
   spawnDistance: 10, residentSafety: 5, wanderRadius: 8, spawnInterval: 6 * NEED_HOUR_TICKS,
-  questLimit: 2, questRadius: 48, questDuration: 2 * TIME_TICKS_PER_DAY, rewardFood: 1
+  questLimit: 2, questRadius: 48, tradeEscortRadius: 96, questDuration: 2 * TIME_TICKS_PER_DAY, rewardFood: 1
 };
 
 export const gear = {

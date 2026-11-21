@@ -118,7 +118,10 @@ export function updateTrade(world) {
       a.trade = { partnerId: b.id, firstNationId: a.nationId, secondNationId: b.nationId,
         outgoing, incoming, outgoingQuantity: quantity, incomingQuantity: quantity,
         travelDays, arrivalDay: day + travelDays, returning: false };
-      const escortQuestId = offerTradeEscort(world, a, b, storeTile(world, second), path);
+      const firstDepot = storeTile(world, first);
+      const secondDepot = storeTile(world, second);
+      const escortQuestId = offerTradeEscort(world, a, b, secondDepot, path) ??
+        offerTradeEscort(world, b, a, firstDepot, [...path.slice(0, -1)].reverse().concat(firstDepot));
       if (escortQuestId) a.trade.escortQuestId = escortQuestId;
       busy.add(b.id);
       break;

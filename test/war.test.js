@@ -550,3 +550,28 @@ test('a threatened trade waits for its two escorts to arrive and return after re
   assert.equal(to.total.wood, 2);
   assert.equal(saved.events.filter(e => e.type === 'tradeEscortReturned').length, 1);
 });
+
+test('a destination guild can escort a longer trade when the originating guild is absent', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { spawnMonster } = await import('../simulation/Adventure.js');
+  const { findPath } = await import('../simulation/path.js');
+  const { world, invader, defender, homeStore, away } = twoNations();
+  const other = world.stockpiles[1];
+  away.x = other.x = 95;
+  Object.assign(homeStore.total, { wood: 20, stone: 0 });
+  Object.assign(other.total, { wood: 0, stone: 10 });
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'guild', settlementId: away.id,
+    x: away.x + 3, y: away.y });
+  for (const citizen of world.citizens.filter(c => c.settlementId === away.id)) citizen.profession = 'adventurer';
+  const path = findPath(world, homeStore, other);
+  assert.ok(path.length > 48 && path.length <= 96);
+  assert.ok(spawnMonster(world, 'goblin', path[Math.floor(path.length / 2)]));
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const quest = saved.quests.find(q => q.id === saved.settlements[0].trade.escortQuestId);
+  assert.equal(quest.settlementId, away.id);
+  assert.equal(quest.partnerId, saved.settlements[0].id);
+  assert.deepEqual(quest.escortGoal, { x: homeStore.x, y: homeStore.y });
+});
