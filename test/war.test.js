@@ -496,3 +496,45 @@ test('an alliance survives reload, supplies a besieged partner and dissolves if 
   updateAlliances(saved);
   assert.equal(alliedNations(saved, ally, partner), false);
 });
+
+test('a threatened trade waits for its two escorts to arrive and return after reload', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { claimAdventure, continueAdventure, spawnMonster } = await import('../simulation/Adventure.js');
+  const { findPath } = await import('../simulation/path.js');
+  const { world, invader, defender, homeStore } = twoNations();
+  const home = world.settlements[0];
+  const awayStore = world.stockpiles[1];
+  Object.assign(homeStore.total, { wood: 20, stone: 0 });
+  Object.assign(awayStore.total, { wood: 0, stone: 10 });
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'guild', settlementId: home.id,
+    x: homeStore.x + 4, y: homeStore.y, width: 1, height: 1 });
+  const team = world.citizens.filter(c => c.settlementId === home.id && c.id !== invader.leaderId).slice(0, 2);
+  for (const c of team) c.profession = 'adventurer';
+  const path = findPath(world, homeStore, awayStore);
+  assert.ok(spawnMonster(world, 'goblin', path[Math.floor(path.length / 2)]));
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  const quest = world.quests.find(q => q.id === home.trade.escortQuestId);
+  assert.equal(quest.kind, 'escort_trade');
+  assert.ok(claimAdventure(world, team[0], homeStore, () => true));
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const persisted = saved.quests.find(q => q.id === quest.id);
+  const [from, to] = saved.stockpiles;
+  saved.worldTimeTick = saved.settlements[0].trade.arrivalDay * TIME_TICKS_PER_DAY;
+  updateTrade(saved);
+  assert.equal(to.total.wood, 0);
+  for (let i = 0; i < 4; i++) {
+    for (const id of [persisted.escortId, persisted.claimedBy]) {
+      const citizen = saved.citizens.find(c => c.id === id);
+      continueAdventure(saved, citizen, persisted, from, from, tile => {
+        citizen.lastKnownSafeTile = { x: tile.x, y: tile.y };
+        return true;
+      });
+    }
+  }
+  assert.equal(persisted.status, 'completed');
+  updateTrade(saved);
+  assert.equal(to.total.wood, 2);
+  assert.equal(saved.events.filter(e => e.type === 'tradeEscortReturned').length, 1);
+});

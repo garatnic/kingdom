@@ -119,6 +119,21 @@ function replenishSpecies(world, species, forbidden) {
 const activeQuest = quest => quest.status === 'open' || quest.status === 'claimed';
 const sameNest = (a, b) => a.species === b.species && distance(a.homeTile, b.homeTile) === 0;
 
+export function offerTradeEscort(world, settlement, partner, destination, path) {
+  if (path.length > COMBAT.questRadius ||
+      !world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
+      world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length >= COMBAT.questLimit ||
+      world.citizens.filter(c => c.alive && c.profession === 'adventurer' &&
+        c.settlementId === settlement.id && ageYears(world, c) >= ADULT_AGE).length < 2 ||
+      !world.monsters.some(monster => monster.alive && monsters[monster.species].attack >= monsters.goblin.attack &&
+        path.some(tile => distance(tile, monster) <= 5))) return;
+  const quest = { id: nextId(world, 'quest'), kind: 'escort_trade', settlementId: settlement.id,
+    partnerId: partner.id, escortGoal: { x: destination.x, y: destination.y }, status: 'open',
+    claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + 4 * COMBAT.questDuration, lootIds: [] };
+  world.quests.push(quest);
+  return quest.id;
+}
+
 export function assignedAdventure(world, citizen) {
   return world.quests.find(q => q.status === 'claimed' && (q.claimedBy === citizen.id || q.escortId === citizen.id));
 }
@@ -247,7 +262,7 @@ function offerSurvey(world, settlement, store, origin, prospectOnly) {
 }
 
 function claimSurvey(world, citizen, quest, store, travel) {
-  const node = surveyTarget(world, quest);
+  const node = quest.escortGoal ?? surveyTarget(world, quest);
   if (!node || available(store, 'food') < 4 ||
       world.settlements.find(s => s.id === quest.settlementId)?.foodWarning) return false;
   const escort = findEscort(world, citizen, candidate => findPath(world, tileOf(candidate), node) !== null);
@@ -256,7 +271,7 @@ function claimSurvey(world, citizen, quest, store, travel) {
   citizen.inventory.food++;
   escort.inventory.food++;
   Object.assign(quest, { status: 'claimed', stage: 'survey', claimedBy: citizen.id, escortId: escort.id, surveyVisitors: [] });
-  emit(world, 'resourceSurveyDeparted', quest, tileOf(citizen), { actorIds: [citizen.id, escort.id] });
+  emit(world, quest.kind === 'escort_trade' ? 'tradeEscortDeparted' : 'resourceSurveyDeparted', quest, tileOf(citizen), { actorIds: [citizen.id, escort.id] });
   return true;
 }
 
@@ -264,7 +279,7 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
   const lead = citizen.id === quest.claimedBy;
   if (!lead && quest.escortReturned) return true;
   const escortAlive = world.citizens.some(candidate => candidate.id === quest.escortId && candidate.alive);
-  const node = surveyTarget(world, quest);
+  const node = quest.escortGoal ?? surveyTarget(world, quest);
   const tile = tileOf(citizen);
   if (quest.stage === 'survey') {
     if (!escortAlive || citizen.hunger >= NEEDS.eat || citizen.hp <= COMBAT.retreatHp) {
@@ -294,6 +309,10 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
   quest.status = quest.retreated || !escortAlive ? 'retreated' : 'completed';
   if (quest.status === 'completed') {
     const actors = [citizen.id, quest.escortId];
+    if (quest.kind === 'escort_trade') {
+      emit(world, 'tradeEscortReturned', quest, node, { actorIds: actors, sourceSettlementId: quest.partnerId });
+      return false;
+    }
     if (!quest.prospectTile) emit(world, 'resourceSurveyReturned', quest, node, {
       actorIds: actors, resource: node.resource, quantity: quest.surveyQuantity
     });
@@ -451,7 +470,9 @@ export function updateAdventureWorld(world, ticks) {
   }
 
   for (const quest of world.quests) {
-    if (quest.status === 'open' && now >= quest.expiresAt) quest.status = 'expired';
+    if (quest.status === 'open' && (now >= quest.expiresAt ||
+        ((quest.kind === 'clear_monsters' || quest.kind === 'clear_nest') &&
+          !world.monsters.some(m => m.id === quest.targetId && m.alive)))) quest.status = 'expired';
     if (quest.status !== 'claimed') continue;
     const citizen = world.citizens.find(c => c.alive && c.id === quest.claimedBy);
     if (!citizen) {
@@ -489,13 +510,22 @@ export function updateAdventureWorld(world, ticks) {
           node.resource === 'food' && node.quantity >= 4)) openRecovery.status = 'expired';
     }
     let slots = COMBAT.questLimit - world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length;
-    if (slots <= 0) continue;
     const store = world.stockpiles.find(s => s.settlementId === settlement.id);
     const origin = store?.x === undefined ? { x: settlement.x + 1, y: settlement.y } : store;
-    if (offerRecovery(world, settlement, store, origin)) slots--;
-    if (slots === 0) continue;
     const imminentThreat = world.monsters.some(m => m.alive &&
       monsters[m.species].attack >= monsters.goblin.attack && distance(m, settlement) <= 8);
+    if (slots <= 0 && imminentThreat) {
+      const survey = world.quests.find(q => q.settlementId === settlement.id &&
+        q.kind === 'survey_resources' && q.status === 'open');
+      const unassigned = survey && world.monsters.find(m => m.alive &&
+        monsters[m.species].attack >= monsters.goblin.attack && distance(m, settlement) <= 8 &&
+        !nestQuestFor(world, m) && !world.quests.some(q => q.targetId === m.id && activeQuest(q)) &&
+        findPath(world, origin, m) !== null);
+      if (survey && unassigned && issueQuest(world, settlement, unassigned, false)) survey.status = 'expired';
+    }
+    if (slots <= 0) continue;
+    if (offerRecovery(world, settlement, store, origin)) slots--;
+    if (slots === 0) continue;
     if ((!imminentThreat || slots > 1) && offerSurvey(world, settlement, store, origin, slots === 1)) slots--;
     const nearby = world.monsters.filter(m => m.alive && distance(m, settlement) <= COMBAT.questRadius);
     if (!nearby.length) continue;
@@ -543,7 +573,7 @@ export function claimAdventure(world, citizen, store, travel) {
       if (claimRecovery(world, citizen, quest, store, travel)) return true;
       continue;
     }
-    if (quest.kind === 'survey_resources') {
+    if (quest.kind === 'survey_resources' || quest.kind === 'escort_trade') {
       if (claimSurvey(world, citizen, quest, store, travel)) return true;
       continue;
     }
@@ -599,7 +629,7 @@ function defeat(world, citizen, quest, monster) {
 
 export function continueAdventure(world, citizen, quest, store, origin, travel) {
   if (quest?.status !== 'claimed' || !store) return false;
-  if (quest.kind === 'survey_resources') return continueSurvey(world, citizen, quest, store, origin, travel);
+  if (quest.kind === 'survey_resources' || quest.kind === 'escort_trade') return continueSurvey(world, citizen, quest, store, origin, travel);
   if (quest.kind === 'recover_supplies') return continueRecovery(world, citizen, quest, store, origin, travel);
   const monster = world.monsters.find(m => m.id === quest.targetId);
   const position = tileOf(citizen);

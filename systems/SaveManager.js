@@ -85,7 +85,9 @@ function validate(world) {
     (trade.returning ? trade.outgoingQuantity + trade.incomingQuantity > 0 :
       trade.outgoingQuantity > 0 && trade.outgoingQuantity === trade.incomingQuantity) &&
     integer(trade.arrivalDay, 1) && integer(trade.travelDays, 1, map.width * map.height) &&
-    typeof trade.returning === 'boolean';
+    typeof trade.returning === 'boolean' &&
+    (trade.escortQuestId === undefined || world.quests.some(q => q.id === trade.escortQuestId &&
+      q.kind === 'escort_trade' && q.settlementId === id && q.partnerId === trade.partnerId));
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.trade === undefined || validTrade(s.trade, s.id)) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
@@ -152,8 +154,9 @@ function validate(world) {
           integer(q.pickupAmount, 1) && q.recoveredBy && Object.getPrototypeOf(q.recoveredBy) === Object.prototype &&
           Object.entries(q.recoveredBy).every(([id, quantity]) =>
             [q.claimedBy, q.escortId].includes(id) && integer(quantity, 0, q.pickupAmount))))
-        : q.kind === 'survey_resources'
-          ? (q.prospectTile ? q.targetId === undefined && validTile(q.prospectTile) : surveyTargets.has(q.targetId)) && (q.claimedBy === null || (people.has(q.escortId) &&
+        : q.kind === 'survey_resources' || q.kind === 'escort_trade'
+          ? (q.kind === 'escort_trade' ? q.partnerId !== q.settlementId && settlements.has(q.partnerId) && validTile(q.escortGoal)
+            : q.prospectTile ? q.targetId === undefined && validTile(q.prospectTile) : surveyTargets.has(q.targetId)) && (q.claimedBy === null || (people.has(q.escortId) &&
             Array.isArray(q.surveyVisitors) && new Set(q.surveyVisitors).size === q.surveyVisitors.length &&
             q.surveyVisitors.every(id => [q.claimedBy, q.escortId].includes(id)))) &&
             (q.surveyQuantity === undefined ? q.status !== 'completed' : integer(q.surveyQuantity, 0)) &&

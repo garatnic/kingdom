@@ -13,6 +13,7 @@ import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
+  tradeEscortDeparted: '交易品の護衛に出発', tradeEscortReturned: '交易品の護衛から帰還',
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換',
   friendshipReached: '国家間の友好が成立',
@@ -32,7 +33,7 @@ const eventGroups = {
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered'],
   adventure: ['adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
-    'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
+    'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
   god: ['god_intervention']
 };
@@ -250,9 +251,9 @@ export function observation(getWorld, getCamera, focus) {
       for (const quest of quests) {
         const recovery = quest.kind === 'recover_supplies';
         const survey = quest.kind === 'survey_resources';
-        const target = quest.prospectTile ??
+        const target = quest.escortGoal ?? quest.prospectTile ??
           (recovery || survey ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
-        const type = recovery ? '物資回収' : quest.prospectTile ? '魔石探鉱' : survey ? '資源調査' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
+        const type = quest.kind === 'escort_trade' ? '交易品の護衛' : recovery ? '物資回収' : quest.prospectTile ? '魔石探鉱' : survey ? '資源調査' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
         const status = quest.status === 'open' ? '募集中' : quest.stage === 'return' ? '帰還中' : '進行中';
         const cargo = (recovery || survey) && target?.resource ? ` · ${resources[target.resource]}` : '';
         const details = add(body, target ? 'button' : 'p', `${type} · ${status}${cargo}`);

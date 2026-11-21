@@ -1,3 +1,4 @@
+import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { nextId } from '../simulation/Identity.js';
 import { commissionGear, trainCombat } from '../simulation/AdventurerGrowth.js';
 import { ensureResearch } from '../simulation/Research.js';
@@ -333,3 +334,26 @@ for (const mode of ['ordinary', 'revisit', 'mountain']) {
     assert.deepEqual(report.actorIds, [restoredQuest.claimedBy, restoredQuest.escortId]);
   });
 }
+
+test('a new local threat can replace an unclaimed survey and a dead target frees its notice', () => {
+  const world = createWorld('threat-priority');
+  world.map.terrain.fill('grass');
+  const [home] = world.settlements;
+  world.nextMonsterSpawnTick = Infinity;
+  const distant = spawnMonster(world, 'slime', { x: home.x + 13, y: home.y });
+  const danger = spawnMonster(world, 'goblin', { x: home.x + 7, y: home.y });
+  for (const monster of world.monsters) monster.moveAt = Infinity;
+  issueQuest(world, home, distant);
+  const survey = { id: nextId(world, 'quest'), kind: 'survey_resources', settlementId: home.id,
+    status: 'open', targetId: world.resourceNodes[0].id, expiresAt: 4 * TIME_TICKS_PER_DAY };
+  world.quests.push(survey);
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 1);
+  assert.equal(survey.status, 'expired');
+  const response = world.quests.find(q => q.targetId === danger.id);
+  assert.equal(response.status, 'open');
+  danger.alive = false;
+  world.worldTimeTick++;
+  updateAdventureWorld(world, 1);
+  assert.equal(response.status, 'expired');
+});

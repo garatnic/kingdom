@@ -1,4 +1,5 @@
 import { FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { offerTradeEscort } from './Adventure.js';
 import { buildings } from '../data/buildings.js';
 import { emitOnce } from '../systems/History.js';
 import { friendlyNations } from './Diplomacy.js';
@@ -47,7 +48,11 @@ export function updateTrade(world) {
         !a.foodWarning && !b.foodWarning && population.has(a.id) && population.has(b.id) &&
         storageRoom(first, trade.incoming, foodTarget(a.id)) >= trade.incomingQuantity &&
         storageRoom(second, trade.outgoing, foodTarget(b.id)) >= trade.outgoingQuantity;
-      if (valid && route(first, second)) {
+      const escort = trade.escortQuestId && world.quests.find(q => q.id === trade.escortQuestId);
+      const path = valid && route(first, second);
+      if (path && escort && ['open', 'claimed'].includes(escort.status) &&
+          world.worldTimeTick < escort.expiresAt + TIME_TICKS_PER_DAY) continue;
+      if (path && (!trade.escortQuestId || escort?.status === 'completed')) {
         first.total[trade.incoming] += trade.incomingQuantity;
         second.total[trade.outgoing] += trade.outgoingQuantity;
         emitOnce(world, `${a.id}/${b.id}/trade/${day}`, 'internationalTradeCompleted', {
@@ -57,6 +62,11 @@ export function updateTrade(world) {
         });
         delete a.trade;
       } else {
+        if (escort?.status === 'open') escort.status = 'expired';
+        if (escort?.status === 'claimed') {
+          escort.retreated = true;
+          escort.stage = 'return';
+        }
         trade.returning = true;
         trade.arrivalDay = day + trade.travelDays;
       }
@@ -108,6 +118,8 @@ export function updateTrade(world) {
       a.trade = { partnerId: b.id, firstNationId: a.nationId, secondNationId: b.nationId,
         outgoing, incoming, outgoingQuantity: quantity, incomingQuantity: quantity,
         travelDays, arrivalDay: day + travelDays, returning: false };
+      const escortQuestId = offerTradeEscort(world, a, b, storeTile(world, second), path);
+      if (escortQuestId) a.trade.escortQuestId = escortQuestId;
       busy.add(b.id);
       break;
     }
