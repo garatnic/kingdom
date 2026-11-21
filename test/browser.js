@@ -182,6 +182,12 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       tab.dispatchEvent(new Event('change'));
     })()`);
     await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('対象がまだありません')"));
+    await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'settlement';
+      tab.dispatchEvent(new Event('change'));
+    })()`);
+    await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('住宅') && document.querySelector('#history-body').textContent.includes('倉庫')"));
     await send('Emulation.setDeviceMetricsOverride', {
       width: 390, height: 844, deviceScaleFactor: 2, mobile: true
     });

@@ -1,3 +1,5 @@
+import { workTicks } from '../data/buildings.js';
+import { available, freeCapacity } from '../simulation/Economy.js';
 import { citizenRaces } from '../data/balance.js';
 import { adventurerRanks, gear } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
@@ -21,6 +23,8 @@ const actions = {
   farm: '収穫', build: '建築', pickUpMaterials: '資材引取', deliverMaterials: '資材搬入',
   recoverMaterials: '資材回収', adventure: '冒険', expedition: '開拓'
 };
+const facilityNames = { house: '住宅', farm: '畑', warehouse: '倉庫', smithy: '鍛冶場', barracks: '兵舎', guild: 'ギルド' };
+const settlementName = settlement => '集落 ' + settlement.id.split(':').at(-1);
 const resources = { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' };
 
 export function eventLocation(world, event) {
@@ -54,21 +58,48 @@ export function observation(getWorld, getCamera, focus) {
     const world = getWorld();
     const mode = tab.value;
     const cutoff = Math.floor(world.worldTimeTick / 120);
-    const key = [mode, subjects.value, cutoff, world.events.at(-1)?.id, world.citizens.length, world.nations.length].join('/');
+    const key = [mode, subjects.value, cutoff, world.events.at(-1)?.id, world.citizens.length, world.nations.length, world.settlements.length].join('/');
     if (!force && key === previousRender) return;
     previousRender = key;
     const citizenMode = mode === 'citizen' || mode === 'family';
-    const choices = citizenMode ? world.citizens : mode === 'nation' ? world.nations : [];
+    const choices = citizenMode ? world.citizens :
+      mode === 'nation' ? world.nations : mode === 'settlement' ? world.settlements : [];
     const selected = subjects.value;
-    subjects.replaceChildren(...choices.map(c => new Option(c.name, c.id)));
+    subjects.replaceChildren(...choices.map(c => new Option(mode === 'settlement' ? settlementName(c) : c.name, c.id)));
     subjects.hidden = choices.length === 0;
     if (choices.some(c => c.id === selected)) subjects.value = selected;
-    get('follow').hidden = !subjects.value;
+    get('follow').hidden = !subjects.value || mode === 'settlement';
     body.replaceChildren();
     if (mode === 'world') {
       const list = historyFor(world, 'world').slice(-20).reverse();
       if (!list.length) add(body, 'p', '出来事はまだありません。');
       for (const event of list) showEvent(world, event);
+      return;
+    }
+
+    if (mode === 'settlement' && subjects.value) {
+      const settlement = world.settlements.find(s => s.id === subjects.value);
+      const residents = world.citizens.filter(c => c.alive && c.settlementId === settlement.id);
+      const facilities = world.buildings.filter(b => b.settlementId === settlement.id);
+      const store = world.stockpiles.find(s => s.settlementId === settlement.id);
+      const beds = facilities.filter(b => b.kind === 'house').reduce((sum, b) => sum + b.capacity, 0);
+      const housed = residents.filter(c => c.homeBuildingId).length;
+      const site = world.constructionSites.find(s => s.settlementId === settlement.id);
+      add(body, 'h3', settlementName(settlement));
+      add(body, 'p', `人口 ${residents.length}人 · 住宅 ${housed}/${beds}床`);
+      add(body, 'p', Object.entries(jobs).map(([role, label]) =>
+        `${label} ${residents.filter(c => c.profession === role).length}`).join(' / '));
+      if (store) {
+        add(body, 'p', `倉庫 ${store.capacity - freeCapacity(store)}/${store.capacity}`);
+        add(body, 'p', Object.entries(resources).map(([key, label]) =>
+          `${label} ${available(store, key)}`).join(' / '));
+      }
+      if (site) add(body, 'p', `建設中 ${facilityNames[site.kind] ?? site.kind} ${Math.floor(100 * site.progress / workTicks(site.kind))}%`);
+      const center = add(body, 'button', '地図で見る');
+      center.onclick = () => {
+        markManual();
+        focus({ x: settlement.x + 0.5, y: settlement.y + 0.5 }, 'manualOverride');
+      };
       return;
     }
 
