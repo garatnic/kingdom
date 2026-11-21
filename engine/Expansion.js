@@ -1,15 +1,19 @@
-import { SIZE, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { SIZE, START_REGION_SIZE, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
 import { nextId } from '../simulation/Identity.js';
 import { findPath, reachableTiles } from '../simulation/path.js';
 
-export const CHUNK_SIZE = 32;
-export const MAX_WORLD_SIZE = 128;
+const SURVEY_BAND = 32;
 const MIN_EXPANSION_TICK = 2 * TIME_TICKS_PER_DAY;
 const RETRY_TICKS = TIME_TICKS_PER_DAY;
 
+export function validSurveyDimension(size) {
+  return Number.isInteger(size) && size >= START_REGION_SIZE && size <= SIZE && size % SURVEY_BAND === 0;
+}
+
 export function validWorldDimension(size) {
-  return Number.isInteger(size) && size >= SIZE && size <= MAX_WORLD_SIZE && size % CHUNK_SIZE === 0;
+  return size === SIZE || (Number.isInteger(size) && size >= START_REGION_SIZE &&
+    size <= 128 && size % SURVEY_BAND === 0);
 }
 
 // Coordinate-based terrain leaves the simulation RNG free for residents and events.
@@ -30,6 +34,25 @@ function terrainAt(seed, x, y) {
   return height < 0.28 ? 'water' : height < 0.53 ? 'grass' : height < 0.76 ? 'forest' : 'mountain';
 }
 
+export function fixedMapTerrain(seed, oldTerrain, oldWidth, oldHeight) {
+  const hash = String(seed).split('').reduce((value, code) => Math.imul(value ^ code.charCodeAt(0), 16777619), 2166136261);
+  return Array.from({ length: SIZE * SIZE }, (_, index) => {
+    const x = index % SIZE;
+    const y = Math.floor(index / SIZE);
+    return x < oldWidth && y < oldHeight ? oldTerrain[y * oldWidth + x] : terrainAt(hash, x, y);
+  });
+}
+
+export function migrateFixedMap(world) {
+  const { map } = world;
+  if (map.width === SIZE && map.height === SIZE) return;
+  const { width, height, terrain } = map;
+  Object.assign(map, {
+    terrain: fixedMapTerrain(world.seed, terrain, width, height),
+    surveyedWidth: width, surveyedHeight: height, width: SIZE, height: SIZE
+  });
+}
+
 export function surveyRoute(world, citizen) {
   const { map, worldTimeTick } = world;
   if (worldTimeTick < (map.nextSurveyTick ?? MIN_EXPANSION_TICK) ||
@@ -38,15 +61,15 @@ export function surveyRoute(world, citizen) {
 
   const origin = citizen.lastKnownSafeTile;
   const candidates = [];
-  if (map.width < MAX_WORLD_SIZE) {
-    for (let y = 0; y < map.height; y += 1) candidates.push({ x: map.width - 1, y, direction: 'east' });
+  if (map.surveyedWidth < map.width) {
+    for (let y = 0; y < map.surveyedHeight; y++) candidates.push({ x: map.surveyedWidth - 1, y, direction: 'east' });
   }
-  if (map.height < MAX_WORLD_SIZE) {
-    for (let x = 0; x < map.width; x += 1) candidates.push({ x, y: map.height - 1, direction: 'south' });
+  if (map.surveyedHeight < map.height) {
+    for (let x = 0; x < map.surveyedWidth; x++) candidates.push({ x, y: map.surveyedHeight - 1, direction: 'south' });
   }
+  if (!candidates.length) return null;
   const cost = tile => Math.abs(tile.x - origin.x) + Math.abs(tile.y - origin.y);
   candidates.sort((a, b) => cost(a) - cost(b));
-  if (!candidates.length) return null;
   const reachable = reachableTiles(world, origin);
   const goal = candidates.find(tile => reachable[tile.y * map.width + tile.x] === 1);
   if (goal) return { goal, path: findPath(world, origin, goal) };
@@ -57,27 +80,35 @@ export function surveyRoute(world, citizen) {
 export function discoverFrontier(world, tile, direction, citizenId) {
   const { map } = world;
   const east = direction === 'east';
+  const { surveyedWidth, surveyedHeight } = map;
   if ((!east && direction !== 'south') || !Number.isInteger(tile.x) || !Number.isInteger(tile.y) ||
-      tile.x < 0 || tile.x >= map.width || tile.y < 0 || tile.y >= map.height ||
-      (east ? tile.x !== map.width - 1 || map.width >= MAX_WORLD_SIZE
-        : tile.y !== map.height - 1 || map.height >= MAX_WORLD_SIZE) ||
+      tile.x < 0 || tile.x >= surveyedWidth || tile.y < 0 || tile.y >= surveyedHeight ||
+      (east ? tile.x !== surveyedWidth - 1 || surveyedWidth >= map.width
+        : tile.y !== surveyedHeight - 1 || surveyedHeight >= map.height) ||
       map.terrain[tile.y * map.width + tile.x] === 'water') return false;
-  const seed = String(world.seed).split('').reduce((hash, code) => Math.imul(hash ^ code.charCodeAt(0), 16777619), 2166136261);
-  const width = map.width + (east ? CHUNK_SIZE : 0);
-  const height = map.height + (east ? 0 : CHUNK_SIZE);
-  const terrain = Array.from({ length: width * height }, (_, i) => {
-    const x = i % width;
-    const y = Math.floor(i / width);
-    if (x < map.width && y < map.height) return map.terrain[y * map.width + x];
-    if (east ? y === tile.y : x === tile.x) return 'grass';
-    return terrainAt(seed, x, y);
-  });
-  for (const [resource, distance, quantity] of [['food', 6, 12], ['wood', 14, 20], ['stone', 22, 30]]) {
-    const x = tile.x + (east ? distance : 0);
-    const y = tile.y + (east ? 0 : distance);
-    world.resourceNodes.push({ id: nextId(world, 'node'), resource, x, y, quantity });
+  const width = surveyedWidth + (east ? SURVEY_BAND : 0);
+  const height = surveyedHeight + (east ? 0 : SURVEY_BAND);
+  const reachable = reachableTiles(world, tile);
+  const occupied = new Set([
+    ...world.resourceNodes, ...world.stockpiles,
+    ...world.constructionSites.flatMap(site => Array.from({ length: site.width * site.height },
+      (_, i) => ({ x: site.x + i % site.width, y: site.y + Math.floor(i / site.width) })))
+  ].map(p => p.y * map.width + p.x));
+  const candidates = [];
+  for (let y = east ? 0 : surveyedHeight; y < height; y++) {
+    for (let x = east ? surveyedWidth : 0; x < width; x++) {
+      const index = y * map.width + x;
+      if (reachable[index] === 1 && !occupied.has(index)) candidates.push({ x, y });
+    }
   }
-  Object.assign(map, { width, height, terrain, nextSurveyTick: world.worldTimeTick + RETRY_TICKS });
+  for (const [resource, distance, quantity] of [['food', 6, 12], ['wood', 14, 20], ['stone', 22, 30]]) {
+    const target = { x: tile.x + (east ? distance : 0), y: tile.y + (east ? 0 : distance) };
+    const cost = point => Math.abs(point.x - target.x) + Math.abs(point.y - target.y);
+    candidates.sort((a, b) => cost(a) - cost(b));
+    const point = candidates.shift();
+    if (point) world.resourceNodes.push({ id: nextId(world, 'node'), resource, ...point, quantity });
+  }
+  Object.assign(map, { surveyedWidth: width, surveyedHeight: height, nextSurveyTick: world.worldTimeTick + RETRY_TICKS });
   emitOnce(world, `frontier/${width}/${height}`, 'frontierDiscovered', { ...tile, citizenId, width, height });
   return true;
 }

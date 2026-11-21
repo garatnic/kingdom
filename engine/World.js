@@ -1,7 +1,8 @@
 import {
-  SIZE, LAYOUT, FRONTIER, POPULATION, TIME_TICKS_PER_YEAR, DECISION_TICKS,
+  SIZE, START_REGION_SIZE, LAYOUT, FRONTIER, POPULATION, TIME_TICKS_PER_YEAR, DECISION_TICKS,
   MAGIC_AFFINITY_THRESHOLD, INITIAL_MAGIC_AFFINITY_MIN_COUNT
 } from '../data/balance.js';
+import { fixedMapTerrain } from './Expansion.js';
 import { random, seedState } from './random.js';
 import { buildings, footprint } from '../data/buildings.js';
 import { findPath } from '../simulation/path.js';
@@ -11,16 +12,17 @@ const races = ['human', 'elf', 'dwarf'];
 const names = ['アルディン', 'ミラ', 'ドルン', 'リナ', 'フィア', 'バルド',
   'ノア', 'エリン', 'ガレン', 'セラ', 'イリス', 'トルン'];
 
-function terrainFor(state) {
+function starterTerrain(state) {
+  const size = START_REGION_SIZE;
   const spacing = LAYOUT.noiseSpacing;
-  const width = Math.ceil(SIZE / spacing) + 1;
+  const width = Math.ceil(size / spacing) + 1;
   const noise = Array.from({ length: width ** 2 }, () => random(state));
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = t => t * t * (3 - 2 * t);
   const [water, grass, forest] = LAYOUT.thresholds;
-  return Array.from({ length: SIZE ** 2 }, (_, i) => {
-    const x = (i % SIZE) / spacing;
-    const y = Math.floor(i / SIZE) / spacing;
+  return Array.from({ length: size ** 2 }, (_, i) => {
+    const x = (i % size) / spacing;
+    const y = Math.floor(i / size) / spacing;
     const cell = Math.floor(y) * width + Math.floor(x);
     const u = smooth(x % 1);
     const v = smooth(y % 1);
@@ -32,8 +34,9 @@ function terrainFor(state) {
 
 export function createWorld(seed) {
   const rngState = seedState(String(seed));
-  const center = SIZE / 2;
-  const map = { width: SIZE, height: SIZE, terrain: terrainFor(rngState), navigationVersion: 0 };
+  const center = START_REGION_SIZE / 2;
+  const map = { width: SIZE, height: SIZE, terrain: fixedMapTerrain(seed, starterTerrain(rngState), START_REGION_SIZE, START_REGION_SIZE),
+    surveyedWidth: START_REGION_SIZE, surveyedHeight: START_REGION_SIZE, navigationVersion: 0 };
   const world = {
     seed: String(seed), rngState, worldTimeTick: 0, gameSpeed: 1, tickRemainder: 0,
     idCounters: {}, map, citizens: [], settlements: [], nations: [], buildings: [],

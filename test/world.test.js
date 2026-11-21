@@ -10,7 +10,7 @@ test('three seeds reproduce map, resources, adults, IDs and PRNG', () => {
   const worlds = ['world-tree', '障害地形', '0'].map(seed => {
     const world = createWorld(seed);
     assert.deepEqual(world, createWorld(seed));
-    assert.equal(world.map.terrain.length, 4096);
+    assert.equal(world.map.terrain.length, 256 ** 2);
     assert.equal(world.citizens.length, 12);
     assert.equal(new Set(world.citizens.map(c => c.id)).size, 12);
     assert.equal(world.idCounters.citizen, 13);
@@ -55,7 +55,7 @@ test('all residents move autonomously without entering an obstacle', () => {
       for (const [i, c] of world.citizens.entries()) {
         const x = Math.floor(c.x);
         const y = Math.floor(c.y);
-        assert.notEqual(world.map.terrain[y * 64 + x], 'water');
+        assert.notEqual(world.map.terrain[y * world.map.width + x], 'water');
         assert.ok(world.buildings.every(b => b.x !== x || b.y !== y));
         if (before[i][0] !== c.x || before[i][1] !== c.y) moved.add(c.id);
       }

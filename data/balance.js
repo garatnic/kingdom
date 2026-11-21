@@ -21,7 +21,8 @@ export const INITIAL_MAGIC_AFFINITY_MIN_COUNT = 1;
 export const INITIAL_IRON_NODE_MIN_QTY = 6;
 export const INITIAL_MANA_NODE_MIN_QTY = 2;
 
-export const SIZE = 64;
+export const START_REGION_SIZE = 64;
+export const SIZE = 256;
 export const TILE = 32;
 export const POPULATION = 12;
 export const SPEEDS = [0, 1, 5, 20];

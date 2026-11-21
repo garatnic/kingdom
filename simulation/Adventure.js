@@ -3,7 +3,7 @@ import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { commissionGear, recordAdventureSuccess, trainCombat } from './AdventurerGrowth.js';
 import { COMBAT, gear, monsters } from '../data/combat.js';
-import { ADULT_AGE, SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
+import { ADULT_AGE, START_REGION_SIZE, FOOD_HUNGER_RESTORED, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { random } from '../engine/random.js';
 import { ageYears, nextId } from './Identity.js';
 import { available, deposit } from './Economy.js';
@@ -54,14 +54,14 @@ function spawnZones(world) {
 function spawnAway(world, species, forbidden, habitatOnly = false) {
   const candidates = [];
   const occupied = new Set(world.monsters.filter(m => m.alive).map(tileKey));
-  for (let y = 0; y < world.map.height; y++) {
-    for (let x = 0; x < world.map.width; x++) {
+  for (let y = 0; y < (world.map.surveyedHeight ?? world.map.height); y++) {
+    for (let x = 0; x < (world.map.surveyedWidth ?? world.map.width); x++) {
       const tile = { x, y };
       const terrain = world.map.terrain[y * world.map.width + x];
       const key = tileKey(tile);
       if (!forbidden.has(key) && !occupied.has(key) && terrain !== 'water' &&
           (!habitatOnly || monsters[species].habitat.includes(terrain)) &&
-          (!monsters[species].requiresExpansion || x >= SIZE || y >= SIZE)) {
+          (!monsters[species].requiresExpansion || x >= START_REGION_SIZE || y >= START_REGION_SIZE)) {
         candidates.push(tile);
       }
     }
@@ -211,7 +211,8 @@ export function updateAdventureWorld(world, ticks) {
     world.nextMonsterSpawnTick = now + COMBAT.spawnInterval;
   } else if (now >= world.nextMonsterSpawnTick) {
     world.nextMonsterSpawnTick += COMBAT.spawnInterval;
-    const expanded = world.map.width > SIZE || world.map.height > SIZE;
+    const expanded = (world.map.surveyedWidth ?? world.map.width) > START_REGION_SIZE ||
+      (world.map.surveyedHeight ?? world.map.height) > START_REGION_SIZE;
     const candidates = Object.keys(monsters).filter(key => {
       const config = monsters[key];
       return (!config.requiresExpansion || expanded) && world.monsters.filter(m => m.alive && m.species === key).length < config.cap;

@@ -10,7 +10,7 @@ test('distant idle walking batches ticks and flushes them when the camera return
   const citizen = world.citizens[0];
   world.citizens = [citizen];
   Object.assign(citizen, { x: 1.5, y: 1.5, lastKnownSafeTile: { x: 1, y: 1 } });
-  world.map.terrain[65] = world.map.terrain[66] = 'grass';
+  world.map.terrain[world.map.width + 1] = world.map.terrain[world.map.width + 2] = 'grass';
   citizen.action = { kind: 'explore', phase: 'travel', goal: { x: 2, y: 1 },
     path: [{ x: 2, y: 1 }], progress: 0, navigationVersion: world.map.navigationVersion };
   updateCitizens(world, 12, { x: 64, y: 64 });

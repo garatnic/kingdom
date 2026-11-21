@@ -4,8 +4,8 @@ import { NATIONS } from '../data/nations.js';
 import { gear, monsters } from '../data/combat.js';
 import { technologies } from '../data/technologies.js';
 import { buildings, footprint } from '../data/buildings.js';
-import { validWorldDimension } from '../engine/Expansion.js';
-import { SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS, TICKS_PER_STEP_AT_1X } from '../data/balance.js';
+import { migrateFixedMap, validSurveyDimension, validWorldDimension } from '../engine/Expansion.js';
+import { SIZE, SPEEDS, REAL_STEP_MS, TERRAIN_COST, LIFESPAN_YEARS, MIN_ZOOM, MAX_ZOOM, WALK_TICKS, TICKS_PER_STEP_AT_1X } from '../data/balance.js';
 
 const VERSION = 1;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -39,6 +39,8 @@ function validate(world) {
       !Array.isArray(world.rngState) || world.rngState.length !== 4 ||
       !world.rngState.every(n => integer(n, 0, 0xffffffff)) || !world.rngState.some(Boolean) ||
       !validWorldDimension(map?.width) || !validWorldDimension(map.height) || !integer(map.navigationVersion, 0) ||
+      ((map.width === SIZE || map.height === SIZE) && (map.width !== SIZE || map.height !== SIZE ||
+        !validSurveyDimension(map.surveyedWidth) || !validSurveyDimension(map.surveyedHeight))) ||
       !Array.isArray(map.terrain) || map.terrain.length !== map.width * map.height ||
       !map.terrain.every(t => Object.hasOwn(TERRAIN_COST, t)) ||
       !world.idCounters || !entityLists(world).every(key => Array.isArray(world[key])) ||
@@ -189,6 +191,7 @@ export async function readSnapshot(json) {
   if (typeof payload.saveId !== 'string' || !Number.isFinite(Date.parse(payload.createdAtIso)) ||
       expected !== await checksum(payload)) throw new Error('保存ファイルの整合性を確認できません。');
   validate(payload.world);
+  migrateFixedMap(payload.world);
   for (const key of entityLists(payload.world).filter(key => key !== 'events')) payload.world[key].sort(idOrder);
   return payload.world;
 }

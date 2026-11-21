@@ -12,7 +12,7 @@ test('building materials are counted once across reserve, transport, site and co
   const [store] = world.stockpiles;
   const [carrier] = world.citizens;
   for (let y = 35; y < 37; y++) {
-    for (let x = 35; x < 37; x++) world.map.terrain[y * 64 + x] = 'grass';
+    for (let x = 35; x < 37; x++) world.map.terrain[y * world.map.width + x] = 'grass';
   }
   const site = planSite(world, settlement, 'house', 35, 35);
   assert.ok(site);

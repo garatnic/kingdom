@@ -74,7 +74,7 @@ test('an expanded and connected world admits migrants only with food and spare h
   const store = world.stockpiles[0];
   const home = world.buildings.find(b => b.kind === 'house');
   const y = store.y;
-  for (let x = store.x; x < 64; x++) world.map.terrain[y * 64 + x] = 'grass';
+  for (let x = store.x; x < 64; x++) world.map.terrain[y * world.map.width + x] = 'grass';
   store.total.food = 0;
   world.worldTimeTick = 30 * TIME_TICKS_PER_DAY;
   updatePopulation(world, 12);
@@ -133,7 +133,7 @@ test('a mature settlement admits a bounded group between regular migration days'
   const store = world.stockpiles[0];
   const home = world.buildings.find(b => b.kind === 'house');
   const { y } = store;
-  for (let x = store.x; x < 64; x++) world.map.terrain[y * 64 + x] = 'grass';
+  for (let x = store.x; x < 64; x++) world.map.terrain[y * world.map.width + x] = 'grass';
   assert.ok(discoverFrontier(world, { x: 63, y }, 'east', world.citizens[0].id));
   while (world.citizens.length < 48) {
     const adult = structuredClone(world.citizens[0]);
