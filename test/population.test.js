@@ -174,3 +174,38 @@ test('daily matchmaking skips parents and siblings and leaves unrelated adults e
   assert.equal(parent.partnerId, null);
   assert.equal(sibling.partnerId, null);
 });
+
+test('a resident born in the simulation can become a parent and preserve three generations after reload', async () => {
+  const { createAdult } = await import('../simulation/CreateAdult.js');
+  const world = marriedWorld();
+  const [settlement] = world.settlements;
+  const [store] = world.stockpiles;
+  const firstParent = world.citizens.find(c => c.nextBirthCheckTick);
+  for (const citizen of world.citizens) if (citizen !== firstParent) delete citizen.nextBirthCheckTick;
+  world.buildings[0].capacity = 30;
+  store.capacity += 100;
+  store.total.food = 50;
+  world.worldTimeTick = firstParent.nextBirthCheckTick;
+  world.rngState = [1, 1, 1, 1];
+  updatePopulation(world, 12);
+  const child = world.citizens.at(-1);
+  assert.ok(firstParent.childIds.includes(child.id));
+
+  world.worldTimeTick += 16 * TIME_TICKS_PER_YEAR;
+  const newcomer = createAdult(world, child.race, child.lastKnownSafeTile, settlement);
+  newcomer.birthWorldTimeTick = world.worldTimeTick - 18 * TIME_TICKS_PER_YEAR;
+  child.relationships[newcomer.id] = newcomer.relationships[child.id] = 60;
+  world.citizens.push(newcomer);
+  for (const citizen of world.citizens) delete citizen.nextBirthCheckTick;
+  updatePopulation(world, 12);
+  assert.equal(child.partnerId, newcomer.id);
+
+  world.worldTimeTick = child.nextBirthCheckTick;
+  world.rngState = [1, 1, 1, 1];
+  updatePopulation(world, 12);
+  const grandchild = world.citizens.at(-1);
+  assert.deepEqual(grandchild.parentIds, [child.id, newcomer.id]);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const savedChild = saved.citizens.find(c => c.id === child.id);
+  assert.ok(savedChild.parentIds.includes(firstParent.id) && savedChild.childIds.includes(grandchild.id));
+});

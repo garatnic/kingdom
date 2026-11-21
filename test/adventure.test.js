@@ -406,7 +406,7 @@ test('an experienced adventurer can train an idle adult apprentice in the guild'
   const world = createWorld('guild-training');
   world.map.terrain.fill('grass');
   const [home] = world.settlements;
-  const point = { x: home.x + 5, y: home.y + 4 };
+  const point = { x: 2, y: 2 };
   world.buildings.push({ id: nextId(world, 'building'), kind: 'guild', settlementId: home.id,
     ...point, width: 1, height: 1 });
   const [mentor, apprentice] = world.citizens;
@@ -427,11 +427,13 @@ test('an experienced adventurer can train an idle adult apprentice in the guild'
   assert.equal(apprentice.combatXp, 2);
   const lesson = world.events.find(event => event.type === 'guildApprenticeAdvanced');
   assert.deepEqual(lesson.actorIds, [mentor.id, apprentice.id]);
-  trainGuildApprentices(world);
-  assert.equal(apprentice.combatXp, 2);
-  world.worldTimeTick = TIME_TICKS_PER_DAY;
-  trainGuildApprentices(world);
-  assert.equal(apprentice.combatXp, 6);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const savedApprentice = saved.citizens.find(c => c.id === apprentice.id);
+  trainGuildApprentices(saved);
+  assert.equal(savedApprentice.combatXp, 2);
+  saved.worldTimeTick = TIME_TICKS_PER_DAY;
+  trainGuildApprentices(saved);
+  assert.equal(savedApprentice.combatXp, 6);
 });
 
 test('binding magic delays a dangerous monster once and resumed casting deals damage', async () => {
