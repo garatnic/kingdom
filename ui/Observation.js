@@ -1,6 +1,6 @@
 import { alliedNations, allianceProgress, friendlyNations } from '../simulation/Diplomacy.js';
 import { buildings, footprint, workTicks } from '../data/buildings.js';
-import { available, freeCapacity } from '../simulation/Economy.js';
+import { available, freeCapacity, resources as bulkResources } from '../simulation/Economy.js';
 import { citizenRaces, MAGIC_AFFINITY_THRESHOLD, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { adventurerRanks, gear, monsters } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
@@ -9,10 +9,12 @@ import { calendar } from '../engine/GameLoop.js';
 import { relationLabel } from '../simulation/Nations.js';
 import { activeNations, truceBetween } from '../simulation/War.js';
 import { civilizationProgress, getResearch, researchOwner } from '../simulation/Research.js';
+import { birthResources } from '../simulation/Population.js';
 import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
+  homeAssigned: '空き住宅へ入居', farmerReassigned: '食料備蓄の不足で農民に転職',
   tradeEscortClash: '護衛隊が街道で交戦', tradeEscortDeparted: '交易品の護衛に出発', tradeEscortReturned: '交易品の護衛から帰還',
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換', internationalTradeReturning: '国際交易の荷を返送',
@@ -215,7 +217,7 @@ export function observation(getWorld, getCamera, focus) {
       const housed = residents.filter(c => c.homeBuildingId).length;
       const site = world.constructionSites.find(s => s.settlementId === settlement.id);
       add(body, 'h3', settlementName(settlement));
-      add(body, 'p', `人口 ${residents.length}人 · 住宅 ${housed}/${beds}床`);
+      add(body, 'p', `人口 ${residents.length}人 · 住宅 ${housed}/${beds}床 · 住居なし ${residents.length - housed}人`);
       showDemographics(residents);
       showResearch(world, researchOwner(world, settlement));
       add(body, 'p', Object.entries(jobs).map(([role, label]) =>
@@ -226,8 +228,8 @@ export function observation(getWorld, getCamera, focus) {
       if (equippedMiners) add(body, 'p', `鋼鉄の採掘道具 ${equippedMiners}人（鉄・魔石の採掘量が増加）`);
       if (store) {
         add(body, 'p', `倉庫 ${store.capacity - freeCapacity(store)}/${store.capacity}`);
-        add(body, 'p', Object.entries(resources).map(([key, label]) =>
-          `${label} ${available(store, key)}`).join(' / '));
+        add(body, 'p', bulkResources.map(key =>
+          `${resources[key]} ${available(store, key)}`).join(' / '));
         const food = available(store, 'food');
         const hungry = residents.filter(c => c.hunger >= NEEDS.eat).length;
         if (residents.length) {
@@ -303,6 +305,12 @@ export function observation(getWorld, getCamera, focus) {
       if (reports.length) {
         add(body, 'h4', '最近の資源調査');
         for (const report of reports) showEvent(world, report);
+      }
+      const changes = world.events.filter(event => ['homeAssigned', 'farmerReassigned', 'foodShortage', 'foodRecovered'].includes(event.type) &&
+        event.settlementId === settlement.id).slice(-4).reverse();
+      if (changes.length) {
+        add(body, 'h4', '暮らしの変化');
+        for (const change of changes) showEvent(world, change);
       }
       const responses = world.events.filter(event => (event.type === 'blessedFarmHarvested' ||
         event.type === 'droughtHarvestRecovered' || event.type === 'droughtFoodForaged') && event.settlementId === settlement.id).slice(-3).reverse();
@@ -402,6 +410,15 @@ export function observation(getWorld, getCamera, focus) {
     const relatives = (ids, field) => [...new Set(ids.flatMap(id => members.get(id)?.[field] ?? []))];
     const partner = members.get(person.partnerId);
     const current = person.alive && partner?.alive && partner.partnerId === person.id ? partner.id : null;
+    if (person.alive && person.settlementId) {
+      const home = world.buildings.find(b => b.id === person.homeBuildingId);
+      if (home) addEventLocation(body, world, home, '住居を地図で見る');
+      else add(body, 'p', '住居なし');
+      if (current && partner.settlementId === person.settlementId) {
+        const capacity = birthResources(world, person.settlementId);
+        add(body, 'p', `出生に向けた集落の状況 · 空床 ${capacity.home ? 'あり' : 'なし'} · 食料 ${capacity.food}/${capacity.foodNeeded}`);
+      }
+    }
     const previous = new Set();
     for (let i = world.events.length - 1; i >= 0; i--) {
       const event = world.events[i];
@@ -525,6 +542,9 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'leaderSucceeded') {
       const leader = world.citizens.find(c => c.id === event.leaderId);
       if (leader) title += '（' + leader.name + '）';
+    }
+    if (event.type === 'farmerReassigned') {
+      title += `（${jobs[event.previousProfession] ?? '前職なし'}・備蓄 ${event.food}）`;
     }
     if (event.type === 'fieldBattle') {
       const winner = world.nations.find(n => n.id === event.winnerId);

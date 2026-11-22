@@ -79,6 +79,19 @@ function dailyRelationships(world, citizens) {
   }
 }
 
+export function birthResources(world, settlementId) {
+  const residents = world.citizens.filter(c => c.alive && c.settlementId === settlementId);
+  const store = world.stockpiles.find(s => s.settlementId === settlementId);
+  const occupancy = new Map();
+  for (const citizen of residents) {
+    occupancy.set(citizen.homeBuildingId, (occupancy.get(citizen.homeBuildingId) ?? 0) + 1);
+  }
+  const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === settlementId &&
+    (occupancy.get(b.id) ?? 0) < b.capacity);
+  return { home, store, food: store ? available(store, 'food') : 0,
+    foodNeeded: residents.length * FOOD_BIRTH_PER_PERSON, population: residents.length };
+}
+
 function checkBirth(world, parent, people) {
   if (!parent.alive || parent.nextBirthCheckTick === undefined ||
       world.worldTimeTick < parent.nextBirthCheckTick) return;
@@ -87,12 +100,9 @@ function checkBirth(world, parent, people) {
   if (!parent.settlementId || !partner?.alive || partner.partnerId !== parent.id ||
       parent.settlementId !== partner.settlementId ||
       (parent.race !== partner.race && !world.settings.mixedFamilies)) return;
-  const residents = world.citizens.filter(c => c.alive && c.settlementId === parent.settlementId);
-  const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === parent.settlementId &&
-    residents.filter(c => c.homeBuildingId === b.id).length < b.capacity);
-  const store = world.stockpiles.find(s => s.settlementId === parent.settlementId);
-  if (!home || !store || available(store, 'food') < residents.length * FOOD_BIRTH_PER_PERSON) {
-    if (residents.length >= 16) parent.nextBirthCheckTick = world.worldTimeTick + 5 * TIME_TICKS_PER_DAY;
+  const { home, store, food, foodNeeded, population } = birthResources(world, parent.settlementId);
+  if (!home || !store || food < foodNeeded) {
+    if (population >= 16) parent.nextBirthCheckTick = world.worldTimeTick + 5 * TIME_TICKS_PER_DAY;
     return;
   }
   const recentChild = [...parent.childIds, ...partner.childIds].some(id =>
@@ -155,7 +165,14 @@ function fillVacancies(world) {
     const candidate = adults.find(c => c.profession !== 'farmer' && !occupied.has(c.id) &&
       c.action.kind === 'idle' && counts.get(c.profession) > 1 &&
       c.id !== world.nations.find(nation => nation.id === settlement.nationId)?.leaderId);
-    if (candidate) candidate.profession = 'farmer';
+    if (candidate) {
+      const previousProfession = candidate.profession;
+      candidate.profession = 'farmer';
+      emitOnce(world, candidate.id + '/' + world.worldTimeTick, 'farmerReassigned', {
+        citizenId: candidate.id, settlementId: settlement.id, nationId: settlement.nationId,
+        previousProfession, food: available(store, 'food'), x: settlement.x, y: settlement.y
+      });
+    }
   }
 }
 
@@ -165,13 +182,21 @@ function fillVacantHomes(world) {
     if (!citizen.alive || !citizen.homeBuildingId) continue;
     occupancy.set(citizen.homeBuildingId, (occupancy.get(citizen.homeBuildingId) ?? 0) + 1);
   }
+  const people = new Map(world.citizens.map(c => [c.id, c]));
   for (const citizen of world.citizens) {
     if (!citizen.alive || citizen.homeBuildingId || !citizen.settlementId) continue;
-    const house = world.buildings.find(b => b.kind === 'house' && b.settlementId === citizen.settlementId &&
-      (occupancy.get(b.id) ?? 0) < b.capacity);
+    const partner = people.get(citizen.partnerId);
+    const availableHouse = b => b.kind === 'house' && b.settlementId === citizen.settlementId &&
+      (occupancy.get(b.id) ?? 0) < b.capacity;
+    const house = (partner?.alive && world.buildings.find(b => b.id === partner.homeBuildingId && availableHouse(b))) ||
+      world.buildings.find(availableHouse);
     if (!house) continue;
     citizen.homeBuildingId = house.id;
     occupancy.set(house.id, (occupancy.get(house.id) ?? 0) + 1);
+    emitOnce(world, citizen.id + '/' + world.worldTimeTick, 'homeAssigned', {
+      citizenId: citizen.id, settlementId: citizen.settlementId, nationId: citizen.nationId,
+      buildingId: house.id, x: house.x, y: house.y
+    });
   }
 }
 

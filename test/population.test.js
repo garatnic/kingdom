@@ -125,6 +125,7 @@ test('vacant housing is reassigned to unhoused residents without exceeding capac
   world.worldTimeTick = TIME_TICKS_PER_DAY;
   updatePopulation(world, 12);
   assert.equal(unhoused.homeBuildingId, house.id);
+  assert.equal(world.events.find(event => event.type === "homeAssigned" && event.citizenId === unhoused.id)?.buildingId, house.id);
   assert.equal(world.citizens.filter(c => c.alive && c.homeBuildingId === house.id).length, house.capacity);
 });
 
