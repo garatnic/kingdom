@@ -14,7 +14,7 @@ import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
 
 const events = {
-  homeAssigned: '空き住宅へ入居', farmerReassigned: '食料備蓄の不足で農民に転職',
+  communityObservance: '集落の記念行事', homeAssigned: '空き住宅へ入居', farmerReassigned: '食料備蓄の不足で農民に転職',
   tradeEscortSpell: '交易護衛で魔法を使用', tradeEscortClash: '護衛隊が街道で交戦', tradeEscortDeparted: '交易品の護衛に出発', tradeEscortReturned: '交易品の護衛から帰還',
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換', internationalTradeReturning: '国際交易の荷を返送',
@@ -45,14 +45,14 @@ const eventGroups = {
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestRelocated', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'tradeEscortClash', 'tradeEscortSpell', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
-  god: ['god_intervention', 'blessedFarmHarvested', 'frostRecovered', 'droughtHarvestRecovered', 'droughtFoodForaged']
+  god: ['god_intervention', 'blessedFarmHarvested', 'frostRecovered', 'droughtHarvestRecovered', 'droughtFoodForaged', 'communityObservance']
 };
 const relatedEventKey = event => event.questId ??
   (event.sourceTransactionId?.startsWith('campaign:') ? event.sourceTransactionId : undefined);
 const eventNumber = event => Number(event.id.split(':')[1]);
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
-  idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', forage: '非常食を採集', haul: '運搬',
+  idle: '待機', explore: '探索', survey: '境界を調査', warMarch: '遠征隊で進軍', eat: '食事', sleep: '睡眠', gather: '採集', forage: '非常食を採集', observance: '記念行事へ移動', haul: '運搬',
   farm: '収穫', build: '建築', pickUpMaterials: '資材引取', deliverMaterials: '資材搬入',
   recoverMaterials: '資材回収', adventure: '冒険', expedition: '開拓'
 };
@@ -240,6 +240,13 @@ export function observation(getWorld, getCamera, focus) {
       }
       if (store?.steelTools) add(body, 'p', `鋼鉄の採掘道具（未装備） ${store.steelTools}`);
       showShipments(world, settlement);
+      if (settlement.observance) {
+        const memory = settlement.observance;
+        const label = memory.kind === 'thanksgiving' ? '豊穣への感謝' : '食料難からの復旧記念';
+        add(body, 'p', `${label} · 次の行事 ${calendar(memory.nextDay * TIME_TICKS_PER_DAY)}以降`);
+        const remembrance = world.events.findLast(event => event.type === 'communityObservance' && event.settlementId === settlement.id);
+        if (remembrance) showEvent(world, remembrance);
+      }
       const recent = settlement.dailyRecords?.slice(-7);
       if (recent?.length) {
         const last = recent.at(-1);
@@ -544,6 +551,9 @@ export function observation(getWorld, getCamera, focus) {
       const leader = world.citizens.find(c => c.id === event.leaderId);
       if (leader) title += '（' + leader.name + '）';
     }
+    if (event.type === 'communityObservance') {
+      title = event.kind === 'thanksgiving' ? '豊穣の祝福に感謝' : '食料難からの復旧を記念';
+    }
     if (event.type === 'monsterNestRelocated') {
       const reasons = { terrain: '地形の変化', settlement: '集落の接近', prey: '獲物の分布' };
       title += `（${monsters[event.species]?.label ?? '魔物'}${event.quantity}体${reasons[event.reason] ? '・' + reasons[event.reason] : ''}）`;
@@ -602,13 +612,15 @@ export function observation(getWorld, getCamera, focus) {
     const cause = eventsById.get(event.causeEventId);
     if (cause) {
       const origin = cause.type === 'foodShortage' ? '食料難が発生した集落' :
-        cause.kind === 'blessing' ? '祝福を行った地点' : '災害の発生地点';
+        cause.kind === 'blessing' ? '祝福を行った地点' :
+        event.type === 'communityObservance' ? '行事のきっかけ' : '災害の発生地点';
       addEventLocation(body, world, cause, `${origin} · ${calendar(cause.worldTimeTick)}`);
     }
     for (const recovery of resultsByCause.get(event.id)?.values() ?? []) {
       const result = recovery.type === 'foodRecovered' ? `備蓄が回復した集落（備蓄 ${recovery.food}）` :
         recovery.type === 'blessedFarmHarvested' ? '祝福後に収穫した畑' :
-        recovery.type === 'droughtFoodForaged' ? '代わりの食料を採集した地点' : '直近の復旧地点';
+        recovery.type === 'droughtFoodForaged' ? '代わりの食料を採集した地点' :
+        recovery.type === 'communityObservance' ? '記念行事を行った地点' : '直近の復旧地点';
       addEventLocation(body, world, recovery, `${result} · ${calendar(recovery.worldTimeTick)}`);
     }
 

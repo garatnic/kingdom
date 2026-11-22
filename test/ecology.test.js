@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { discoverFrontier } from '../engine/Expansion.js';
-import { issueQuest, spawnMonster, updateAdventureWorld } from '../simulation/Adventure.js';
+import { issueQuest, offerTradeEscort, spawnMonster, updateAdventureWorld } from '../simulation/Adventure.js';
 import { applyGodCommand } from '../systems/GodPowers.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { TIME_TICKS_PER_DAY } from '../data/balance.js';
@@ -203,4 +203,20 @@ test('a new settlement can displace a nest and the colony can leave the inner sa
   }
   assert.equal(goblin.relocating, undefined);
   assert.ok(Math.abs(goblin.x - settlement.x) + Math.abs(goblin.y - settlement.y) >= 9);
+});
+
+test('an occupied trade road can call for escorts before a dangerous colony reaches its new nest', () => {
+  const world = createWorld('relocation-road-risk');
+  world.map.terrain.fill('forest');
+  const home = world.settlements[0];
+  const partner = { ...home, id: 'settlement:2', x: 25, y: 12 };
+  world.buildings.push({ kind: 'guild', settlementId: home.id });
+  for (const resident of world.citizens.slice(0, 2)) resident.profession = 'adventurer';
+  const goblin = spawnMonster(world, 'goblin', { x: 12, y: 2 });
+  const road = Array.from({ length: 20 }, (_, index) => ({ x: 6 + index, y: 12 }));
+  goblin.homeTile = { x: 12, y: 9 };
+  assert.equal(offerTradeEscort(world, home, partner, partner, road), undefined);
+  goblin.relocating = true;
+  const id = offerTradeEscort(world, home, partner, partner, road);
+  assert.equal(world.quests.find(quest => quest.id === id)?.kind, 'escort_trade');
 });

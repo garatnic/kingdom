@@ -1,5 +1,6 @@
+import { rememberRecovery } from './SettlementRecords.js';
 import { emitOnce } from '../systems/History.js';
-import { citizenRaces, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, LARGE_SETTLEMENT_POPULATION, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
+import { ADULT_AGE, TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR, citizenRaces, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, LARGE_SETTLEMENT_POPULATION, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyBounds, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
 import { random } from '../engine/random.js';
@@ -16,6 +17,7 @@ import { TECH } from '../data/technologies.js';
 import { unlocked } from './Research.js';
 import { assignedAdventure, claimAdventure, continueAdventure, isQuestCargo } from './Adventure.js';
 import { campaignFor, invasionOrder } from './War.js';
+import { ageYears } from './Identity.js';
 import { recordDeath } from './Population.js';
 import { buildingDistance, tileDistance } from './Territory.js';
 
@@ -52,7 +54,7 @@ function travel(world, citizen, goal, kind, targetId = null) {
 function interruptForFood(world, citizen) {
   const { kind, phase } = citizen.action;
   const interruptible = phase === 'perform' && kind === 'build' || phase === 'travel' &&
-    ['gather', 'haul', 'explore', 'survey', 'deliverMaterials', 'recoverMaterials', 'pickUpMaterials'].includes(kind);
+    ['gather', 'haul', 'explore', 'survey', 'observance', 'deliverMaterials', 'recoverMaterials', 'pickUpMaterials'].includes(kind);
   if (citizen.hunger < 95 || !interruptible) return;
   const store = world.stockpiles.find(s => s.settlementId === citizen.settlementId);
   if (!store || available(store, 'food') < 1) return;
@@ -196,7 +198,15 @@ function chooseRoute(world, citizen, store, population) {
   }
   if (store && claimAdventure(world, citizen, store, (goal, kind, targetId) =>
     travel(world, citizen, goal, kind, targetId))) return;
-  const { x, y } = world.settlements.find(s => s.id === citizen.settlementId) ?? citizen.lastKnownSafeTile;
+  const settlement = world.settlements.find(s => s.id === citizen.settlementId);
+  const observance = settlement?.observance;
+  if (store && observance && !settlement.foodWarning && !campaign && !active &&
+      ageYears(world, citizen) >= ADULT_AGE &&
+      Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) >= observance.nextDay &&
+      !world.citizens.some(other => other.alive && other.settlementId === settlement.id &&
+        other.action.kind === 'observance' && other.action.targetId === observance.originEventId) &&
+      travel(world, citizen, storeTile(world, store), 'observance', observance.originEventId)) return;
+  const { x, y } = settlement ?? citizen.lastKnownSafeTile;
   const offset = () => Math.floor(random(world.rngState) * (2 * WANDER_RADIUS + 1)) - WANDER_RADIUS;
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
 }
@@ -256,10 +266,13 @@ function harvestFarm(world, farm, farmer, store) {
     const id = farm.fertilityCommandId;
     const blessing = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
     const nationId = world.settlements.find(s => s.id === farm.settlementId)?.nationId;
-    emitOnce(world, JSON.stringify([id, farm.id]), 'blessedFarmHarvested', {
+    const recorded = emitOnce(world, JSON.stringify([id, farm.id]), 'blessedFarmHarvested', {
       causeEventId: blessing?.id, buildingId: farm.id, settlementId: farm.settlementId,
       nationId, actorIds: [farmer.id], x: farm.x, y: farm.y, quantity
     });
+    if (recorded && blessing) {
+      rememberRecovery(world, world.settlements.find(s => s.id === farm.settlementId), world.events.at(-1), 'thanksgiving');
+    }
     delete farm.fertilityCommandId;
   }
   return quantity;
@@ -477,6 +490,19 @@ function perform(world, citizen, store, ticks, population) {
   }
   if (action.kind === 'deliverMaterials') {
     deliverMaterials(world, world.inTransit.find(item => item.id === action.targetId), citizen);
+  }
+  if (action.kind === 'observance' && store) {
+    const settlement = world.settlements.find(s => s.id === citizen.settlementId);
+    const memory = settlement?.observance;
+    const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
+    if (memory?.originEventId === action.targetId && day >= memory.nextDay && !settlement.foodWarning &&
+        citizen.hunger < NEEDS.eat) {
+      emitOnce(world, JSON.stringify([settlement.id, day]), 'communityObservance', {
+        causeEventId: memory.originEventId, settlementId: settlement.id, nationId: settlement.nationId,
+        actorIds: [citizen.id], kind: memory.kind, x: storeTile(world, store).x, y: storeTile(world, store).y
+      });
+      memory.nextDay = day + TIME_TICKS_PER_YEAR / TIME_TICKS_PER_DAY;
+    }
   }
   if (action.kind === 'haul' && store?.id === action.targetId) {
     deposit(citizen, store, population * FOOD_TARGET_PER_PERSON);

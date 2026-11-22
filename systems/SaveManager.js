@@ -93,6 +93,9 @@ function validate(world) {
         (s.trade === undefined || validTrade(s.trade, s.id)) &&
         (s.lastGuildLessonDay === undefined || integer(s.lastGuildLessonDay, 0, Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY))) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
+        (s.observance === undefined || (s.observance &&
+          ['thanksgiving', 'scarcity'].includes(s.observance.kind) && integer(s.observance.nextDay, 1) &&
+          typeof s.observance.originEventId === 'string' && /^event:[1-9][0-9]*$/.test(s.observance.originEventId))) &&
         (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1) &&
           (s.foodAid.allianceRelief === undefined || (s.foodAid.allianceRelief === true && s.foodAid.recipientNationId)) &&
           (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&

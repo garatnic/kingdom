@@ -2,7 +2,7 @@ import { nextId } from '../simulation/Identity.js';
 
 const importance = {
   pactEnvoyArrived: 2, campaignRationsRecovered: 2, aidReturning: 2, aidReturned: 2, internationalTradeReturned: 2,
-  homeAssigned: 1, farmerReassigned: 2, healingReceived: 1, terrainCorrection: 1, adventureDeparted: 1, adventureReturned: 1,
+  communityObservance: 2, homeAssigned: 1, farmerReassigned: 2, healingReceived: 1, terrainCorrection: 1, adventureDeparted: 1, adventureReturned: 1,
   constructionCompleted: 2, foodShortage: 2, foodRecovered: 2, frostRecovered: 2, blessedFarmHarvested: 2, droughtHarvestRecovered: 2, droughtFoodForaged: 2, foodAidDelivered: 2, foreignFoodAidDelivered: 2, materialAidDelivered: 2, monsterDefeated: 2, monsterBound: 2, monsterPredation: 2, monsterThreat: 2, monsterNestFounded: 2, monsterNestRelocated: 2, monsterNestCleared: 3, cooperativeExpedition: 2, supplyRecoveryDeparted: 1, supplyRecoveryReturned: 2, tradeEscortClash: 2, tradeEscortSpell: 2, tradeEscortDeparted: 1, tradeEscortReturned: 2, resourceSurveyDeparted: 1, resourceSurveyReturned: 2, borderFriction: 2, friendshipReached: 3, allianceFormed: 3, allianceEnded: 3, internationalTradeCompleted: 2, internationalTradeReturning: 2,
   marriage: 3, birth: 3, migrantArrived: 3, independentExpedition: 3, settlementFounded: 3, god_intervention: 3,
   manaVeinDiscovered: 3, arcaneIrrigationInstalled: 2, miningToolsForged: 2, miningToolsDispatched: 2, miningToolsIssued: 2, adventurerRankUp: 3, combatLevelUp: 2, guildApprenticeAdvanced: 2, adventurerEquipped: 2,

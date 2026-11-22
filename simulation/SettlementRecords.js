@@ -4,6 +4,15 @@ import { available } from './Economy.js';
 
 export const RECORD_DAYS = 30;
 
+export function rememberRecovery(world, settlement, event, kind) {
+  if (!settlement) return;
+  const earlier = settlement.observance;
+  if (earlier?.originEventId === event.id ||
+      (earlier?.kind === 'thanksgiving' && kind === 'scarcity')) return;
+  settlement.observance = { kind, originEventId: event.id,
+    nextDay: Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) + 5 };
+}
+
 export function recordSettlements(world) {
   const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
   const counts = new Map(world.settlements.map(s => [s.id, { population: 0, hungry: 0, waitingCargo: 0 }]));
@@ -37,11 +46,12 @@ export function recordSettlements(world) {
         settlement.foodWarning = nextAlert;
         const shortage = !nextAlert && world.events.findLast(event =>
           event.settlementId === settlement.id && event.type === 'foodShortage');
-        emitOnce(world, `${settlement.id}/food/${day}`, nextAlert ? 'foodShortage' : 'foodRecovered', {
+        const recorded = emitOnce(world, `${settlement.id}/food/${day}`, nextAlert ? 'foodShortage' : 'foodRecovered', {
           settlementId: settlement.id, nationId: settlement.nationId, x: settlement.x, y: settlement.y,
           food: current.food, population: current.population,
           ...(shortage && { causeEventId: shortage.id, foodAtShortage: shortage.food })
         });
+        if (recorded && shortage) rememberRecovery(world, settlement, world.events.at(-1), 'scarcity');
       }
     }
     if (records.length > RECORD_DAYS) records.shift();

@@ -158,6 +158,27 @@ test('drought delays local harvests and remains idempotent after restoration', a
   assert.equal(harvests[0].quantity, recovery[0].quantity);
   assert.deepEqual(harvests[0].actorIds, [farmer.id]);
   assert.equal(revived.buildings[1].fertilityCommandId, undefined);
+
+  const memory = revived.settlements[0].observance;
+  assert.equal(memory.kind, 'thanksgiving');
+  assert.equal(memory.originEventId, harvests[0].id);
+  const ready = await readSnapshot(JSON.stringify(await createSnapshot(revived)));
+  ready.worldTimeTick = memory.nextDay * TIME_TICKS_PER_DAY + 24;
+  const attendee = ready.citizens.find(person => person.id === farmer.id);
+  const depot = ready.stockpiles[0];
+  for (const citizen of ready.citizens) citizen.decisionAt = ready.worldTimeTick + TIME_TICKS_PER_DAY;
+  Object.assign(attendee, {
+    profession: null, decisionAt: ready.worldTimeTick, x: depot.x + 0.5, y: depot.y + 0.5,
+    lastKnownSafeTile: { x: depot.x, y: depot.y }, inventory: Object.fromEntries(Object.keys(attendee.inventory).map(key => [key, 0])),
+    action: { kind: 'idle', phase: 'plan', targetId: null, startedAt: ready.worldTimeTick, progress: 0 }
+  });
+  updateCitizens(ready, 12);
+  updateCitizens(ready, 12);
+  const observances = ready.events.filter(event => event.type === 'communityObservance');
+  assert.equal(observances.length, 1);
+  assert.equal(observances[0].causeEventId, harvests[0].id);
+  assert.deepEqual(observances[0].actorIds, [attendee.id]);
+  assert.ok(ready.settlements[0].observance.nextDay > memory.nextDay);
 });
 
 test('favorite citizens persist in a snapshot and reference existing residents', async () => {
