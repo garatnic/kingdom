@@ -239,8 +239,9 @@ function validRoute(citizen, passable, terrainAt, navigationVersion) {
     Number.isInteger(action.progress) && inside(action.progress, max);
 }
 
-async function checksum(value) {
-  const bytes = new TextEncoder().encode(canonical(value));
+const payloadBytes = payload => new TextEncoder().encode(canonical(payload));
+
+async function checksum(bytes) {
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return 'sha256:' + Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -254,7 +255,11 @@ export async function createSnapshot(world, camera) {
     schemaVersion: VERSION, saveId: 'save:' + crypto.randomUUID(),
     createdAtIso: new Date().toISOString(), world: copy
   };
-  return { ...payload, checksum: await checksum(payload) };
+  const bytes = payloadBytes(payload);
+  // The exported file adds this field and the 64 hexadecimal hash digits.
+  const checksumFieldBytes = ',"checksum":"sha256:"'.length + 64;
+  if (bytes.length + checksumFieldBytes > MAX_BYTES) throw new Error('保存ファイルが大きすぎます。');
+  return { ...payload, checksum: await checksum(bytes) };
 }
 
 export async function readSnapshot(json) {
@@ -262,7 +267,7 @@ export async function readSnapshot(json) {
   const { checksum: expected, ...payload } = JSON.parse(json);
   if (payload.schemaVersion !== VERSION) throw new Error('未対応の保存形式です。');
   if (typeof payload.saveId !== 'string' || !Number.isFinite(Date.parse(payload.createdAtIso)) ||
-      expected !== await checksum(payload)) throw new Error('保存ファイルの整合性を確認できません。');
+      expected !== await checksum(payloadBytes(payload))) throw new Error('保存ファイルの整合性を確認できません。');
   validate(payload.world);
   migrateFixedMap(payload.world);
   for (const key of entityLists(payload.world).filter(key => key !== 'events')) payload.world[key].sort(idOrder);

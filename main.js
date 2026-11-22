@@ -91,7 +91,7 @@ function frame(now) {
   if (!document.hidden && now - lastBackup >= 60000) {
     lastBackup = now;
     keepGeneration(createSnapshot(world, camera)).catch(error => {
-      get('status').textContent = `自動保存失敗：${error.message}。手動でJSONを保存できます。`;
+      get('status').textContent = `自動保存失敗：${error.message}`;
     });
   }
   for (const [id, max] of [['god-x', world.map.width - 1], ['god-y', world.map.height - 1]]) {

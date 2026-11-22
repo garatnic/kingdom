@@ -153,3 +153,11 @@ test('settlement food alerts are recorded on persistent shortage and recovery af
   assert.equal(recoveries[0].food, 36);
   assert.equal(restored.settlements[0].dailyRecords.length, 4);
 });
+
+test('a snapshot that would exceed the import size limit is rejected before saving', async () => {
+  const world = createWorld('save-size-limit');
+  world.settings.overflow = 'a'.repeat(8 * 1024 * 1024);
+  await assert.rejects(createSnapshot(world), /保存ファイルが大きすぎます/);
+  delete world.settings.overflow;
+  assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
+});
