@@ -98,7 +98,8 @@ function validate(world) {
           (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&
             nations.has(s.foodAid.recipientNationId))))) &&
         (s.materialAid === undefined || (validAid(s.materialAid, s.id) &&
-          ['wood', 'stone', 'iron', 'manaStone'].includes(s.materialAid.resource) && integer(s.materialAid.quantity, 1))) &&
+          (s.materialAid.resource === 'steelTools' ? s.materialAid.quantity === 1 :
+            ['wood', 'stone', 'iron', 'manaStone'].includes(s.materialAid.resource) && integer(s.materialAid.quantity, 1)))) &&
         (s.dailyRecords === undefined || (Array.isArray(s.dailyRecords) && s.dailyRecords.length <= RECORD_DAYS &&
           s.dailyRecords.every((r, i, records) => r && integer(r.day, (records[i - 1]?.day ?? 0) + 1,
               Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY)) &&
@@ -124,7 +125,7 @@ function validate(world) {
       world.stockpiles.length !== settlements.size ||
       new Set(world.stockpiles.map(p => p.settlementId)).size !== settlements.size ||
       !world.stockpiles.every(p => settlements.has(p.settlementId) && p.total && p.reserved &&
-        integer(p.capacity, 0) && (p.x === undefined || passable(p)) &&
+        integer(p.capacity, 0) && (p.steelTools === undefined || integer(p.steelTools, 1)) && (p.x === undefined || passable(p)) &&
         resources.every(key => integer(p.total[key], 0) && integer(p.reserved[key], 0, p.total[key])) &&
         resources.reduce((sum, key) => sum + p.total[key], 0) <= p.capacity)) {
     throw new Error('保存データの集落・資源が無効です。');

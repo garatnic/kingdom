@@ -815,3 +815,57 @@ test('friendly trade buys the last mana stone needed by a capital smithy', async
   assert.equal(home.trade.incomingQuantity, 1);
   assert.equal(other.total.manaStone, 6);
 });
+
+test('steel tools ship from a smithy, survive reload, and equip once or return after a change of ownership', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { produceMiningTools } = await import('../simulation/Industry.js');
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const home = world.settlements[0];
+  away.nationId = invader.id;
+  invader.settlementIds.push(away.id);
+  Object.assign(defender, { capitalId: null, settlementIds: [], fallenAt: 0 });
+  for (const citizen of world.citizens) {
+    citizen.nationId = invader.id;
+    if (citizen.settlementId === home.id && citizen.profession === 'miner') citizen.steelMiningTools = true;
+  }
+  const recipient = world.citizens.find(c => c.settlementId === away.id);
+  recipient.profession = 'miner';
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'smithy', settlementId: home.id,
+    x: 2, y: 2, width: 2, height: 2, completedAt: 0 });
+  ensureResearch(world, invader, ['steel_1']);
+  homeStore.capacity += 20;
+  homeStore.total.iron = 5;
+  updateFoodAid(world);
+  assert.equal(away.materialAid?.resource, 'steelTools');
+  assert.equal(homeStore.total.iron, 3);
+
+  const serialized = JSON.stringify(await createSnapshot(world));
+  const delivered = await readSnapshot(serialized);
+  const destination = delivered.settlements[1];
+  delivered.worldTimeTick = destination.materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(delivered);
+  assert.equal(delivered.stockpiles[1].steelTools, 1);
+  produceMiningTools(delivered);
+  produceMiningTools(delivered);
+  assert.equal(delivered.citizens.find(c => c.id === recipient.id).steelMiningTools, true);
+  assert.equal(delivered.stockpiles[1].steelTools, undefined);
+  assert.equal(delivered.events.filter(event => event.type === 'miningToolsIssued').length, 1);
+
+  const returning = await readSnapshot(serialized);
+  const target = returning.settlements[1];
+  returning.nations[0].settlementIds = [home.id];
+  Object.assign(returning.nations[1], { capitalId: target.id, settlementIds: [target.id] });
+  delete returning.nations[1].fallenAt;
+  target.nationId = defender.id;
+  for (const citizen of returning.citizens.filter(c => c.settlementId === target.id)) citizen.nationId = defender.id;
+  returning.worldTimeTick = target.materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(returning);
+  assert.equal(target.materialAid.returning, true);
+  returning.worldTimeTick = target.materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(returning);
+  assert.equal(target.materialAid, undefined);
+  assert.equal(returning.stockpiles[0].steelTools, 1);
+  assert.equal(returning.stockpiles[0].total.iron, 3);
+  assert.equal(returning.stockpiles[1].steelTools, undefined);
+});

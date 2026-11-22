@@ -1,4 +1,4 @@
-import { arcaneGearDemand } from './Industry.js';
+import { arcaneGearDemand, forgeMiningTools, miningToolRecipient, STEEL_TOOLS } from './Industry.js';
 import { gear } from '../data/combat.js';
 import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { alliedNations, friendlyNations } from './Diplomacy.js';
@@ -26,6 +26,14 @@ export function updateFoodAid(world) {
   const nations = new Map(world.nations.map(nation => [nation.id, nation]));
   const friendly = (from, to) => friendlyNations(world, nations.get(from), nations.get(to));
 
+  const room = (store, resource, target) =>
+    resource === STEEL_TOOLS ? Math.max(0, 1 - (store.steelTools ?? 0)) : storageRoom(store, resource, target);
+
+  function receive(store, resource, quantity) {
+    if (resource === STEEL_TOOLS) store.steelTools = (store.steelTools ?? 0) + quantity;
+    else store.total[resource] += quantity;
+  }
+
   function settle(destination, field, resource, quantityKey) {
     const aid = destination[field];
     if (!aid || day < aid.arrivalDay) return;
@@ -44,9 +52,9 @@ export function updateFoodAid(world) {
     };
     const deliveryRoute = !aid.returning && ownershipMatches && relationsAllowAid && residents && route(from, to);
     if (deliveryRoute) {
-      const delivered = Math.min(aid[quantityKey], storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
+      const delivered = Math.min(aid[quantityKey], room(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (delivered) {
-        to.total[resource] += delivered;
+        receive(to, resource, delivered);
         aid[quantityKey] -= delivered;
         const food = resource === 'food';
         emitOnce(world, eventKey, food ? (aid.recipientNationId ? 'foreignFoodAidDelivered' : 'foodAidDelivered') : 'materialAidDelivered', {
@@ -68,8 +76,8 @@ export function updateFoodAid(world) {
       aid.returning = true;
       aid.arrivalDay = day + aid.travelDays;
     } else if (route(to, from)) {
-      const returned = Math.min(aid[quantityKey], storageRoom(from, resource));
-      from.total[resource] += returned;
+      const returned = resource === STEEL_TOOLS ? aid[quantityKey] : Math.min(aid[quantityKey], room(from, resource));
+      if (returned) receive(from, resource, returned);
       aid[quantityKey] -= returned;
       if (returned) {
         emitOnce(world, eventKey, 'aidReturned', {
@@ -120,15 +128,44 @@ export function updateFoodAid(world) {
     }
   }
 
+  const steelDemandForTools = TECH.miningToolIron + TECH.miningToolIronReserve;
+  const smithies = new Map(world.buildings.filter(b => b.kind === 'smithy').map(b => [b.settlementId, b]));
+  for (const destination of world.settlements) {
+    const to = stores.get(destination.id);
+    if (!destination.nationId || destination.foodWarning || destination.materialAid || to.steelTools ||
+        smithies.has(destination.id) || !unlocked(world, destination.id, 'steel_1') ||
+        !miningToolRecipient(world, to)) continue;
+    for (const source of world.settlements) {
+      if (source === destination || source.nationId !== destination.nationId || source.foodWarning ||
+          !population.has(source.id)) continue;
+      const from = stores.get(source.id);
+      const smithy = smithies.get(source.id);
+      if ((!from.steelTools && (!smithy || available(from, 'iron') < steelDemandForTools)) ||
+          miningToolRecipient(world, from)) continue;
+      const path = route(from, to);
+      if (!path) continue;
+      const forged = !from.steelTools;
+      if (forged && !forgeMiningTools(world, from, smithy)) continue;
+      if (--from.steelTools === 0) delete from.steelTools;
+      const travelDays = Math.max(1, Math.ceil(path.length / 32));
+      destination.materialAid = { sourceId: source.id, nationId: source.nationId,
+        resource: STEEL_TOOLS, quantity: 1, travelDays, arrivalDay: day + travelDays, returning: false };
+      emitOnce(world, `${source.id}/${destination.id}/${day}`, 'miningToolsDispatched', {
+        settlementId: source.id, recipientSettlementId: destination.id, nationId: source.nationId,
+        forged, ...(forged ? { x: smithy.x, y: smithy.y } : storeTile(world, from))
+      });
+      break;
+    }
+  }
+
   const projectNeeds = new Map(world.constructionSites.map(site => [site.settlementId,
     world.reservations.some(r => r.siteId === site.id) ? {} : buildings[site.kind].cost]));
-  const steelDemand = TECH.miningToolIron + TECH.miningToolIronReserve;
   const industrialNeeds = new Map();
   for (const smithy of world.buildings.filter(b => b.kind === 'smithy')) {
     const id = smithy.settlementId;
     if (unlocked(world, id, 'steel_1') && world.citizens.some(c =>
         c.alive && c.settlementId === id && c.profession === 'miner' && !c.steelMiningTools)) {
-      industrialNeeds.set(id, steelDemand);
+      industrialNeeds.set(id, steelDemandForTools);
     }
   }
 

@@ -31,7 +31,7 @@ const events = {
   constructionCompleted: '施設が完成', foodShortage: '集落で食料難', foodRecovered: '集落の食料備蓄が回復', foodAidDelivered: '同じ国の集落から食料が到着', monsterDefeated: '魔物を討伐', monsterThreat: '集落に魔物が接近', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestRelocated: '魔物の群れが巣を移した', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', supplyRecoveryDeparted: '物資回収に出発', supplyRecoveryReturned: '物資回収隊が帰還', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', blessedFarmHarvested: '豊穣の祝福を受けた畑で収穫', droughtHarvestRecovered: '干ばつ後に収穫を再開', droughtFoodForaged: '干ばつに備えて野生食料を採集', founding: '建国', leaderSucceeded: '指導者が交代',
-  miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
+  miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', miningToolsDispatched: '採掘道具を別の集落へ出荷', miningToolsIssued: '鉱夫が鋼鉄の採掘道具を受け取った', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   alliedDefenseMobilized: '防衛協定により同盟国が参戦', warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   campaignRationsRecovered: '遠征の残り兵糧を回収',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
@@ -39,7 +39,7 @@ const events = {
 const eventGroups = {
   nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'pactEnvoyArrived', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'alliedDefenseMobilized', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'campaignRationsRecovered', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
-  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
+  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'miningToolsDispatched', 'miningToolsIssued', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestRelocated', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'tradeEscortClash', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
@@ -56,7 +56,7 @@ const actions = {
 };
 const facilityNames = { house: '住宅', farm: '畑', warehouse: '倉庫', smithy: '鍛冶場', barracks: '兵舎', guild: 'ギルド' };
 const settlementName = settlement => '集落 ' + settlement.id.split(':').at(-1);
-const resources = { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石' };
+const resources = { food: '食料', wood: '木材', stone: '石材', iron: '鉄', manaStone: '魔石', steelTools: '鋼鉄の採掘道具' };
 
 const techNames = { farming_1: '農業', building_1: '建築', weapons_1: '武器', magic_1: '魔法',
   steel_1: '鋼鉄鍛造', irrigation_1: '灌漑', magic_2: '魔法増幅', restoration_1: '治癒術', verdant_1: '豊穣魔法', binding_1: '拘束魔法' };
@@ -235,6 +235,7 @@ export function observation(getWorld, getCamera, focus) {
           add(body, 'p', `食料備蓄 ${food}/${residents.length * FOOD_TARGET_PER_PERSON}（目標） · 空腹 ${hungry}人${shortage}`);
         }
       }
+      if (store?.steelTools) add(body, 'p', `鋼鉄の採掘道具（未装備） ${store.steelTools}`);
       showShipments(world, settlement);
       const recent = settlement.dailyRecords?.slice(-7);
       if (recent?.length) {

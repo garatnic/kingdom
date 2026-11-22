@@ -9,24 +9,38 @@ import { unlocked } from './Research.js';
 import { workTile } from './Construction.js';
 import { findPath } from './path.js';
 
+export const STEEL_TOOLS = 'steelTools';
+
+export function miningToolRecipient(world, store) {
+  const depot = storeTile(world, store);
+  return world.citizens.find(c => c.alive && c.settlementId === store.settlementId && c.profession === 'miner' &&
+    !c.steelMiningTools && ageYears(world, c) >= ADULT_AGE &&
+    findPath(world, c.lastKnownSafeTile, depot) !== null);
+}
+
+export function forgeMiningTools(world, store, smithy) {
+  if (!smithy || !unlocked(world, store.settlementId, 'steel_1') ||
+      available(store, 'iron') < TECH.miningToolIron + TECH.miningToolIronReserve) return false;
+  store.total.iron -= TECH.miningToolIron;
+  store.steelTools = (store.steelTools ?? 0) + 1;
+  return true;
+}
+
 export function produceMiningTools(world) {
-  const equippedSettlements = new Set();
-  for (const smithy of world.buildings) {
-    const id = smithy.settlementId;
-    if (smithy.kind !== 'smithy' || equippedSettlements.has(id) || !unlocked(world, id, 'steel_1')) continue;
-    const store = world.stockpiles.find(s => s.settlementId === id);
-    if (!store || available(store, 'iron') < TECH.miningToolIron + TECH.miningToolIronReserve) continue;
-    const depot = storeTile(world, store);
-    const miner = world.citizens.find(c => c.alive && c.settlementId === id && c.profession === 'miner' &&
-      !c.steelMiningTools && ageYears(world, c) >= ADULT_AGE &&
-      findPath(world, c.lastKnownSafeTile, depot) !== null);
+  for (const store of world.stockpiles) {
+    const id = store.settlementId;
+    const smithy = world.buildings.find(b => b.kind === 'smithy' && b.settlementId === id);
+    if (!store.steelTools && (!smithy || !unlocked(world, id, 'steel_1'))) continue;
+    const miner = miningToolRecipient(world, store);
     if (!miner) continue;
 
-    store.total.iron -= TECH.miningToolIron;
+    const forgedLocally = !store.steelTools;
+    if (forgedLocally && !forgeMiningTools(world, store, smithy)) continue;
+    if (--store.steelTools === 0) delete store.steelTools;
     miner.steelMiningTools = true;
-    equippedSettlements.add(id);
-    emitOnce(world, miner.id, 'miningToolsForged', {
-      citizenId: miner.id, settlementId: id, nationId: miner.nationId, x: smithy.x, y: smithy.y
+    emitOnce(world, miner.id, forgedLocally ? 'miningToolsForged' : 'miningToolsIssued', {
+      citizenId: miner.id, settlementId: id, nationId: miner.nationId,
+      ...(forgedLocally ? { x: smithy.x, y: smithy.y } : storeTile(world, store))
     });
   }
 }
