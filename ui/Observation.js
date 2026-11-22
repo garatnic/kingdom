@@ -299,12 +299,14 @@ export function observation(getWorld, getCamera, focus) {
       for (const quest of quests) {
         const recovery = quest.kind === 'recover_supplies';
         const survey = quest.kind === 'survey_resources';
-        const target = quest.escortGoal ?? quest.prospectTile ??
+        const rendezvous = quest.stage !== 'return' && quest.escortWaypoint && quest.waypointVisitors.length < 2;
+        const target = (rendezvous ? quest.escortWaypoint : quest.escortGoal) ?? quest.prospectTile ??
           (recovery || survey ? world.resourceNodes : world.monsters).find(item => item.id === quest.targetId);
         const type = quest.kind === 'escort_trade' ? '交易品の護衛' : recovery ? '物資回収' : quest.prospectTile ? '魔石探鉱' : survey ? '資源調査' : quest.kind === 'clear_nest' ? '巣の攻略' : '魔物討伐';
         const status = quest.status === 'open' ? '募集中' : quest.stage === 'return' ? '帰還中' : '進行中';
+        const meeting = rendezvous ? ` · 危険地点に到着 ${quest.waypointVisitors.length}/2人` : '';
         const cargo = (recovery || survey) && target?.resource ? ` · ${resources[target.resource]}` : '';
-        const details = add(body, target ? 'button' : 'p', `${type} · ${status}${cargo}`);
+        const details = add(body, target ? 'button' : 'p', `${type} · ${status}${meeting}${cargo}`);
         if (target) details.onclick = () => {
           markManual();
           focus({ x: target.x + 0.5, y: target.y + 0.5 }, 'manualOverride');

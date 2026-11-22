@@ -684,6 +684,25 @@ test('a threat that appears after trade dispatch makes the shipment wait for its
     assert.ok(loadedEnemy.hp < magicEnemy.hp);
     if (binding) assert.equal(loadedCaster.hp, caster.hp);
   }
+  const regrouping = structuredClone(saved);
+  const regroupQuest = regrouping.quests.find(q => q.id === persisted.id);
+  const regroupStore = regrouping.stockpiles[0];
+  const scout = regrouping.citizens.find(c => c.id === regroupQuest.claimedBy);
+  regroupQuest.escortWaypoint = { ...scout.lastKnownSafeTile };
+  regroupQuest.waypointVisitors = [];
+  const moveScout = tile => { scout.lastKnownSafeTile = { x: tile.x, y: tile.y }; return true; };
+  continueAdventure(regrouping, scout, regroupQuest, regroupStore, regroupStore, moveScout);
+  assert.deepEqual(regroupQuest.waypointVisitors, [scout.id]);
+  assert.deepEqual(scout.lastKnownSafeTile, regroupQuest.escortWaypoint);
+
+  const reloaded = await readSnapshot(JSON.stringify(await createSnapshot(regrouping)));
+  const restoredQuest = reloaded.quests.find(q => q.id === persisted.id);
+  const restoredStore = reloaded.stockpiles[0];
+  const wing = reloaded.citizens.find(c => c.id === restoredQuest.escortId);
+  const moveWing = tile => { wing.lastKnownSafeTile = { x: tile.x, y: tile.y }; return true; };
+  continueAdventure(reloaded, wing, restoredQuest, restoredStore, restoredStore, moveWing);
+  assert.deepEqual(restoredQuest.waypointVisitors, [scout.id, wing.id]);
+  assert.deepEqual(wing.lastKnownSafeTile, restoredQuest.escortGoal);
   const unarmored = structuredClone(saved);
   const baselineEnemy = unarmored.monsters.find(m => m.id === enemy.id);
   updateAdventureWorld(unarmored, 1);
