@@ -655,7 +655,7 @@ test('a destination guild escorts only the threatened segment on a trade longer 
   updateTrade(saved);
   updateTrade(saved);
   assert.equal(destination.total.wood, 2);
-  assert.equal(saved.events.filter(event => event.type === 'internationalTradeCompleted').length, 1);
+  assert.equal(saved.events.filter(event => event.type === 'internationalTradeCompleted' && event.questId === quest.id).length, 1);
 });
 
 test('a veteran receives domestic mana stone and equips arcane gear after cargo reload', async () => {

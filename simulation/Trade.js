@@ -74,7 +74,7 @@ export function updateTrade(world) {
         emitOnce(world, `${a.id}/${b.id}/trade/${day}`, 'internationalTradeCompleted', {
           settlementId: a.id, sourceSettlementId: b.id, nationIds: [a.nationId, b.nationId],
           x: a.x, y: a.y, outgoing: trade.outgoing, incoming: trade.incoming,
-          quantity: trade.outgoingQuantity
+          quantity: trade.outgoingQuantity, ...(escort && { questId: escort.id })
         });
         delete a.trade;
       } else {
@@ -82,7 +82,7 @@ export function updateTrade(world) {
           !escort || ['open', 'claimed', 'expired'].includes(escort.status) ? 'timeout' : 'escort';
         emitOnce(world, `${a.id}/${b.id}/trade-return/${day}`, 'internationalTradeReturning', {
           settlementId: a.id, sourceSettlementId: b.id, nationIds: [trade.firstNationId, trade.secondNationId],
-          x: a.x, y: a.y, reason
+          x: a.x, y: a.y, reason, ...(escort && { questId: escort.id })
         });
         if (escort?.status === 'open') escort.status = 'expired';
         if (escort?.status === 'claimed') {
