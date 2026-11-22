@@ -40,6 +40,8 @@ const eventGroups = {
   science: ['research_unlocked', 'civilizationAdvanced'],
   god: ['god_intervention', 'frostRecovered', 'droughtHarvestRecovered']
 };
+const relatedEventKey = event => event.questId ??
+  (event.sourceTransactionId?.startsWith('campaign:') ? event.sourceTransactionId : undefined);
 const eventNumber = event => Number(event.id.split(':')[1]);
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
 const actions = {
@@ -86,6 +88,29 @@ export function observation(getWorld, getCamera, focus) {
   let currentEvent = null;
   let suspendedAt = null;
   const seen = new Set();
+  let openRelatedEventId;
+  let indexedEvents;
+  let indexedLastEvent;
+  const eventsById = new Map();
+  const resultsByCause = new Map();
+  const relatedByType = new Map();
+
+  function indexHistory(events) {
+    if (indexedEvents === events && indexedLastEvent === events.at(-1)) return;
+    indexedEvents = events;
+    indexedLastEvent = events.at(-1);
+    eventsById.clear();
+    resultsByCause.clear();
+    relatedByType.clear();
+    for (const event of events) {
+      eventsById.set(event.id, event);
+      if (event.causeEventId) resultsByCause.set(event.causeEventId, event);
+      const key = relatedEventKey(event);
+      if (!key) continue;
+      if (!relatedByType.has(key)) relatedByType.set(key, new Map());
+      relatedByType.get(key).set(event.type, event);
+    }
+  }
 
   function render(force = false) {
     const world = getWorld();
@@ -119,9 +144,13 @@ export function observation(getWorld, getCamera, focus) {
     if (mode === 'world') {
       const group = eventGroups[eventFilter.value];
       const before = previousPages.at(-1) ?? Infinity;
-      const list = historyFor(world, 'world')
-        .filter(event => eventNumber(event) < before && (!group || group.includes(event.type)))
-        .slice(-21).reverse();
+      const list = [];
+      for (let i = world.events.length - 1; i >= 0 && list.length < 21; i--) {
+        const event = world.events[i];
+        if (eventNumber(event) < before && eventImportance(event) >= 2 && (!group || group.includes(event.type))) {
+          list.push(event);
+        }
+      }
       if (!list.length) add(body, 'p', '該当する出来事はありません。');
       for (const event of list.slice(0, 20)) showEvent(world, event);
       if (previousPages.length) {
@@ -408,30 +437,36 @@ export function observation(getWorld, getCamera, focus) {
     }
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
+    if (!addEventLocation(body, world, event, label)) add(body, 'p', label);
+
+    indexHistory(world.events);
+    const cause = eventsById.get(event.causeEventId);
+    if (cause) addEventLocation(body, world, cause, `災害の発生地点 · ${calendar(cause.worldTimeTick)}`);
+    const recovery = resultsByCause.get(event.id);
+    if (recovery) addEventLocation(body, world, recovery, `直近の復旧地点 · ${calendar(recovery.worldTimeTick)}`);
+
+    const group = relatedByType.get(relatedEventKey(event));
+    if (!group) return;
+    const linked = [...group.values()].filter(entry => entry.type !== event.type && eventLocation(world, entry));
+    if (!linked.length) return;
+    const details = add(body, 'details', '');
+    details.open = openRelatedEventId === event.id;
+    const summary = add(details, 'summary', '関連する出来事');
+    summary.onclick = () => { openRelatedEventId = details.open ? undefined : event.id; };
+    linked.sort((a, b) => eventNumber(a) - eventNumber(b));
+    for (const entry of linked) {
+      addEventLocation(details, world, entry, `${events[entry.type] ?? entry.type} · ${calendar(entry.worldTimeTick)}`);
+    }
+  }
+
+  function addEventLocation(container, world, event, label) {
     const target = eventLocation(world, event);
-    if (target) {
-      add(body, 'button', label).onclick = () => {
-        markManual();
-        focus(target, 'manualOverride');
-      };
-    } else {
-      add(body, 'p', label);
-    }
-    if (event.causeEventId) {
-      const cause = world.events.find(entry => entry.id === event.causeEventId);
-      const location = cause && eventLocation(world, cause);
-      if (location) add(body, 'button', `災害の発生地点 · ${calendar(cause.worldTimeTick)}`).onclick = () => {
-        markManual();
-        focus(location, 'manualOverride');
-      };
-    } else if (event.type === 'god_intervention' && event.kind === 'disaster') {
-      const recovery = world.events.findLast(entry => entry.causeEventId === event.id);
-      const location = recovery && eventLocation(world, recovery);
-      if (location) add(body, 'button', `直近の復旧地点 · ${calendar(recovery.worldTimeTick)}`).onclick = () => {
-        markManual();
-        focus(location, 'manualOverride');
-      };
-    }
+    if (!target) return false;
+    add(container, 'button', label).onclick = () => {
+      markManual();
+      focus(target, 'manualOverride');
+    };
+    return true;
   }
 
   tab.onchange = () => { search.value = ''; previousPages.length = 0; render(true); };

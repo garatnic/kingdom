@@ -286,7 +286,15 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       const { createWorld } = await import('/engine/World.js');
       const { createAdult } = await import('/simulation/CreateAdult.js');
       const { createSnapshot } = await import('/systems/SaveManager.js');
+      const { emitOnce, trimHistory } = await import('/systems/History.js');
       const world = createWorld('dense-browser-test');
+      for (let i = 0; i < 2100; i++) emitOnce(world, 'construction:' + i, 'constructionCompleted', { x: 31, y: 31 });
+      emitOnce(world, 'campaign:1', 'warDeclared', { x: 18, y: 18 });
+      emitOnce(world, 'campaign:1', 'fieldBattle', { x: 50, y: 50, nationIds: [] });
+      emitOnce(world, 'quest:1', 'tradeEscortDeparted', { questId: 'quest:1', x: 21, y: 21 });
+      emitOnce(world, 'quest:1/monster:1', 'tradeEscortClash', { questId: 'quest:1', x: 44, y: 44 });
+      emitOnce(world, 'settlement:1/settlement:2/trade/1', 'internationalTradeCompleted', { questId: 'quest:1', x: 24, y: 24 });
+      trimHistory(world);
       world.map.terrain.fill('grass');
       const settlement = world.settlements[0];
       for (let i = 0; i < 288; i++) {
@@ -315,6 +323,31 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })`);
     assert.notEqual(await evaluate("document.querySelector('#clock').textContent"), denseClock);
     console.log(JSON.stringify({ syntheticPopulation: 300, sampleMs: 2000, observedFps: denseFps }));
+    await evaluate(`(() => {
+      document.querySelector('[data-speed="0"]').click();
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'world';
+      tab.dispatchEvent(new Event('change'));
+    })()`);
+    const relatedLocation = (record, related) => `(() => {
+      const recordButton = [...document.querySelectorAll('#history-body > button')].find(button =>
+        button.textContent.startsWith(${JSON.stringify(record)}));
+      const details = recordButton?.nextElementSibling;
+      if (details?.tagName !== 'DETAILS') return false;
+      details.querySelector('summary').click();
+      const button = [...details.querySelectorAll('button')].find(entry =>
+        entry.textContent.startsWith(${JSON.stringify(related)}));
+      if (!button) return false;
+      button.click();
+      return true;
+    })()`;
+    const beforeBattleLink = await evaluate(canvasImage);
+    assert.equal(await evaluate(relatedLocation('開戦', '野戦で両軍が交戦')), true);
+    await poll(async () => (await evaluate(canvasImage)) !== beforeBattleLink);
+    const beforeTradeLink = await evaluate(canvasImage);
+    assert.equal(await evaluate(relatedLocation('友好国間で物資を交換', '交易品の護衛に出発')), true);
+    await poll(async () => (await evaluate(canvasImage)) !== beforeTradeLink);
+    assert.equal(await evaluate(relatedLocation('護衛隊が街道で交戦', '友好国間で物資を交換')), true);
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();

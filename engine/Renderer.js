@@ -193,12 +193,30 @@ export class Renderer {
     ctx.fillRect(x - 4, y - 2, 3, 4 + (foot === 1 ? 2 : 0));
     ctx.fillRect(x + 1, y - 2, 3, 4 + (foot === 3 ? 2 : 0));
     if (citizen.action.phase === 'perform') {
-      const effect = { gather: '#e9d28e', farm: '#b4d881', build: '#d9b37d',
-        adventure: quest?.casting ? '#c6a7e8' : '#e8c1a1' }[citizen.action.kind];
-      if (effect) {
-        ctx.fillStyle = effect;
-        const shift = Math.floor(tick / 12) % 4;
-        ctx.fillRect(x + 7 + shift, y - 8 - shift, 3, 7);
+      const shift = Math.floor(tick / 12) % 4;
+      switch (citizen.action.kind) {
+        case 'gather':
+        case 'farm':
+          ctx.fillStyle = citizen.action.kind === 'farm' ? '#b4d881' : '#e9d28e';
+          ctx.fillRect(x + 7 + shift, y - 6 - shift, 3, 3);
+          ctx.fillRect(x + 4 + shift, y - 3 + shift, 2, 2);
+          break;
+        case 'build':
+          ctx.fillStyle = '#d9b37d';
+          ctx.fillRect(x + 8, y - 12 + shift, 3, 9);
+          ctx.fillRect(x + 5, y - 14 + shift, 9, 4);
+          break;
+        case 'adventure':
+          if (quest?.casting) {
+            ctx.fillStyle = '#c6a7e8';
+            ctx.fillRect(x - 1, y - 29 - shift, 2, 10);
+            ctx.fillRect(x - 5, y - 25 - shift, 10, 2);
+          } else if (quest?.stage === 'fight') {
+            ctx.fillStyle = '#e8c1a1';
+            ctx.fillRect(x + 7 + shift, y - 10, 8, 2);
+            ctx.fillRect(x + 10 + shift, y - 13, 2, 8);
+          }
+          break;
       }
     }
   }
