@@ -194,7 +194,10 @@ function validate(world) {
         (q.claimedBy === null || people.has(q.claimedBy)) &&
         (q.escortId === undefined || (people.has(q.escortId) && q.escortId !== q.claimedBy)) &&
         (q.kind !== 'clear_nest' || (validTile(q.nestTile) && Object.hasOwn(monsters, q.species))) &&
-        (q.boundTargetId === undefined || (targets.has(q.boundTargetId) && targets.has(q.targetId))) &&
+        (q.boundTargetId === undefined || (targets.has(q.boundTargetId) && (q.kind === 'escort_trade' || targets.has(q.targetId)))) &&
+        (q.escortSpell === undefined || (q.kind === 'escort_trade' && q.escortSpell &&
+          [q.claimedBy, q.escortId].includes(q.escortSpell.casterId) && targets.has(q.escortSpell.monsterId) &&
+          integer(q.escortSpell.readyAt, 0))) &&
         Array.isArray(q.lootIds) && q.lootIds.every(id => ids.has(id))) ||
       accounts.size !== world.researchStates.length ||
       !world.researchStates.every(state => (settlements.has(state.ownerId) || nations.has(state.ownerId)) &&

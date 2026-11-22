@@ -321,7 +321,9 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
     if (!escortAlive || citizen.hunger >= NEEDS.eat || citizen.hp <= COMBAT.retreatHp) {
       quest.retreated = true;
       quest.stage = 'return';
+      delete quest.escortSpell;
     } else {
+      if (quest.escortSpell) return true;
       if (distance(tile, node)) {
         if (travel(node, 'adventure', quest.id)) return true;
         quest.retreated = true;
@@ -542,21 +544,91 @@ function huntPrey(world) {
   }
 }
 
+function canCastSpell(world, citizen) {
+  return citizen.skills.magic > 0 && (citizen.mp ?? 0) >= TECH.spellMp &&
+    world.worldTimeTick >= (citizen.spellReadyAt ?? 0) && unlocked(world, citizen.settlementId, 'magic_1');
+}
+
+function spendSpell(world, citizen) {
+  citizen.mp -= TECH.spellMp;
+  citizen.spellReadyAt = world.worldTimeTick + TECH.spellCooldownTicks;
+}
+
+function spellPower(world, citizen) {
+  const arcane = unlocked(world, citizen.settlementId, 'magic_2') ? TECH.arcaneSpellBonus : 0;
+  return TECH.spellAttack + arcane + (gear[citizen.gearId]?.spellAttack ?? 0);
+}
+
+function bindMonster(world, quest, monster, citizen) {
+  if (quest.boundTargetId === monster.id || monsters[monster.species].attack < monsters.goblin.attack ||
+      !unlocked(world, citizen.settlementId, 'binding_1')) return false;
+  const until = world.worldTimeTick + COMBAT.interval;
+  monster.moveAt = Math.max(monster.moveAt, until);
+  monster.attackAt = Math.max(monster.attackAt, until);
+  quest.boundTargetId = monster.id;
+  emitOnce(world, quest.id + '/' + monster.id, 'monsterBound', {
+    citizenId: citizen.id, settlementId: citizen.settlementId, questId: quest.id,
+    monsterId: monster.id, x: monster.x, y: monster.y
+  });
+  return true;
+}
+
 function resolveEscortEncounter(world, quest, lead) {
   const partner = world.citizens.find(citizen => citizen.id === quest.escortId && citizen.alive);
-  if (!partner) return;
+  if (!partner) {
+    delete quest.escortSpell;
+    return;
+  }
   const team = [lead, partner];
-  const enemy = world.monsters.find(monster => monster.alive && world.worldTimeTick >= monster.attackAt &&
-    monsters[monster.species].attack >= monsters.goblin.attack &&
-    team.some(member => distance(tileOf(member), monster) <= COMBAT.rangedDistance));
-  if (!enemy) return;
-  const participants = team.filter(member => distance(tileOf(member), enemy) <= COMBAT.rangedDistance);
-  const target = participants[0];
+  const now = world.worldTimeTick;
+  const spell = quest.escortSpell;
+  const enemy = spell
+    ? world.monsters.find(monster => monster.alive && monster.id === spell.monsterId)
+    : world.monsters.find(monster => monster.alive && now >= monster.attackAt &&
+      monsters[monster.species].attack >= monsters.goblin.attack &&
+      team.some(member => distance(tileOf(member), monster) <= COMBAT.rangedDistance));
+  if (!enemy) {
+    delete quest.escortSpell;
+    return;
+  }
+  const melee = team.filter(member => distance(tileOf(member), enemy) <= COMBAT.rangedDistance);
+  const eligible = member => member.hp > COMBAT.retreatHp && member.hunger < NEEDS.eat &&
+    distance(tileOf(member), enemy) <= TECH.spellRange && canCastSpell(world, member);
+  const caster = spell ? team.find(member => member.id === spell.casterId && eligible(member)) : team.find(eligible);
+  if (spell && !caster) {
+    delete quest.escortSpell;
+    return;
+  }
+  if (!spell && caster) {
+    const tile = tileOf(caster);
+    caster.x = tile.x + 0.5;
+    caster.y = tile.y + 0.5;
+    caster.action = { kind: 'adventure', phase: 'perform', targetId: quest.id, startedAt: now, progress: 0 };
+    quest.escortSpell = { casterId: caster.id, monsterId: enemy.id, readyAt: now + TECH.spellCastTicks };
+    return;
+  }
+  if (spell && now < spell.readyAt) return;
+  delete quest.escortSpell;
+
+  let bound = false;
+  let spellAttack = 0;
+  if (caster) {
+    spendSpell(world, caster);
+    bound = bindMonster(world, quest, enemy, caster);
+    if (!bound) spellAttack = spellPower(world, caster);
+    emitOnce(world, [quest.id, enemy.id, now].join('/'), 'tradeEscortSpell', {
+      questId: quest.id, settlementId: quest.settlementId, citizenId: caster.id,
+      monsterId: enemy.id, x: enemy.x, y: enemy.y, bound
+    });
+  }
+  const participants = caster && !melee.includes(caster) ? [...melee, caster] : melee;
+  const target = melee[0];
   const config = monsters[enemy.species];
-  const attack = participants.reduce((power, member) =>
-    power + COMBAT.attack + member.skills.combat + (gear[member.gearId]?.attack ?? 0), 0);
-  enemy.attackAt = world.worldTimeTick + COMBAT.interval;
-  enemy.hp = Math.max(0, enemy.hp - damage(world, attack, config.defense));
+  const attack = melee.reduce((power, member) => member === caster ? power :
+    power + COMBAT.attack + member.skills.combat + (gear[member.gearId]?.attack ?? 0), spellAttack);
+  const retaliates = !bound && target && now >= enemy.attackAt;
+  enemy.attackAt = Math.max(enemy.attackAt, now + COMBAT.interval);
+  if (attack) enemy.hp = Math.max(0, enemy.hp - damage(world, attack, config.defense));
   emitOnce(world, `${quest.id}/${enemy.id}`, 'tradeEscortClash', {
     questId: quest.id, settlementId: quest.settlementId, actorIds: participants.map(member => member.id),
     monsterId: enemy.id, x: enemy.x, y: enemy.y
@@ -572,6 +644,7 @@ function resolveEscortEncounter(world, quest, lead) {
     return;
   }
 
+  if (!retaliates) return;
   target.hp = Math.max(0, target.hp - damage(world, config.attack, COMBAT.defense + (gear[target.gearId]?.defense ?? 0)));
   if (!target.hp) recordDeath(world, target, 'combat');
   if (target.hp <= COMBAT.retreatHp) {
@@ -618,13 +691,18 @@ export function updateAdventureWorld(world, ticks) {
     if (quest.status === 'open' && (now >= quest.expiresAt ||
         ((quest.kind === 'clear_monsters' || quest.kind === 'clear_nest') &&
           !world.monsters.some(m => m.id === quest.targetId && m.alive)))) quest.status = 'expired';
-    if (quest.status !== 'claimed') continue;
+    if (quest.status !== 'claimed') {
+      delete quest.escortSpell;
+      continue;
+    }
     const citizen = world.citizens.find(c => c.alive && c.id === quest.claimedBy);
     if (!citizen) {
       quest.status = 'failed';
+      delete quest.escortSpell;
     } else if (now >= quest.expiresAt && quest.stage !== 'return') {
       quest.stage = 'return';
       quest.retreated = true;
+      delete quest.escortSpell;
       citizen.action = { kind: 'idle', phase: 'plan', targetId: null, startedAt: now, progress: 0 };
       citizen.x = citizen.lastKnownSafeTile.x + 0.5;
       citizen.y = citizen.lastKnownSafeTile.y + 0.5;
@@ -824,8 +902,7 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
   }
   if (quest.claimedBy !== citizen.id) return false;
   const escort = quest.escortId && world.citizens.find(c => c.id === quest.escortId && c.alive);
-  const canCast = citizen.skills.magic > 0 && (citizen.mp ?? 0) >= TECH.spellMp &&
-    world.worldTimeTick >= (citizen.spellReadyAt ?? 0) && unlocked(world, citizen.settlementId, 'magic_1');
+  const canCast = canCastSpell(world, citizen);
   const spell = quest.casting === true || canCast;
   const range = spell ? TECH.spellRange : COMBAT.rangedDistance;
   if (quest.stage === 'fight') {
@@ -850,27 +927,14 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
         quest.strikeAt = world.worldTimeTick + (spell ? TECH.spellCastTicks : COMBAT.strikeDelay);
       }
       if (world.worldTimeTick >= quest.strikeAt) {
-        if (quest.casting) {
-          citizen.mp -= TECH.spellMp;
-          citizen.spellReadyAt = world.worldTimeTick + TECH.spellCooldownTicks;
-        }
+        if (quest.casting) spendSpell(world, citizen);
         const weapon = unlocked(world, citizen.settlementId, 'weapons_1') ? TECH.weaponBonus : 0;
         const steel = !quest.casting && unlocked(world, citizen.settlementId, 'steel_1') ? TECH.steelWeaponBonus : 0;
-        const arcane = quest.casting && unlocked(world, citizen.settlementId, 'magic_2') ? TECH.arcaneSpellBonus : 0;
         const equipment = gear[citizen.gearId];
-        const attack = quest.casting ? TECH.spellAttack + arcane + (equipment?.spellAttack ?? 0)
+        const attack = quest.casting ? spellPower(world, citizen)
           : COMBAT.attack + citizen.skills.combat + weapon + steel + (equipment?.attack ?? 0);
-        if (quest.casting && quest.boundTargetId !== monster.id && config.attack >= monsters.goblin.attack &&
-            unlocked(world, citizen.settlementId, 'binding_1')) {
-          const until = world.worldTimeTick + COMBAT.interval;
-          monster.moveAt = Math.max(monster.moveAt, until);
-          monster.attackAt = Math.max(monster.attackAt, until);
-          quest.boundTargetId = monster.id;
-          emitOnce(world, quest.id + '/' + monster.id, 'monsterBound', {
-            citizenId: citizen.id, settlementId: citizen.settlementId, questId: quest.id,
-            monsterId: monster.id, x: monster.x, y: monster.y
-          });
-        } else if (quest.casting || distance(position, monster) <= COMBAT.rangedDistance) {
+        const bound = quest.casting && bindMonster(world, quest, monster, citizen);
+        if (!bound && (quest.casting || distance(position, monster) <= COMBAT.rangedDistance)) {
           const support = escort && !quest.escortRetreated && escort.hp > COMBAT.retreatHp &&
             distance(tileOf(escort), monster) <= COMBAT.rangedDistance;
           const bonus = support ? Math.floor(COMBAT.attack / 2) + escort.skills.combat : 0;

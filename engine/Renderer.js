@@ -207,7 +207,7 @@ export class Renderer {
           ctx.fillRect(x + 5, y - 14 + shift, 9, 4);
           break;
         case 'adventure':
-          if (quest?.casting) {
+          if (quest?.casting || quest?.escortSpell?.casterId === citizen.id) {
             ctx.fillStyle = '#c6a7e8';
             ctx.fillRect(x - 1, y - 29 - shift, 2, 10);
             ctx.fillRect(x - 5, y - 25 - shift, 10, 2);

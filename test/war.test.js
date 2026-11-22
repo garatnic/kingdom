@@ -655,6 +655,34 @@ test('a threat that appears after trade dispatch makes the shipment wait for its
     const citizen = saved.citizens.find(c => c.id === id);
     citizen.lastKnownSafeTile = { x: enemy.x, y: enemy.y };
   }
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const { TECH } = await import('../data/technologies.js');
+  for (const binding of [false, true]) {
+    const magicWorld = structuredClone(saved);
+    const spellQuest = magicWorld.quests.find(q => q.id === persisted.id);
+    const caster = magicWorld.citizens.find(c => c.id === spellQuest.claimedBy);
+    const magicEnemy = magicWorld.monsters.find(m => m.id === enemy.id);
+    ensureResearch(magicWorld, magicWorld.nations[0], binding ? ['magic_1', 'binding_1'] : ['magic_1']);
+    caster.skills.magic = 1;
+    caster.mp = TECH.spellMp;
+    updateAdventureWorld(magicWorld, 1);
+    assert.equal(spellQuest.escortSpell?.casterId, caster.id);
+    assert.equal(caster.mp, TECH.spellMp);
+
+    const spellSaved = await readSnapshot(JSON.stringify(await createSnapshot(magicWorld)));
+    const loadedQuest = spellSaved.quests.find(q => q.id === spellQuest.id);
+    spellSaved.worldTimeTick = loadedQuest.escortSpell.readyAt;
+    updateAdventureWorld(spellSaved, 1);
+    updateAdventureWorld(spellSaved, 1);
+    assert.equal(loadedQuest.escortSpell, undefined);
+    const loadedCaster = spellSaved.citizens.find(c => c.id === caster.id);
+    assert.equal(loadedCaster.mp, 0);
+    assert.equal(spellSaved.events.filter(e => e.type === 'tradeEscortSpell').length, 1);
+    assert.equal(spellSaved.events.filter(e => e.type === 'monsterBound').length, Number(binding));
+    const loadedEnemy = spellSaved.monsters.find(m => m.id === magicEnemy.id);
+    assert.ok(loadedEnemy.hp < magicEnemy.hp);
+    if (binding) assert.equal(loadedCaster.hp, caster.hp);
+  }
   const unarmored = structuredClone(saved);
   const baselineEnemy = unarmored.monsters.find(m => m.id === enemy.id);
   updateAdventureWorld(unarmored, 1);
