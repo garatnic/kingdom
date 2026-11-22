@@ -23,6 +23,7 @@ const events = {
   materialAidDelivered: '同じ国の集落から資材が到着',
   manaVeinDiscovered: '協力調査で魔石鉱脈を発見', resourceSurveyDeparted: '資源調査に出発', resourceSurveyReturned: '資源調査を報告',
   terrainCorrection: '地形の生成補正', adventureDeparted: '討伐に出発', adventureReturned: '討伐から帰還',
+  healingReceived: '治癒術で住民を治療',
   monsterBound: '拘束魔法で魔物の動きを止めた',
   guildApprenticeAdvanced: 'ギルドの指導で戦闘技能が向上',
   arcaneIrrigationInstalled: '農地に魔導灌漑を設置',
@@ -476,6 +477,7 @@ export function observation(getWorld, getCamera, focus) {
       const stock = event.foodAtShortage === undefined ? event.food : `${event.foodAtShortage} → ${event.food}`;
       if (stock !== undefined) title += `（備蓄 ${stock}）`;
     }
+    if (event.type === 'healingReceived') title += `（HP +${event.quantity}）`;
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     if (!addEventLocation(body, world, event, label)) add(body, 'p', label);

@@ -129,6 +129,8 @@ test('restoration can treat a nearby resting neighbor once per hour', () => {
   assert.equal(distant.hp, 42);
   assert.equal(first.mp, 20);
   assert.equal(second.mp, 30);
+  assert.deepEqual(world.events.filter(event => event.type === 'healingReceived').map(event =>
+    [event.actorIds, event.quantity]), [[[first.id, patient.id], 12], [[first.id, distant.id], 12]]);
 });
 
 test('steel industry equips miners after research and improves both mining paths across saves', async () => {
