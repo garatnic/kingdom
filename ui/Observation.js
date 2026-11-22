@@ -340,22 +340,7 @@ export function observation(getWorld, getCamera, focus) {
         get('favorite-citizen')?.focus();
       };
       if (mode === 'family') {
-        const members = new Map(world.citizens.map(c => [c.id, c]));
-        const relatives = (ids, field) => [...new Set(ids.flatMap(id => members.get(id)?.[field] ?? []))];
-        const fields = [
-          ['祖父母', relatives(person.parentIds, 'parentIds')],
-          ['親', person.parentIds], ['配偶者', [person.partnerId].filter(Boolean)],
-          ['子', person.childIds], ['孫', relatives(person.childIds, 'childIds')]
-        ];
-        for (const [label, ids] of fields) {
-          add(body, 'h4', label);
-          if (!ids.length) add(body, 'p', '記録なし');
-          for (const id of ids) {
-            const member = members.get(id);
-            const button = add(body, 'button', member?.name ?? id);
-            button.onclick = () => selectCitizen(id);
-          }
-        }
+        showFamily(world, person);
       } else {
         for (const event of historyFor(world, 'citizen', person.id).slice(-10).reverse()) showEvent(world, event);
       }
@@ -389,6 +374,43 @@ export function observation(getWorld, getCamera, focus) {
       }
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);
     } else add(body, 'p', '対象がまだありません。');
+  }
+
+  function showFamily(world, person) {
+    const members = new Map(world.citizens.map(citizen => [citizen.id, citizen]));
+    const relatives = (ids, field) => [...new Set(ids.flatMap(id => members.get(id)?.[field] ?? []))];
+    const partner = members.get(person.partnerId);
+    const current = person.alive && partner?.alive && partner.partnerId === person.id ? partner.id : null;
+    const previous = new Set();
+    for (let i = world.events.length - 1; i >= 0; i--) {
+      const event = world.events[i];
+      if (event.type !== 'marriage' || !event.citizenIds?.includes(person.id)) continue;
+      for (const id of event.citizenIds) {
+        if (id !== person.id && id !== current) previous.add(id);
+      }
+    }
+    if (partner && partner.id !== current) previous.add(partner.id);
+    for (const member of members.values()) {
+      if (!member.alive && member.partnerId === person.id) previous.add(member.id);
+    }
+    const fields = [
+      ['祖父母', relatives(person.parentIds, 'parentIds')],
+      ['親', person.parentIds],
+      ['兄弟姉妹', relatives(person.parentIds, 'childIds').filter(id => id !== person.id)],
+      ['配偶者', current ? [current] : []],
+      ['過去の配偶者', [...previous]],
+      ['子', person.childIds],
+      ['孫', relatives(person.childIds, 'childIds')]
+    ];
+    for (const [label, ids] of fields) {
+      add(body, 'h4', label);
+      if (!ids.length) add(body, 'p', '記録なし');
+      for (const id of ids) {
+        const member = members.get(id);
+        const name = member ? member.name + (member.alive ? '' : '（死亡）') : id;
+        add(body, 'button', name).onclick = () => selectCitizen(id);
+      }
+    }
   }
 
   function showShipments(world, settlement) {

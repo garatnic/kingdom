@@ -339,9 +339,21 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await evaluate(`(async () => {
       const { createWorld } = await import('/engine/World.js');
       const { createAdult } = await import('/simulation/CreateAdult.js');
+      const { recordDeath } = await import('/simulation/Population.js');
+      const { TIME_TICKS_PER_YEAR } = await import('/data/balance.js');
       const { createSnapshot } = await import('/systems/SaveManager.js');
       const { emitOnce, trimHistory } = await import('/systems/History.js');
       const world = createWorld('dense-browser-test');
+      const [resident, former, parent, sibling] = world.citizens;
+      resident.birthWorldTimeTick = sibling.birthWorldTimeTick = -20 * TIME_TICKS_PER_YEAR;
+      parent.birthWorldTimeTick = -36 * TIME_TICKS_PER_YEAR;
+      parent.lifespanYears = Math.max(parent.lifespanYears, 45);
+      parent.childIds = [resident.id, sibling.id];
+      resident.parentIds = sibling.parentIds = [parent.id];
+      resident.partnerId = former.id;
+      former.partnerId = resident.id;
+      emitOnce(world, 'family-browser-test', 'marriage', { citizenIds: [resident.id, former.id] });
+      recordDeath(world, former, 'old_age');
       for (let i = 0; i < 2100; i++) emitOnce(world, 'construction:' + i, 'constructionCompleted', { x: 31, y: 31 });
       emitOnce(world, 'campaign:1', 'warDeclared', { x: 18, y: 18, actorIds: [world.citizens[0].id] });
       emitOnce(world, 'campaign:1', 'fieldBattle', { x: 50, y: 50, nationIds: [] });
@@ -361,7 +373,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       trimHistory(world);
       world.map.terrain.fill('grass');
       const settlement = world.settlements[0];
-      for (let i = 0; i < 288; i++) {
+      for (let i = 0; i < 289; i++) {
         const tile = { x: 16 + i % 16, y: 24 + Math.floor(i / 16) };
         world.citizens.push(createAdult(world, 'human', tile, settlement));
       }
@@ -438,6 +450,15 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     assert.equal(await evaluate("document.querySelector('#history-tab').value"), 'citizen');
     assert.equal(await evaluate("document.querySelector('#history-body h3').textContent"), participantName);
     assert.equal(await evaluate("document.querySelector('#history-body').textContent.includes('魔力適性')"), true);
+    assert.equal(await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'family';
+      tab.dispatchEvent(new Event('change'));
+      const headings = [...document.querySelectorAll('#history-body h4')];
+      const record = label => headings.find(heading => heading.textContent === label)?.nextElementSibling;
+      return record('兄弟姉妹')?.tagName === 'BUTTON' && record('配偶者')?.textContent === '記録なし' &&
+        record('過去の配偶者')?.textContent.endsWith('（死亡）');
+    })()`), true);
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
     const eventButton = await evaluate(`(() => {
       const tab = document.querySelector('#history-tab');
