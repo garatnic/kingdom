@@ -290,7 +290,9 @@ test('summer drought delays an unprotected farm and its recovery establishes a l
   world.idCounters.building = 4;
   let year = 1;
   while (seedState(JSON.stringify([world.seed, year, 'summer-drought']))[0] % 3 !== 0) year++;
-  world.worldTimeTick = year * TIME_TICKS_PER_YEAR + 18 * TIME_TICKS_PER_DAY;
+  const { calendar } = await import('../engine/GameLoop.js');
+  world.worldTimeTick = year * TIME_TICKS_PER_YEAR + 13 * TIME_TICKS_PER_DAY;
+  assert.match(calendar(world.worldTimeTick), /夏/);
 
   updateWeather(world);
   updateWeather(world);

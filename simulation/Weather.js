@@ -1,13 +1,15 @@
-import { TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR } from '../data/balance.js';
+import { SEASONS, TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR } from '../data/balance.js';
 import { FARM_HARVEST_TICKS } from '../data/buildings.js';
 import { seedState } from '../engine/random.js';
 import { emitOnce } from '../systems/History.js';
 import { available } from './Economy.js';
 
+const lateSummerDay = SEASONS[0][1] + SEASONS[1][1] - 2;
+
 export function updateWeather(world) {
   const now = world.worldTimeTick;
   const year = Math.floor(now / TIME_TICKS_PER_YEAR);
-  if (year === 0 || now % TIME_TICKS_PER_YEAR !== 18 * TIME_TICKS_PER_DAY) return;
+  if (year === 0 || now % TIME_TICKS_PER_YEAR !== lateSummerDay * TIME_TICKS_PER_DAY) return;
   const [season, location] = seedState(JSON.stringify([world.seed, year, 'summer-drought']));
   if (season % 3 !== 0) return;
 
