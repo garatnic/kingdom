@@ -7,7 +7,7 @@ import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR } from '../data/balance.js';
 
 function marriedWorld() {
-  const world = createWorld('families');
+  const world = createWorld('families', { mixedFamilies: false });
   for (let day = 1; day <= 6; day++) {
     world.worldTimeTick = TIME_TICKS_PER_DAY * day;
     updatePopulation(world, 12);
@@ -244,4 +244,18 @@ test('mixed families are opt-in and children inherit either parent race determin
   assert.deepEqual(child.parentIds, [parent.id, partner.id]);
   assert.equal(child.race, 'fairy');
   assert.ok(child.traits.magicAffinity >= 0.75);
+});
+
+test('new worlds default to both rules on while each can be disabled and old saves preserve their options', async () => {
+  const defaults = createWorld('default-rules');
+  assert.deepEqual(defaults.settings, { mixedFamilies: true, alliedIntervention: true });
+  const familiesOff = createWorld('family-rule-off', { mixedFamilies: false });
+  const interventionOff = createWorld('intervention-rule-off', { alliedIntervention: false });
+  const legacy = createWorld('legacy-rules', { mixedFamilies: false, alliedIntervention: false });
+  assert.deepEqual(familiesOff.settings, { alliedIntervention: true });
+  assert.deepEqual(interventionOff.settings, { mixedFamilies: true });
+  assert.deepEqual(legacy.settings, {});
+  for (const world of [defaults, familiesOff, interventionOff, legacy]) {
+    assert.deepEqual((await readSnapshot(JSON.stringify(await createSnapshot(world)))).settings, world.settings);
+  }
 });

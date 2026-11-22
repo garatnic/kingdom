@@ -32,7 +32,7 @@ function starterTerrain(state) {
   });
 }
 
-export function createWorld(seed, { mixedFamilies = false, alliedIntervention = false } = {}) {
+export function createWorld(seed, { mixedFamilies = true, alliedIntervention = true } = {}) {
   const rngState = seedState(String(seed));
   const center = START_REGION_SIZE / 2;
   const map = { width: SIZE, height: SIZE, terrain: fixedMapTerrain(seed, starterTerrain(rngState), START_REGION_SIZE, START_REGION_SIZE),

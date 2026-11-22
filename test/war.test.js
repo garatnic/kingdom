@@ -10,7 +10,7 @@ import { activeNations, truceBetween, updateWar } from '../simulation/War.js';
 import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 
 function twoNations() {
-  const world = createWorld('war');
+  const world = createWorld('war', { alliedIntervention: false });
   world.map.terrain.fill('grass');
   const home = world.settlements[0];
   const away = { id: nextId(world, 'settlement'), x: 13, y: 13, nationId: null };

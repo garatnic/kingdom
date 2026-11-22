@@ -67,6 +67,9 @@ function showReadouts() {
 }
 
 function showState() {
+  const families = world.settings.mixedFamilies ? 'オン' : 'オフ';
+  const intervention = world.settings.alliedIntervention ? 'オン' : 'オフ';
+  get('world-rules').textContent = `現在の世界 · 異種族家族 ${families} · 協定参戦 ${intervention}`;
   showReadouts();
   for (const button of get('speeds').querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(Number(button.dataset.speed) === world.gameSpeed));
@@ -119,8 +122,6 @@ function replaceWorld(next) {
   lastSpeed = next.gameSpeed || 1;
   lastTime = null;
   get('seed').value = world.seed;
-  get('mixed-families').checked = world.settings.mixedFamilies === true;
-  get('allied-intervention').checked = world.settings.alliedIntervention === true;
   showState();
 }
 

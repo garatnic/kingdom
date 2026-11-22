@@ -109,6 +109,8 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     });
     assert.equal(snapshot.world.gameSpeed, 0);
     assert.equal(snapshot.world.citizens.length, 12);
+    assert.equal(snapshot.world.settings.mixedFamilies, true);
+    assert.equal(snapshot.world.settings.alliedIntervention, true);
     assert.equal(snapshot.world.settings.camera.zoom, 1.25);
     assert.ok(snapshot.world.settings.camera.x < 32.5);
     await evaluate("document.querySelector('#overview-toggle').click()");
@@ -128,12 +130,17 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       const { openSaveStorage, writeGeneration } = await import('/systems/SaveStorage.js');
       const database = await openSaveStorage();
       try {
-        await writeGeneration(database, await createSnapshot(createWorld('previous-browser-save')));
+        await writeGeneration(database, await createSnapshot(createWorld('previous-browser-save', { mixedFamilies: false, alliedIntervention: false })));
       } finally {
         database.close();
       }
     })()`);
-    await evaluate("document.querySelector('#seed').value = 'new-seed'; document.querySelector('form').requestSubmit()");
+    await send('Page.reload');
+    await poll(() => evaluate("document.querySelector('#seed')?.value === 'previous-browser-save'"));
+    assert.match(await evaluate("document.querySelector('#world-rules').textContent"), /異種族家族 オフ · 協定参戦 オフ/);
+    assert.equal(await evaluate("document.querySelector('#mixed-families').checked && document.querySelector('#allied-intervention').checked"), true);
+    await evaluate("document.querySelector('#seed').value = 'new-seed'; document.querySelector('#mixed-families').checked = false; document.querySelector('form').requestSubmit()");
+    assert.match(await evaluate("document.querySelector('#world-rules').textContent"), /異種族家族 オフ · 協定参戦 オン/);
     const { root } = await send('DOM.getDocument');
     const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#file' });
     await send('DOM.setFileInputFiles', { nodeId, files: [savePath] });
@@ -388,8 +395,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       return true;
     })()`);
     await poll(() => evaluate("document.querySelector('#population').textContent === '住民 300人'"));
-    assert.equal(await evaluate("document.querySelector('#mixed-families').checked"), true);
-    assert.equal(await evaluate("document.querySelector('#allied-intervention').checked"), true);
+    assert.match(await evaluate("document.querySelector('#world-rules').textContent"), /異種族家族 オン · 協定参戦 オン/);
     const denseClock = await evaluate("document.querySelector('#clock').textContent");
     const denseFps = await evaluate(`new Promise(resolve => {
       const start = performance.now();

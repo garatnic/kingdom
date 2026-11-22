@@ -60,3 +60,5 @@ summary { min-height: 40px; cursor: pointer; }
 .settlement-records th, .settlement-records td { text-align: right; padding: 4px 2px; border-bottom: 1px solid var(--line); }
 
 .camera-option[hidden] { display: none; }
+
+.world-rules { margin: 0 0 8px; color: var(--soft); font-size: .84rem; }
