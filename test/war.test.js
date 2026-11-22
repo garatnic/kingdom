@@ -936,3 +936,32 @@ test('a guild receives missing domestic inputs to install arcane irrigation', as
   assert.equal(saved.stockpiles[1].total.manaStone, 5);
   assert.equal(saved.events.filter(event => event.type === 'arcaneIrrigationInstalled').length, 1);
 });
+
+test('a friendly capital buys the missing mana stone needed for weather-resistant irrigation', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const { installArcaneIrrigation } = await import('../simulation/Industry.js');
+  const { world, invader, defender, homeStore } = twoNations();
+  const home = world.settlements[0];
+  const other = world.stockpiles[1];
+  const field = { id: nextId(world, 'building'), kind: 'farm', settlementId: home.id,
+    x: 36, y: 36, width: 2, height: 2, completedAt: 0 };
+  world.buildings.push(field, { id: nextId(world, 'building'), kind: 'guild', settlementId: home.id,
+    x: 40, y: 36, width: 2, height: 2, completedAt: 0 });
+  ensureResearch(world, invader, ['magic_2', 'irrigation_1']);
+  homeStore.capacity += 30;
+  other.capacity += 30;
+  Object.assign(homeStore.total, { wood: 20, stone: 5, manaStone: 5 });
+  Object.assign(other.total, { wood: 0, manaStone: 7 });
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  assert.equal(home.trade?.incoming, 'manaStone');
+  assert.equal(home.trade.incomingQuantity, 1);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick = restored.settlements[0].trade.arrivalDay * TIME_TICKS_PER_DAY;
+  updateTrade(restored);
+  installArcaneIrrigation(restored);
+  assert.equal(restored.buildings.find(item => item.id === field.id).arcaneIrrigation, true);
+  assert.equal(restored.stockpiles[0].total.manaStone, 5);
+});

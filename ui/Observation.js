@@ -243,7 +243,7 @@ export function observation(getWorld, getCamera, focus) {
       if (store?.steelTools) add(body, 'p', `鋼鉄の採掘道具（未装備） ${store.steelTools}`);
       showShipments(world, settlement);
       for (const memory of observancesFor(settlement)) {
-        const label = memory.kind === 'thanksgiving' ? '豊穣への感謝' : '食料難からの復旧記念';
+        const label = memory.kind === 'thanksgiving' ? '豊穣への感謝' : '災害・食料難からの復旧記念';
         add(body, 'p', `${label} · 次の行事 ${calendar(memory.nextDay * TIME_TICKS_PER_DAY)}以降`);
         const remembrance = world.events.findLast(event => event.type === 'communityObservance' &&
           event.settlementId === settlement.id && event.kind === memory.kind);
@@ -554,7 +554,7 @@ export function observation(getWorld, getCamera, focus) {
       if (leader) title += '（' + leader.name + '）';
     }
     if (event.type === 'communityObservance') {
-      title = event.kind === 'thanksgiving' ? '豊穣の祝福に感謝' : '食料難からの復旧を記念';
+      title = event.kind === 'thanksgiving' ? '豊穣の祝福に感謝' : '集落の復旧を記念';
     }
     if (event.type === 'monsterNestRelocated') {
       const reasons = { terrain: '地形の変化', settlement: '集落の接近', prey: '獲物の分布' };
