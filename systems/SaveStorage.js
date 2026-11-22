@@ -49,6 +49,31 @@ export async function readLatestGeneration(database, { onRecovery } = {}) {
   }
 }
 
+export function listGenerations(database) {
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(STORE, 'readonly');
+    const request = tx.objectStore(STORE).openCursor(null, 'prev');
+    const entries = [];
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(entries);
+        return;
+      }
+      const { seed, worldTimeTick } = cursor.value?.world ?? {};
+      entries.push({ key: cursor.key, seed, worldTimeTick });
+      cursor.continue();
+    };
+    tx.onabort = () => reject(tx.error ?? new Error('保存一覧の読込が中断されました。'));
+  });
+}
+
+export async function readGeneration(database, key) {
+  const record = await readStore(database, store => store.get(key));
+  if (record === undefined) throw new Error('この保存は既に入れ替わりました。一覧を開き直してください。');
+  return readSnapshot(JSON.stringify(record));
+}
+
 function readStore(database, read, value = result => result) {
   return new Promise((resolve, reject) => {
     const tx = database.transaction(STORE, 'readonly');

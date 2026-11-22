@@ -1,7 +1,7 @@
 import { monsters } from './data/combat.js';
 import { TILE, citizenRaces } from './data/balance.js';
 import { applyGodCommand } from './systems/GodPowers.js';
-import { openSaveStorage, readLatestGeneration, writeGeneration } from './systems/SaveStorage.js';
+import { listGenerations, openSaveStorage, readGeneration, readLatestGeneration, writeGeneration } from './systems/SaveStorage.js';
 import { observation } from './ui/Observation.js';
 import { activeNations } from './simulation/War.js';
 import { createWorld } from './engine/World.js';
@@ -91,7 +91,7 @@ function frame(now) {
   showReadouts();
   viewer.render();
   viewer.updateCamera(now, elapsed);
-  if (!document.hidden && now - lastBackup >= 60000) {
+  if (!document.hidden && !savesDialog.open && now - lastBackup >= 60000) {
     lastBackup = now;
     keepGeneration(createSnapshot(world, camera)).catch(error => {
       get('status').textContent = `自動保存失敗：${error.message}`;
@@ -220,6 +220,58 @@ get('save').addEventListener('click', async () => {
     get('status').textContent = `保存失敗：${error.message}`;
   }
 });
+const savesDialog = get('saves-dialog');
+const generationList = get('save-generation');
+const restoreButton = get('restore-generation');
+const saveListStatus = get('save-list-status');
+let saveDialogRequest = 0;
+
+get('browser-saves').addEventListener('click', async () => {
+  const request = ++saveDialogRequest;
+  generationList.replaceChildren();
+  restoreButton.disabled = true;
+  saveListStatus.textContent = '保存一覧を読み込んでいます…';
+  savesDialog.showModal();
+  try {
+    const { database, error } = await storage;
+    if (error) throw error;
+    await saveQueue;
+    const entries = await listGenerations(database);
+    if (!savesDialog.open || request !== saveDialogRequest) return;
+    for (const [index, { key, seed, worldTimeTick }] of entries.entries()) {
+      const valid = typeof seed === 'string' && Number.isSafeInteger(worldTimeTick) && worldTimeTick >= 0;
+      const label = valid ? `${seed} / ${calendar(worldTimeTick)}` : '保存情報を読み取れません';
+      generationList.add(new Option(`${index + 1}. ${label}`, key));
+    }
+    restoreButton.disabled = entries.length === 0;
+    saveListStatus.textContent = entries.length ? '' : 'ブラウザ内に保存がありません。';
+  } catch (error) {
+    if (savesDialog.open && request === saveDialogRequest) saveListStatus.textContent = error.message;
+  }
+});
+
+restoreButton.addEventListener('click', async () => {
+  const request = ++saveDialogRequest;
+  const previousLoad = loadRequest;
+  restoreButton.disabled = true;
+  saveListStatus.textContent = '保存を読み込んでいます…';
+  try {
+    const { database } = await storage;
+    const next = await readGeneration(database, Number(generationList.value));
+    if (!savesDialog.open || request !== saveDialogRequest) return;
+    if (previousLoad !== loadRequest) throw new Error('表示中の世界が変わりました。もう一度選んでください。');
+    ++loadRequest;
+    replaceWorld(next);
+    savesDialog.close();
+    await keepRestoredWorld(loadRequest, '選んだ保存を復元しました');
+  } catch (error) {
+    if (savesDialog.open && request === saveDialogRequest) {
+      saveListStatus.textContent = `復元失敗：${error.message}`;
+      restoreButton.disabled = false;
+    }
+  }
+});
+
 get('open').onclick = () => get('file').click();
 get('file').addEventListener('change', async event => {
   const [file] = event.target.files;
@@ -235,16 +287,20 @@ get('file').addEventListener('change', async event => {
     if (request === loadRequest) get('status').textContent = `読込失敗：${error.message}`;
     return;
   }
+  await keepRestoredWorld(request, 'セーブを読み込みました');
+});
+
+async function keepRestoredWorld(request, message) {
   lastBackup = performance.now();
   try {
     await keepGeneration(createSnapshot(world, camera));
-    if (request === loadRequest) get('status').textContent = 'セーブを読み込みました';
+    if (request === loadRequest) get('status').textContent = message;
   } catch (error) {
     if (request === loadRequest) {
-      get('status').textContent = `セーブを読み込みました。ブラウザ内保存失敗：${error.message}`;
+      get('status').textContent = `${message}。ブラウザ内保存失敗：${error.message}`;
     }
   }
-});
+}
 
 const godOptions = {
   disaster: { drought: '干ばつ（周囲5タイル）', frost: '霜害（周囲5タイル）' },

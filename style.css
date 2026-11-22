@@ -62,3 +62,15 @@ summary { min-height: 40px; cursor: pointer; }
 .camera-option[hidden] { display: none; }
 
 .world-rules { margin: 0 0 8px; color: var(--soft); font-size: .84rem; }
+
+#saves-dialog {
+  width: min(440px, calc(100% - 24px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #152624;
+  color: inherit;
+}
+#saves-dialog::backdrop { background: #081512b3; }
+#saves-dialog h2 { margin: 0; font-size: 1.2rem; }
+#save-generation { display: block; width: 100%; }
+#restore-generation:disabled { opacity: .55; cursor: default; }

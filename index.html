@@ -36,9 +36,21 @@
       <div class="group">
         <button type="button" id="save">保存</button>
         <button type="button" id="open">読込</button>
+        <button type="button" id="browser-saves">ブラウザ内の保存</button>
         <input type="file" id="file" accept=".json,application/json" hidden>
       </div>
     </div>
+    <dialog id="saves-dialog" aria-labelledby="saves-title">
+      <h2 id="saves-title">ブラウザ内の保存</h2>
+      <p>復元すると表示中の世界が切り替わります。現在の状態を残す場合は先に「保存」でJSONをダウンロードしてください。</p>
+      <label for="save-generation">保存世代</label>
+      <select id="save-generation"></select>
+      <p id="save-list-status" role="status"></p>
+      <div class="group">
+        <button type="button" id="restore-generation" disabled>選んだ保存を復元</button>
+        <form method="dialog"><button>閉じる</button></form>
+      </div>
+    </dialog>
     <p class="world-rules" id="world-rules"></p>
     <div class="game-layout">
     <div class="viewport">

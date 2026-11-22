@@ -489,6 +489,37 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       const bounds = document.querySelector('#map').getBoundingClientRect();
       return bounds.bottom > 0 && bounds.top < innerHeight;
     })()`));
+    await evaluate(`(async () => {
+      const { createSnapshot } = await import('/systems/SaveManager.js');
+      const { openSaveStorage, writeGeneration } = await import('/systems/SaveStorage.js');
+      const { createWorld } = await import('/engine/World.js');
+      const database = await openSaveStorage();
+      try {
+        const world = createWorld('restore-older-world');
+        world.gameSpeed = 0;
+        await writeGeneration(database, await createSnapshot(world));
+        await writeGeneration(database, { corrupt: true });
+      } finally {
+        database.close();
+      }
+      document.querySelector('#browser-saves').click();
+    })()`);
+    await poll(() => evaluate("document.querySelector('#save-generation').options.length === 3"));
+    assert.match(await evaluate("document.querySelector('#save-generation').options[1].text"), /restore-older-world/);
+    const seedBeforeRestore = await evaluate("document.querySelector('#seed').value");
+    await evaluate("document.querySelector('#restore-generation').click()");
+    await poll(() => evaluate("document.querySelector('#save-list-status').textContent.startsWith('復元失敗：')"));
+    assert.equal(await evaluate("document.querySelector('#seed').value"), seedBeforeRestore);
+    await evaluate(`(() => {
+      document.querySelector('#save-generation').selectedIndex = 1;
+      document.querySelector('#restore-generation').click();
+    })()`);
+    await poll(() => evaluate("document.querySelector('#status').textContent === '選んだ保存を復元しました'"));
+    assert.equal(await evaluate("document.querySelector('#saves-dialog').open"), false);
+    assert.equal(await evaluate("document.querySelector('#seed').value"), 'restore-older-world');
+    await send('Page.reload');
+    await poll(() => evaluate("document.querySelector('#status')?.textContent === 'ブラウザのセーブを復元しました'"));
+    assert.equal(await evaluate("document.querySelector('#seed').value"), 'restore-older-world');
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();
