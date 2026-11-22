@@ -150,7 +150,6 @@ const sameNest = (a, b) => a.species === b.species && distance(a.homeTile, b.hom
 
 export function offerTradeEscort(world, settlement, partner, destination, path) {
   if (!world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
-      world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length >= COMBAT.questLimit ||
       world.citizens.filter(c => c.alive && c.profession === 'adventurer' &&
         c.settlementId === settlement.id && ageYears(world, c) >= ADULT_AGE).length < 2) return;
   const threats = world.monsters.filter(monster => monster.alive && monsters[monster.species].attack >= monsters.goblin.attack);
@@ -160,10 +159,26 @@ export function offerTradeEscort(world, settlement, partner, destination, path) 
   const steps = Math.min(path.length, COMBAT.tradeEscortRadius, lastDanger + 2);
   const goal = path.length <= COMBAT.tradeEscortRadius ? destination : path[steps - 1];
   const escortDistance = path.length <= COMBAT.tradeEscortRadius ? path.length : steps;
+  const approach = path[lastDanger];
+  // Prefer the migration as the cause when it extends danger beyond the monsters' present positions.
+  const incoming = threats.filter(monster => monster.relocating && distance(approach, monster.homeTile) <= 5);
+  const migration = !threats.some(monster => distance(approach, monster) <= 5) && incoming.length
+    ? world.events.findLast(event => event.type === 'monsterNestRelocated' && incoming.some(monster =>
+      event.monsterIds?.includes(monster.id) && distance(event, monster.homeTile) === 0))
+    : undefined;
+  const local = world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q));
+  if (local.length >= COMBAT.questLimit) {
+    const survey = migration && local.find(q => q.status === 'open' && q.kind === 'survey_resources' && !q.prospectTile);
+    if (!survey) return;
+    survey.status = 'expired';
+  }
   const quest = { id: nextId(world, 'quest'), kind: 'escort_trade', settlementId: settlement.id,
     partnerId: partner.id, escortGoal: { x: goal.x, y: goal.y }, status: 'open',
     claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + Math.max(4, Math.ceil(escortDistance / 12)) * COMBAT.questDuration, lootIds: [] };
   world.quests.push(quest);
+  emit(world, 'tradeEscortRequested', quest, approach, {
+    sourceSettlementId: partner.id, ...(migration && { causeEventId: migration.id })
+  });
   return quest.id;
 }
 
@@ -490,7 +505,7 @@ function relocateDisplacedNests(world) {
       monster.relocating = true;
     }
     emitOnce(world, leader.id + '/relocate/' + world.worldTimeTick, 'monsterNestRelocated', {
-      ...destination, fromX: from.x, fromY: from.y, species: leader.species, quantity: colony.length, reason
+      ...destination, fromX: from.x, fromY: from.y, species: leader.species, quantity: colony.length, reason, monsterIds: colony.map(monster => monster.id)
     });
   }
 }

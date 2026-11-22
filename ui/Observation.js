@@ -15,6 +15,7 @@ import { eventImportance, historyFor, involvesCitizen } from '../systems/History
 
 const events = {
   communityObservance: '集落の記念行事', homeAssigned: '空き住宅へ入居', farmerReassigned: '食料備蓄の不足で農民に転職',
+  tradeEscortRequested: '街道の危険に備えて護衛を募集',
   tradeEscortSpell: '交易護衛で魔法を使用', tradeEscortClash: '護衛隊が街道で交戦', tradeEscortDeparted: '交易品の護衛に出発', tradeEscortReturned: '交易品の護衛から帰還',
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換', internationalTradeReturning: '国際交易の荷を返送',
@@ -43,7 +44,7 @@ const eventGroups = {
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'campaignRationsRecovered', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'miningToolsDispatched', 'miningToolsIssued', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestRelocated', 'monsterNestCleared',
-    'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'tradeEscortClash', 'tradeEscortSpell', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
+    'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortRequested', 'tradeEscortReturned', 'tradeEscortClash', 'tradeEscortSpell', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
   god: ['god_intervention', 'blessedFarmHarvested', 'frostRecovered', 'droughtHarvestRecovered', 'droughtFoodForaged', 'communityObservance']
 };
@@ -621,7 +622,8 @@ export function observation(getWorld, getCamera, focus) {
       const origin = cause.type === 'foodShortage' ? '食料難が発生した集落' :
         cause.kind === 'blessing' ? '祝福を行った地点' :
         event.type === 'communityObservance' ? '行事のきっかけ' :
-        event.type === 'peaceAgreed' ? '講和に先立つ侵攻の終結地点' : '災害の発生地点';
+        event.type === 'peaceAgreed' ? '講和に先立つ侵攻の終結地点' :
+        cause.type === 'monsterNestRelocated' ? '街道に近づいた巣の移転先' : '災害の発生地点';
       addEventLocation(body, world, cause, `${origin} · ${calendar(cause.worldTimeTick)}`);
     }
     for (const recovery of resultsByCause.get(event.id)?.values() ?? []) {
@@ -629,7 +631,8 @@ export function observation(getWorld, getCamera, focus) {
         recovery.type === 'blessedFarmHarvested' ? '祝福後に収穫した畑' :
         recovery.type === 'droughtFoodForaged' ? '代わりの食料を採集した地点' :
         recovery.type === 'communityObservance' ? '記念行事を行った地点' :
-        recovery.type === 'peaceAgreed' ? '後の講和地点' : '直近の復旧地点';
+        recovery.type === 'peaceAgreed' ? '後の講和地点' :
+        recovery.type === 'tradeEscortRequested' ? '護衛を募集した危険区間' : '直近の復旧地点';
       addEventLocation(body, world, recovery, `${result} · ${calendar(recovery.worldTimeTick)}`);
     }
 

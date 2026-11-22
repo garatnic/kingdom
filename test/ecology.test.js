@@ -217,6 +217,16 @@ test('an occupied trade road can call for escorts before a dangerous colony reac
   goblin.homeTile = { x: 12, y: 9 };
   assert.equal(offerTradeEscort(world, home, partner, partner, road), undefined);
   goblin.relocating = true;
+  const survey = { id: 'quest:80', kind: 'survey_resources', status: 'open', settlementId: home.id };
+  const raid = { id: 'quest:81', kind: 'clear_nest', status: 'claimed', settlementId: home.id };
+  world.quests.push(survey, raid);
+  assert.equal(offerTradeEscort(world, home, partner, partner, road), undefined);
+  world.events.push({ id: 'event:99', type: 'monsterNestRelocated', monsterIds: [goblin.id], ...goblin.homeTile });
   const id = offerTradeEscort(world, home, partner, partner, road);
   assert.equal(world.quests.find(quest => quest.id === id)?.kind, 'escort_trade');
+  const request = world.events.find(event => event.type === 'tradeEscortRequested');
+  assert.equal(request.questId, id);
+  assert.equal(request.causeEventId, 'event:99');
+  assert.equal(survey.status, 'expired');
+  assert.equal(raid.status, 'claimed');
 });
