@@ -123,7 +123,7 @@ export function observation(getWorld, getCamera, focus) {
   function render(force = false) {
     const world = getWorld();
     const mode = tab.value;
-    const cutoff = Math.floor(world.worldTimeTick / 120);
+    const cutoff = mode === 'world' ? 0 : Math.floor(world.worldTimeTick / 120);
     const query = search.value.normalize('NFKC').trim().toLowerCase();
     const key = [mode, subjects.value, query, cutoff, world.events.at(-1)?.id, world.citizens.length, world.nations.length, world.settlements.length].join('/');
     if (!force && key === previousRender) return;
@@ -464,17 +464,42 @@ export function observation(getWorld, getCamera, focus) {
     }
 
     const group = relatedByType.get(relatedEventKey(event));
-    if (!group) return;
-    const linked = [...group.values()].filter(entry => entry.type !== event.type && eventLocation(world, entry));
-    if (!linked.length) return;
+    const linked = group ? [...group.values()].filter(entry => entry.type !== event.type && eventLocation(world, entry)) : [];
+    const personIds = new Set([event.citizenId, event.leaderId, ...(event.citizenIds ?? []),
+      ...(event.parentIds ?? []), ...(event.actorIds ?? []), ...(event.affectedCitizenIds ?? [])]);
+    const nationIds = new Set([event.nationId, event.ownerId, ...(event.nationIds ?? [])]);
+    personIds.delete(undefined);
+    nationIds.delete(undefined);
+    const people = personIds.size ? world.citizens.filter(person => personIds.has(person.id)) : [];
+    const nations = nationIds.size ? world.nations.filter(nation => nationIds.has(nation.id)) : [];
+    if (!linked.length && !people.length && !nations.length) return;
     const details = add(body, 'details', '');
     details.open = openRelatedEventId === event.id;
-    const summary = add(details, 'summary', '関連する出来事');
+    const summary = add(details, 'summary', linked.length ? '関連する出来事' : '関係者・国家');
     summary.onclick = () => { openRelatedEventId = details.open ? undefined : event.id; };
     linked.sort((a, b) => eventNumber(a) - eventNumber(b));
     for (const entry of linked) {
       addEventLocation(details, world, entry, `${events[entry.type] ?? entry.type} · ${calendar(entry.worldTimeTick)}`);
     }
+    addEventSubjects(details, '関係者の人物伝', people, id => {
+      tab.value = 'citizen';
+      selectCitizen(id);
+    });
+    addEventSubjects(details, '関係国の国家史', nations, id => {
+      tab.value = 'nation';
+      search.value = '';
+      render(true);
+      subjects.value = id;
+      render(true);
+    });
+  }
+
+  function addEventSubjects(container, label, entries, selectSubject) {
+    if (!entries.length) return;
+    const select = add(container, 'select', '');
+    select.setAttribute('aria-label', label);
+    select.append(new Option(label, ''), ...entries.map(entry => new Option(entry.name, entry.id)));
+    select.onchange = () => { if (select.value) selectSubject(select.value); };
   }
 
   function addEventLocation(container, world, event, label) {

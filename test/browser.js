@@ -289,7 +289,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       const { emitOnce, trimHistory } = await import('/systems/History.js');
       const world = createWorld('dense-browser-test');
       for (let i = 0; i < 2100; i++) emitOnce(world, 'construction:' + i, 'constructionCompleted', { x: 31, y: 31 });
-      emitOnce(world, 'campaign:1', 'warDeclared', { x: 18, y: 18 });
+      emitOnce(world, 'campaign:1', 'warDeclared', { x: 18, y: 18, actorIds: [world.citizens[0].id] });
       emitOnce(world, 'campaign:1', 'fieldBattle', { x: 50, y: 50, nationIds: [] });
       emitOnce(world, 'quest:1', 'tradeEscortDeparted', { questId: 'quest:1', x: 21, y: 21 });
       emitOnce(world, 'quest:1/monster:1', 'tradeEscortClash', { questId: 'quest:1', x: 44, y: 44 });
@@ -364,6 +364,19 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await poll(async () => (await evaluate(canvasImage)) !== beforeAutoCamera);
     assert.equal(await evaluate(relatedLocation('護衛隊が街道で交戦', '友好国間で物資を交換')), true);
     await poll(() => evaluate("!document.querySelector('#auto-camera').checked"));
+    const participantName = await evaluate(`(() => {
+      const declaration = [...document.querySelectorAll('#history-body > button')]
+        .find(button => button.textContent.startsWith('開戦'));
+      const details = declaration.nextElementSibling;
+      if (!details.open) details.querySelector('summary').click();
+      const select = details.querySelector('select[aria-label="関係者の人物伝"]');
+      select.selectedIndex = 1;
+      const name = select.selectedOptions[0].textContent;
+      select.dispatchEvent(new Event('change'));
+      return name;
+    })()`);
+    assert.equal(await evaluate("document.querySelector('#history-tab').value"), 'citizen');
+    assert.equal(await evaluate("document.querySelector('#history-body h3').textContent"), participantName);
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();
