@@ -1,4 +1,4 @@
-name: 30-minute browser stability
+name: 30-minute natural-city browser stability
 on:
   push:
     branches: [main]

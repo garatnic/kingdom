@@ -250,8 +250,8 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     const { root: cityRoot } = await send('DOM.getDocument');
     const { nodeId: cityInput } = await send('DOM.querySelector', { nodeId: cityRoot.nodeId, selector: '#file' });
     await send('DOM.setFileInputFiles', { nodeId: cityInput, files: [cityPath] });
-    await poll(() => evaluate("document.querySelector('#status').textContent === 'セーブを読み込みました'"));
-    assert.equal(await evaluate("document.querySelector('#population').textContent"), `住民 ${residents}人`);
+    await poll(() => evaluate(`document.querySelector('#population').textContent === '住民 ${residents}人' &&
+      document.querySelector('#status').textContent === 'セーブを読み込みました'`));
     await send('Page.bringToFront');
     const clock = () => evaluate("document.querySelector('#clock').textContent");
     const gameMinutes = label => {

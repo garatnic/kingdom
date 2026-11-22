@@ -222,6 +222,7 @@ get('file').addEventListener('change', async event => {
   event.target.value = '';
   if (!file) return;
   const request = ++loadRequest;
+  get('status').textContent = 'セーブを読み込んでいます…';
   try {
     const next = await readSnapshot(await file.text());
     if (request !== loadRequest) return;
