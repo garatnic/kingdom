@@ -26,7 +26,7 @@ const events = {
   arcaneIrrigationInstalled: '農地に魔導灌漑を設置',
   constructionCompleted: '施設が完成', foodShortage: '集落で食料難', foodRecovered: '集落の食料備蓄が回復', foodAidDelivered: '同じ国の集落から食料が到着', monsterDefeated: '魔物を討伐', monsterThreat: '集落に魔物が接近', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', supplyRecoveryDeparted: '物資回収に出発', supplyRecoveryReturned: '物資回収隊が帰還', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
-  settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', founding: '建国', leaderSucceeded: '指導者が交代',
+  settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', droughtHarvestRecovered: '干ばつ後に収穫を再開', founding: '建国', leaderSucceeded: '指導者が交代',
   miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
@@ -38,7 +38,7 @@ const eventGroups = {
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'tradeEscortClash', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
-  god: ['god_intervention', 'frostRecovered']
+  god: ['god_intervention', 'frostRecovered', 'droughtHarvestRecovered']
 };
 const eventNumber = event => Number(event.id.split(':')[1]);
 const jobs = { farmer: '農民', woodcutter: '木こり', miner: '鉱夫', builder: '建築家', adventurer: '冒険者' };
@@ -399,6 +399,9 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'internationalTradeReturning') {
       const reasons = { conditions: '交易条件が崩れた', route: '道が通れない', timeout: '護衛が期限に間に合わない', escort: '護衛を完了できない' };
       if (reasons[event.reason]) title += `（${reasons[event.reason]}）`;
+    }
+    if (event.type === 'droughtHarvestRecovered') {
+      title += `（収穫 ${event.quantity}${event.foodBeforeHarvest === undefined ? '' : '・収穫前の備蓄 ' + event.foodBeforeHarvest}）`;
     }
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;

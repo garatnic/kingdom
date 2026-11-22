@@ -140,6 +140,17 @@ test('drought delays local harvests and remains idempotent after restoration', a
   assert.equal(restored.stockpiles[0].total.food, storeFood);
   const revived = await readSnapshot(JSON.stringify(await createSnapshot(restored)));
   assert.equal(applyGodCommand(revived, fertility), 'DUPLICATE');
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const farmer = revived.citizens.find(person => person.profession === 'farmer');
+  farmer.action = { kind: 'farm', phase: 'perform', targetId: farm.id, startedAt: 0, progress: 0 };
+  updateCitizens(revived, 12);
+  updateCitizens(revived, 12);
+  const recovery = revived.events.filter(event => event.type === 'droughtHarvestRecovered');
+  assert.equal(recovery.length, 1);
+  assert.equal(recovery[0].causeEventId, revived.events.find(event => event.value === 'drought').id);
+  assert.ok(recovery[0].quantity > 0);
+  assert.equal(recovery[0].foodBeforeHarvest, storeFood);
+  assert.equal(revived.buildings[1].droughtCommandId, undefined);
 });
 
 test('favorite citizens persist in a snapshot and reference existing residents', async () => {

@@ -1,3 +1,4 @@
+import { emitOnce } from '../systems/History.js';
 import { citizenRaces, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, LARGE_SETTLEMENT_POPULATION, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyBounds, surveyRoute } from '../engine/Expansion.js';
 import { FAR_DISTANCE, movementBudget } from './DetailLevel.js';
@@ -204,6 +205,24 @@ export function farmYield(world, farm, worker) {
   return Math.floor(FARM_YIELD * multiplier) + (farm.arcaneIrrigation ? TECH.arcaneIrrigationYield : 0) + aptitude;
 }
 
+function harvestFarm(world, farm, farmer, store) {
+  farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
+  const quantity = farmYield(world, farm, farmer);
+  if (farm.droughtCommandId) {
+    const id = farm.droughtCommandId;
+    const drought = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
+    const settlement = world.settlements.find(s => s.id === farm.settlementId);
+    emitOnce(world, JSON.stringify([id, farm.id]), 'droughtHarvestRecovered', {
+      causeEventId: drought?.id, buildingId: farm.id, settlementId: farm.settlementId,
+      nationId: settlement?.nationId, actorIds: [farmer.id], x: farm.x, y: farm.y,
+      quantity, ...(store && { foodBeforeHarvest: available(store, 'food') })
+    });
+    delete farm.droughtCommandId;
+  }
+  return quantity;
+}
+
+
 const distantRoutes = new WeakMap();
 
 function distantConnectivity(world, store, origin) {
@@ -342,8 +361,7 @@ function updateDistantSettlements(world, camera, population) {
       const worker = workers.findIndex(c => findPath(world, c.lastKnownSafeTile, field) !== null);
       if (worker === -1) continue;
       const [farmer] = workers.splice(worker, 1);
-      farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      const yieldPerFarm = farmYield(world, farm, farmer);
+      const yieldPerFarm = harvestFarm(world, farm, farmer, store);
       const delivered = Math.min(yieldPerFarm, room, foodTarget - available(store, 'food'));
       store.total.food += delivered;
       farmer.inventory.food += yieldPerFarm - delivered;
@@ -389,8 +407,7 @@ function perform(world, citizen, store, ticks, population) {
   if (action.kind === 'farm') {
     const farm = world.buildings.find(b => b.id === action.targetId);
     if (farm && (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick) {
-      farm.harvestAt = world.worldTimeTick + FARM_HARVEST_TICKS;
-      citizen.inventory.food += farmYield(world, farm, citizen);
+      citizen.inventory.food += harvestFarm(world, farm, citizen, store);
       if (store && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
     }
   }

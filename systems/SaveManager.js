@@ -113,7 +113,9 @@ function validate(world) {
         Object.entries(n.alliances).every(([id, since]) => id !== n.id &&
           integer(since, 0, world.worldTimeTick) && nations.get(id)?.alliances?.[n.id] === since))) ||
       !world.buildings.every(b => validTile(b) && settlements.has(b.settlementId) &&
-        (b.arcaneIrrigation === undefined || (b.kind === 'farm' && typeof b.arcaneIrrigation === 'boolean'))) ||
+        (b.arcaneIrrigation === undefined || (b.kind === 'farm' && typeof b.arcaneIrrigation === 'boolean')) &&
+        (b.droughtCommandId === undefined || (b.kind === 'farm' && integer(b.harvestAt, 0) &&
+          typeof b.droughtCommandId === 'string' && b.droughtCommandId.length > 0))) ||
       !world.resourceNodes.every(n => passable(n) && resources.includes(n.resource) && integer(n.quantity, 0) &&
         (n.frostCommandId === undefined || (typeof n.frostCommandId === 'string' && n.frostCommandId.length > 0 &&
           n.resource === 'food' && !n.dropped && n.quantity === 0 && integer(n.renewAt, 0)))) ||
