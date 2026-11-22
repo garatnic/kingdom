@@ -146,6 +146,10 @@ test('settlement food alerts are recorded on persistent shortage and recovery af
   restored.worldTimeTick += TIME_TICKS_PER_DAY;
   store.total.food = 36;
   recordSettlements(restored);
-  assert.equal(restored.events.filter(e => e.type === 'foodRecovered').length, 1);
+  const recoveries = restored.events.filter(e => e.type === 'foodRecovered');
+  assert.equal(recoveries.length, 1);
+  assert.equal(recoveries[0].causeEventId, world.events.find(e => e.type === 'foodShortage').id);
+  assert.equal(recoveries[0].foodAtShortage, 0);
+  assert.equal(recoveries[0].food, 36);
   assert.equal(restored.settlements[0].dailyRecords.length, 4);
 });

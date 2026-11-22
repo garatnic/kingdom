@@ -90,19 +90,21 @@ export function observation(getWorld, getCamera, focus) {
   const seen = new Set();
   let openRelatedEventId;
   let indexedEvents;
-  let indexedLastEvent;
+  let indexedCount = 0;
   const eventsById = new Map();
   const resultsByCause = new Map();
   const relatedByType = new Map();
 
   function indexHistory(events) {
-    if (indexedEvents === events && indexedLastEvent === events.at(-1)) return;
-    indexedEvents = events;
-    indexedLastEvent = events.at(-1);
-    eventsById.clear();
-    resultsByCause.clear();
-    relatedByType.clear();
-    for (const event of events) {
+    if (indexedEvents !== events) {
+      indexedEvents = events;
+      indexedCount = 0;
+      eventsById.clear();
+      resultsByCause.clear();
+      relatedByType.clear();
+    }
+    for (; indexedCount < events.length; indexedCount++) {
+      const event = events[indexedCount];
       eventsById.set(event.id, event);
       if (event.causeEventId) resultsByCause.set(event.causeEventId, event);
       const key = relatedEventKey(event);
@@ -435,15 +437,25 @@ export function observation(getWorld, getCamera, focus) {
       title += `（収穫 ${event.quantity}${stock === undefined ? '' : baseline === undefined
         ? '・収穫前の備蓄 ' + stock : `・備蓄 ${baseline} → ${stock}（干ばつ時 → 収穫前）`}）`;
     }
+    if (event.type === 'foodShortage' || event.type === 'foodRecovered') {
+      const stock = event.foodAtShortage === undefined ? event.food : `${event.foodAtShortage} → ${event.food}`;
+      if (stock !== undefined) title += `（備蓄 ${stock}）`;
+    }
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     if (!addEventLocation(body, world, event, label)) add(body, 'p', label);
 
     indexHistory(world.events);
     const cause = eventsById.get(event.causeEventId);
-    if (cause) addEventLocation(body, world, cause, `災害の発生地点 · ${calendar(cause.worldTimeTick)}`);
+    if (cause) {
+      const origin = cause.type === 'foodShortage' ? '食料難が発生した集落' : '災害の発生地点';
+      addEventLocation(body, world, cause, `${origin} · ${calendar(cause.worldTimeTick)}`);
+    }
     const recovery = resultsByCause.get(event.id);
-    if (recovery) addEventLocation(body, world, recovery, `直近の復旧地点 · ${calendar(recovery.worldTimeTick)}`);
+    if (recovery) {
+      const result = recovery.type === 'foodRecovered' ? `備蓄が回復した集落（備蓄 ${recovery.food}）` : '直近の復旧地点';
+      addEventLocation(body, world, recovery, `${result} · ${calendar(recovery.worldTimeTick)}`);
+    }
 
     const group = relatedByType.get(relatedEventKey(event));
     if (!group) return;

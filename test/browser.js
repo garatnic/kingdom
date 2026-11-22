@@ -294,6 +294,11 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       emitOnce(world, 'quest:1', 'tradeEscortDeparted', { questId: 'quest:1', x: 21, y: 21 });
       emitOnce(world, 'quest:1/monster:1', 'tradeEscortClash', { questId: 'quest:1', x: 44, y: 44 });
       emitOnce(world, 'settlement:1/settlement:2/trade/1', 'internationalTradeCompleted', { questId: 'quest:1', x: 24, y: 24 });
+      emitOnce(world, 'settlement:1/food/1', 'foodShortage', { x: 30, y: 30, food: 0 });
+      const shortage = world.events.at(-1);
+      emitOnce(world, 'settlement:1/food/3', 'foodRecovered', {
+        x: 30, y: 30, food: 36, foodAtShortage: 0, causeEventId: shortage.id
+      });
       trimHistory(world);
       world.map.terrain.fill('grass');
       const settlement = world.settlements[0];
@@ -327,8 +332,11 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       document.querySelector('[data-speed="0"]').click();
       const tab = document.querySelector('#history-tab');
       tab.value = 'world';
+      document.querySelector('#event-filter').selectedIndex = 0;
       tab.dispatchEvent(new Event('change'));
     })()`);
+    assert.equal(await evaluate(`document.querySelector('#history-body').textContent.includes('備蓄 0 → 36') &&
+      document.querySelector('#history-body').textContent.includes('食料難が発生した集落')`), true);
     const relatedLocation = (record, related) => `(() => {
       const recordButton = [...document.querySelectorAll('#history-body > button')].find(button =>
         button.textContent.startsWith(${JSON.stringify(record)}));

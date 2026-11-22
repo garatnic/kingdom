@@ -24,14 +24,12 @@ export function involvesCitizen(event, id) {
 
 export function historyFor(world, kind, id) {
   if (!id && kind !== 'world') return [];
-  return world.events.filter(e => {
-    if (kind === 'world') return eventImportance(e) >= 2;
-    if (kind === 'citizen') return involvesCitizen(e, id);
-    const nation = world.nations.find(n => n.id === id);
-    const research = world.researchStates.find(state => state.ownerId === id);
-    return e.nationId === id || e.ownerId === id || e.nationIds?.includes(id) ||
-      nation?.settlementIds.includes(e.settlementId) || (Boolean(research) && e.researchId === research.id);
-  });
+  if (kind === 'world') return world.events.filter(e => eventImportance(e) >= 2);
+  if (kind === 'citizen') return world.events.filter(e => involvesCitizen(e, id));
+  const nation = world.nations.find(n => n.id === id);
+  const research = world.researchStates.find(state => state.ownerId === id);
+  return world.events.filter(e => e.nationId === id || e.ownerId === id || e.nationIds?.includes(id) ||
+    nation?.settlementIds.includes(e.settlementId) || (Boolean(research) && e.researchId === research.id));
 }
 
 export function trimHistory(world) {

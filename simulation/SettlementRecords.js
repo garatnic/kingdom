@@ -35,9 +35,12 @@ export function recordSettlements(world) {
         previous?.day === day - 1 && short(previous) && short(current);
       if (nextAlert !== alert) {
         settlement.foodWarning = nextAlert;
+        const shortage = !nextAlert && world.events.findLast(event =>
+          event.settlementId === settlement.id && event.type === 'foodShortage');
         emitOnce(world, `${settlement.id}/food/${day}`, nextAlert ? 'foodShortage' : 'foodRecovered', {
           settlementId: settlement.id, nationId: settlement.nationId, x: settlement.x, y: settlement.y,
-          food: current.food, population: current.population
+          food: current.food, population: current.population,
+          ...(shortage && { causeEventId: shortage.id, foodAtShortage: shortage.food })
         });
       }
     }
