@@ -160,7 +160,9 @@ function chooseRoute(world, citizen, store, population) {
         farm.settlementId === citizen.settlementId && !assigned.has(farm.id) &&
         (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) <= world.worldTimeTick);
       if (population >= LARGE_SETTLEMENT_POPULATION) {
-        ripe.sort((a, b) => buildingDistance(origin, a) - buildingDistance(origin, b));
+        ripe.sort((a, b) => blessedFarmFirst(a, b) || buildingDistance(origin, a) - buildingDistance(origin, b));
+      } else {
+        ripe.sort(blessedFarmFirst);
       }
       for (const farm of ripe) {
         const goal = workTile(world, origin, farm);
@@ -196,6 +198,10 @@ function chooseRoute(world, citizen, store, population) {
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
 }
 
+function blessedFarmFirst(a, b) {
+  return Number(Boolean(b.fertilityCommandId)) - Number(Boolean(a.fertilityCommandId));
+}
+
 export function farmYield(world, farm, worker) {
   const { settlementId } = farm;
   let multiplier = unlocked(world, settlementId, 'farming_1') ? TECH.farmYieldMultiplier : 1;
@@ -220,6 +226,16 @@ function harvestFarm(world, farm, farmer, store) {
       ...(foodBeforeDrought !== undefined && { foodBeforeDrought })
     });
     delete farm.droughtCommandId;
+  }
+  if (farm.fertilityCommandId) {
+    const id = farm.fertilityCommandId;
+    const blessing = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
+    const nationId = world.settlements.find(s => s.id === farm.settlementId)?.nationId;
+    emitOnce(world, JSON.stringify([id, farm.id]), 'blessedFarmHarvested', {
+      causeEventId: blessing?.id, buildingId: farm.id, settlementId: farm.settlementId,
+      nationId, actorIds: [farmer.id], x: farm.x, y: farm.y, quantity
+    });
+    delete farm.fertilityCommandId;
   }
   return quantity;
 }
@@ -353,10 +369,11 @@ function updateDistantSettlements(world, camera, population) {
       }
     }
     if (!workers.length) continue;
-    for (const farm of world.buildings) {
+    const farms = buildings.filter(building => building.kind === 'farm').sort(blessedFarmFirst);
+    for (const farm of farms) {
       const room = storageRoom(store, 'food', foodTarget);
       if (available(store, 'food') >= foodTarget || room <= 0) break;
-      if (farm.kind !== 'farm' || farm.settlementId !== settlement.id || claimedFarms.has(farm.id) ||
+      if (claimedFarms.has(farm.id) ||
           (farm.harvestAt ?? farm.completedAt + FARM_HARVEST_TICKS) > world.worldTimeTick) continue;
       const field = workTile(world, origin, farm);
       if (!field) continue;

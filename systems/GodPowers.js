@@ -101,12 +101,16 @@ export function applyGodCommand(world, command) {
     for (const farm of affectedFarms) {
       farm.harvestAt = until;
       farm.droughtCommandId = commandId;
+      delete farm.fertilityCommandId;
     }
   } else if (kind === 'blessing' && value === 'fertility') {
     affectedFarms = world.buildings.filter(b => b.kind === 'farm' && sumDistance(b, tile) <= 5 &&
       (b.harvestAt ?? b.completedAt + FARM_HARVEST_TICKS) > world.worldTimeTick);
     if (!affectedFarms.length) return 'NO_TARGET';
-    for (const farm of affectedFarms) farm.harvestAt = world.worldTimeTick;
+    for (const farm of affectedFarms) {
+      farm.harvestAt = world.worldTimeTick;
+      farm.fertilityCommandId = commandId;
+    }
   } else if (kind === 'blessing') {
     if (value !== 'recovery') return 'INVALID_KIND';
     const affected = world.citizens.filter(c => c.alive && sumDistance(cell(c), tile) <= 3 &&

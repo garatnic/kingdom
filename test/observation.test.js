@@ -152,6 +152,12 @@ test('drought delays local harvests and remains idempotent after restoration', a
   assert.equal(recovery[0].foodBeforeHarvest, storeFood);
   assert.equal(recovery[0].foodBeforeDrought, storeFood);
   assert.equal(revived.buildings[1].droughtCommandId, undefined);
+  const harvests = revived.events.filter(event => event.type === 'blessedFarmHarvested');
+  assert.equal(harvests.length, 1);
+  assert.equal(harvests[0].causeEventId, revived.events.find(event => event.value === 'fertility').id);
+  assert.equal(harvests[0].quantity, recovery[0].quantity);
+  assert.deepEqual(harvests[0].actorIds, [farmer.id]);
+  assert.equal(revived.buildings[1].fertilityCommandId, undefined);
 });
 
 test('favorite citizens persist in a snapshot and reference existing residents', async () => {
