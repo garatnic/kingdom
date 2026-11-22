@@ -174,6 +174,7 @@ export function offerTradeEscort(world, settlement, partner, destination, path) 
   }
   const quest = { id: nextId(world, 'quest'), kind: 'escort_trade', settlementId: settlement.id,
     partnerId: partner.id, escortGoal: { x: goal.x, y: goal.y }, status: 'open',
+    ...(migration && { escortWaypoint: { ...approach }, waypointVisitors: [] }),
     claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + Math.max(4, Math.ceil(escortDistance / 12)) * COMBAT.questDuration, lootIds: [] };
   world.quests.push(quest);
   emit(world, 'tradeEscortRequested', quest, approach, {
@@ -317,8 +318,9 @@ function claimSurvey(world, citizen, quest, store, travel) {
   const node = quest.escortGoal ?? surveyTarget(world, quest);
   if (!node || available(store, 'food') < 4 ||
       world.settlements.find(s => s.id === quest.settlementId)?.foodWarning) return false;
-  const escort = findEscort(world, citizen, candidate => findPath(world, tileOf(candidate), node) !== null);
-  if (!escort || !travel(node, 'adventure', quest.id)) return false;
+  const firstStop = quest.escortWaypoint ?? node;
+  const escort = findEscort(world, citizen, candidate => findPath(world, tileOf(candidate), firstStop) !== null);
+  if (!escort || !travel(firstStop, 'adventure', quest.id)) return false;
   store.total.food -= 2;
   citizen.inventory.food++;
   escort.inventory.food++;
@@ -340,8 +342,14 @@ function continueSurvey(world, citizen, quest, store, origin, travel) {
       delete quest.escortSpell;
     } else {
       if (quest.escortSpell) return true;
-      if (distance(tile, node)) {
-        if (travel(node, 'adventure', quest.id)) return true;
+      const waypoint = quest.escortWaypoint;
+      if (waypoint && !quest.waypointVisitors.includes(citizen.id) && !distance(tile, waypoint)) {
+        quest.waypointVisitors.push(citizen.id);
+      }
+      const target = waypoint && quest.waypointVisitors.length < 2 ? waypoint : node;
+      if (target === waypoint && !distance(tile, waypoint)) return true;
+      if (distance(tile, target)) {
+        if (travel(target, 'adventure', quest.id)) return true;
         quest.retreated = true;
         quest.stage = 'return';
       } else {

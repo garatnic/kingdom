@@ -203,6 +203,10 @@ function validate(world) {
         (q.escortId === undefined || (people.has(q.escortId) && q.escortId !== q.claimedBy)) &&
         (q.kind !== 'clear_nest' || (validTile(q.nestTile) && Object.hasOwn(monsters, q.species))) &&
         (q.boundTargetId === undefined || (targets.has(q.boundTargetId) && (q.kind === 'escort_trade' || targets.has(q.targetId)))) &&
+        (q.escortWaypoint === undefined ? q.waypointVisitors === undefined :
+          q.kind === 'escort_trade' && validTile(q.escortWaypoint) && Array.isArray(q.waypointVisitors) &&
+          new Set(q.waypointVisitors).size === q.waypointVisitors.length &&
+          q.waypointVisitors.every(id => typeof id === 'string' && (id === q.claimedBy || id === q.escortId))) &&
         (q.escortSpell === undefined || (q.kind === 'escort_trade' && q.escortSpell &&
           [q.claimedBy, q.escortId].includes(q.escortSpell.casterId) && targets.has(q.escortSpell.monsterId) &&
           integer(q.escortSpell.readyAt, 0))) &&

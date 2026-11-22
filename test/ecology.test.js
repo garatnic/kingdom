@@ -226,6 +226,7 @@ test('an occupied trade road can call for escorts before a dangerous colony reac
   assert.equal(world.quests.find(quest => quest.id === id)?.kind, 'escort_trade');
   const request = world.events.find(event => event.type === 'tradeEscortRequested');
   assert.equal(request.questId, id);
+  assert.deepEqual(world.quests.find(quest => quest.id === id).escortWaypoint, { x: request.x, y: request.y });
   assert.equal(request.causeEventId, 'event:99');
   assert.equal(survey.status, 'expired');
   assert.equal(raid.status, 'claimed');
