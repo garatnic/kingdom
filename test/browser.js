@@ -81,6 +81,21 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await send('Runtime.enable');
     await send('Page.navigate', { url });
     await poll(() => evaluate("document.querySelector('#population')?.textContent === '住民 12人'"));
+    const effects = await evaluate(`(async () => {
+      const { Renderer } = await import('/engine/Renderer.js');
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 64;
+      const renderer = new Renderer(canvas);
+      const actor = { x: 1, y: 1, race: 'human', action: { kind: 'deliverMaterials', phase: 'travel' },
+        inventory: {}, lastImpact: { tick: 100, magic: true } };
+      renderer.citizen(actor, 100, undefined, 'wood');
+      const pixel = (x, y) => Array.from(renderer.ctx.getImageData(x, y, 1, 1).data);
+      const result = { timber: pixel(37, 20), spell: pixel(28, 10) };
+      renderer.ctx.clearRect(0, 0, 64, 64);
+      renderer.citizen(actor, 184, undefined, 'wood');
+      return { ...result, expired: pixel(28, 10) };
+    })()`);
+    assert.deepEqual(effects, { timber: [153, 187, 114, 255], spell: [216, 183, 255, 255], expired: [0, 0, 0, 0] });
     const canvasImage = "document.querySelector('#map').toDataURL()";
     const initialImage = await evaluate(canvasImage);
     const initialTime = await evaluate("document.querySelector('#clock').textContent");

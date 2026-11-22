@@ -34,6 +34,8 @@ function validate(world) {
   const map = world?.map;
   const camera = world?.settings?.camera;
   const validTile = tile => tile && integer(tile.x, 0, map.width - 1) && integer(tile.y, 0, map.height - 1);
+  const validImpact = impact => impact === undefined || (impact &&
+    integer(impact.tick, 0, world.worldTimeTick) && typeof impact.magic === 'boolean');
   const terrainAt = tile => map.terrain[tile.y * map.width + tile.x];
   if (typeof world?.seed !== 'string' || !integer(world.worldTimeTick, 0) ||
       !SPEEDS.includes(world.gameSpeed) || !inside(world.tickRemainder, REAL_STEP_MS) ||
@@ -179,7 +181,7 @@ function validate(world) {
           (item.carrierId === null ? validTile(item) : people.get(item.carrierId)?.alive);
       }) ||
       !world.monsters.every(m => Object.hasOwn(monsters, m.species) && validTile(m) && validTile(m.homeTile) &&
-        (m.relocating === undefined || typeof m.relocating === 'boolean') &&
+        (m.relocating === undefined || typeof m.relocating === 'boolean') && validImpact(m.lastImpact) &&
         typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
       !world.quests.every(q => (q.kind === 'recover_supplies'
         ? dropIds.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&
@@ -232,7 +234,7 @@ function validate(world) {
         (c.nextBirthCheckTick !== undefined && !integer(c.nextBirthCheckTick, 1)) ||
         (c.homeBuildingId !== null && !world.buildings.some(b => b.id === c.homeBuildingId)) ||
         !integer(c.decisionAt, 0) || !(c.alive ? passable(c.lastKnownSafeTile) : validTile(c.lastKnownSafeTile)) ||
-        !action || !['plan', 'travel', 'perform'].includes(action.phase) ||
+        !validImpact(c.lastImpact) || !action || !['plan', 'travel', 'perform'].includes(action.phase) ||
         (action.droughtForageId !== undefined && (action.kind !== 'gather' ||
           typeof action.droughtForageId !== 'string' || !action.droughtForageId.length || action.droughtForageId.length > 80)) ||
         (action.phase === 'travel' && !validRoute(c, passable, terrainAt, map.navigationVersion))) {

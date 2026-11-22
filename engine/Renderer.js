@@ -1,5 +1,5 @@
-import { monsters } from '../data/combat.js';
-import { NEED_HOUR_TICKS, TILE, citizenRaces } from '../data/balance.js';
+import { COMBAT, monsters } from '../data/combat.js';
+import { GATHER_TICKS, NEED_HOUR_TICKS, TILE, citizenRaces } from '../data/balance.js';
 
 export const terrainColors = { grass: '#577d4c', forest: '#365a43', mountain: '#77786a', water: '#346075' };
 export const nationColor = id => `hsl(${(Number(id.split(':')[1]) * 137 + 248) % 360} 70% 72%)`;
@@ -112,16 +112,22 @@ export class Renderer {
       ctx.fillRect(home.x * TILE + 9, home.y * TILE + 19, 14, 2);
     }
 
-    for (const monster of world.monsters.filter(m => m.alive && visible(m))) {
+    for (const monster of world.monsters.filter(m => (m.alive || (camera.zoom > 0.65 &&
+        m.lastImpact && world.worldTimeTick - m.lastImpact.tick < 84)) && visible(m))) {
       const x = monster.x * TILE + 16;
       const y = monster.y * TILE + 16;
-      ctx.fillStyle = monsters[monster.species]?.color ?? '#b66d54';
-      ctx.fillRect(x - 6, y - 4, 12, 9);
-      ctx.fillRect(x - 3, y - 7, 6, 3);
-      ctx.fillStyle = '#233a32';
-      ctx.fillRect(x - 3, y - 3, 2, 2);
-      ctx.fillRect(x + 2, y - 3, 2, 2);
+      if (monster.alive) {
+        ctx.fillStyle = monsters[monster.species]?.color ?? '#b66d54';
+        ctx.fillRect(x - 6, y - 4, 12, 9);
+        ctx.fillRect(x - 3, y - 7, 6, 3);
+        ctx.fillStyle = '#233a32';
+        ctx.fillRect(x - 3, y - 3, 2, 2);
+        ctx.fillRect(x + 2, y - 3, 2, 2);
+      }
+      if (camera.zoom > 0.65) this.impact(x, y, world.worldTimeTick, monster.lastImpact);
     }
+    const cargo = camera.zoom > 0.65 ? new Map(world.inTransit.filter(item => item.carrierId)
+      .map(item => [item.carrierId, item.resource])) : null;
     const citizens = world.citizens.filter(c => c.alive && visible(c)).sort((a, b) => a.y - b.y);
     for (const c of citizens) {
       if (camera.zoom <= 0.65) {
@@ -129,7 +135,7 @@ export class Renderer {
         ctx.fillRect(c.x * TILE - 3, c.y * TILE - 3, 6, 6);
       } else {
         const quest = c.action.kind === 'adventure' ? world.quests.find(q => q.id === c.action.targetId) : undefined;
-        this.citizen(c, world.worldTimeTick, quest);
+        this.citizen(c, world.worldTimeTick, quest, cargo.get(c.id));
       }
     }
 
@@ -176,7 +182,15 @@ export class Renderer {
     }
   }
 
-  citizen(citizen, tick, quest) {
+  impact(x, y, tick, hit) {
+    if (!hit || tick - hit.tick >= 84) return;
+    const spread = 4 + Math.floor((tick - hit.tick) / 14);
+    this.ctx.fillStyle = hit.magic ? '#d8b7ff' : '#ffcf84';
+    this.ctx.fillRect(x - spread, y - spread - 9, 2, 4);
+    this.ctx.fillRect(x + spread, y - spread - 5, 3, 2);
+  }
+
+  citizen(citizen, tick, quest, constructionCargo) {
     const { ctx } = this;
     const x = Math.round(citizen.x * TILE);
     const y = Math.round(citizen.y * TILE);
@@ -192,14 +206,34 @@ export class Renderer {
     ctx.fillStyle = '#2c3736';
     ctx.fillRect(x - 4, y - 2, 3, 4 + (foot === 1 ? 2 : 0));
     ctx.fillRect(x + 1, y - 2, 3, 4 + (foot === 3 ? 2 : 0));
+    if (citizen.action.phase === 'travel' &&
+        (constructionCargo || ['haul', 'adventure'].includes(citizen.action.kind))) {
+      const resource = constructionCargo ?? Object.keys(resourceColors).find(key => citizen.inventory[key] > 0);
+      if (resource) {
+        ctx.fillStyle = '#453529';
+        ctx.fillRect(x + 4, y - 13, 6, 7);
+        ctx.fillStyle = resourceColors[resource];
+        ctx.fillRect(x + 5, y - 12, 4, 4);
+      }
+    }
+    this.impact(x, y - 9, tick, citizen.lastImpact);
     if (citizen.action.phase === 'perform') {
       const shift = Math.floor(tick / 12) % 4;
       switch (citizen.action.kind) {
         case 'gather':
+        case 'forage': {
+          const swing = Math.floor(citizen.action.progress / (GATHER_TICKS / 4)) % 4;
+          ctx.fillStyle = '#ad865b';
+          ctx.fillRect(x + 6, y - 10 + swing, 2, 7);
+          ctx.fillStyle = '#d3e0d8';
+          ctx.fillRect(x + 5, y - 12 + swing, 6, 2);
+          if (swing >= 2) ctx.fillRect(x + 10, y - 2, 2, 2);
+          break;
+        }
         case 'farm':
-          ctx.fillStyle = citizen.action.kind === 'farm' ? '#b4d881' : '#e9d28e';
-          ctx.fillRect(x + 7 + shift, y - 6 - shift, 3, 3);
-          ctx.fillRect(x + 4 + shift, y - 3 + shift, 2, 2);
+          ctx.fillStyle = '#b4d881';
+          ctx.fillRect(x + 7 + shift, y - 6 - shift, 2, 5);
+          ctx.fillRect(x + 5 + shift, y - 7 - shift, 6, 2);
           break;
         case 'build':
           ctx.fillStyle = '#d9b37d';
@@ -213,8 +247,10 @@ export class Renderer {
             ctx.fillRect(x - 5, y - 25 - shift, 10, 2);
           } else if (quest?.stage === 'fight') {
             ctx.fillStyle = '#e8c1a1';
-            ctx.fillRect(x + 7 + shift, y - 10, 8, 2);
-            ctx.fillRect(x + 10 + shift, y - 13, 2, 8);
+            const strike = quest.strikeAt !== null && quest.strikeAt - tick <= COMBAT.strikeDelay;
+            const offset = strike ? 5 : 0;
+            ctx.fillRect(x + 7 + offset, y - 10 - offset, 8, 2);
+            ctx.fillRect(x + 10 + offset, y - 13 - offset, 2, 8);
           }
           break;
       }

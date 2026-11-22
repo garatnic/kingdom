@@ -637,7 +637,7 @@ function resolveEscortEncounter(world, quest, lead) {
     power + COMBAT.attack + member.skills.combat + (gear[member.gearId]?.attack ?? 0), spellAttack);
   const retaliates = !bound && target && now >= enemy.attackAt;
   enemy.attackAt = Math.max(enemy.attackAt, now + COMBAT.interval);
-  if (attack) enemy.hp = Math.max(0, enemy.hp - damage(world, attack, config.defense));
+  if (attack) applyHit(world, enemy, damage(world, attack, config.defense), Boolean(caster && !bound));
   emitOnce(world, `${quest.id}/${enemy.id}`, 'tradeEscortClash', {
     questId: quest.id, settlementId: quest.settlementId, actorIds: participants.map(member => member.id),
     monsterId: enemy.id, x: enemy.x, y: enemy.y
@@ -654,7 +654,7 @@ function resolveEscortEncounter(world, quest, lead) {
   }
 
   if (!retaliates) return;
-  target.hp = Math.max(0, target.hp - damage(world, config.attack, COMBAT.defense + (gear[target.gearId]?.defense ?? 0)));
+  applyHit(world, target, damage(world, config.attack, COMBAT.defense + (gear[target.gearId]?.defense ?? 0)));
   if (!target.hp) recordDeath(world, target, 'combat');
   if (target.hp <= COMBAT.retreatHp) {
     quest.retreated = true;
@@ -866,6 +866,11 @@ export function claimAdventure(world, citizen, store, travel) {
   return false;
 }
 
+function applyHit(world, target, amount, magic = false) {
+  target.hp = Math.max(0, target.hp - amount);
+  target.lastImpact = { tick: world.worldTimeTick, magic };
+}
+
 function damage(world, attack, defense) {
   return Math.max(1, Math.floor(attack * (0.9 + random(world.rngState) * 0.2) - defense * 0.5));
 }
@@ -948,14 +953,14 @@ export function continueAdventure(world, citizen, quest, store, origin, travel) 
             distance(tileOf(escort), monster) <= COMBAT.rangedDistance;
           const bonus = support ? Math.floor(COMBAT.attack / 2) + escort.skills.combat : 0;
           if (support) quest.escortContributed = true;
-          monster.hp = Math.max(0, monster.hp - damage(world, attack + bonus, config.defense));
+          applyHit(world, monster, damage(world, attack + bonus, config.defense), quest.casting);
         }
         quest.casting = false;
         quest.strikeAt = world.worldTimeTick + COMBAT.interval;
         if (monster.hp === 0) defeat(world, citizen, quest, monster);
       }
       if (monster.alive && distance(position, monster) <= COMBAT.rangedDistance && world.worldTimeTick >= monster.attackAt) {
-        citizen.hp = Math.max(0, citizen.hp - damage(world, config.attack, COMBAT.defense + (gear[citizen.gearId]?.defense ?? 0)));
+        applyHit(world, citizen, damage(world, config.attack, COMBAT.defense + (gear[citizen.gearId]?.defense ?? 0)));
         monster.attackAt = world.worldTimeTick + COMBAT.interval;
         if (!citizen.hp) {
           recordDeath(world, citizen, 'combat');
