@@ -415,6 +415,24 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     assert.equal(await evaluate("document.querySelector('#history-tab').value"), 'citizen');
     assert.equal(await evaluate("document.querySelector('#history-body h3').textContent"), participantName);
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    const eventButton = await evaluate(`(() => {
+      const tab = document.querySelector('#history-tab');
+      tab.value = 'world';
+      tab.dispatchEvent(new Event('change'));
+      const button = [...document.querySelectorAll('#history-body > button')]
+        .find(entry => entry.textContent.startsWith('開戦'));
+      button.scrollIntoView({ block: 'center' });
+      const rect = button.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    })()`);
+    await poll(() => evaluate("document.querySelector('#map').getBoundingClientRect().bottom <= 0"));
+    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [eventButton] });
+    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await poll(() => evaluate(`(() => {
+      const bounds = document.querySelector('#map').getBoundingClientRect();
+      return bounds.bottom > 0 && bounds.top < innerHeight;
+    })()`));
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();

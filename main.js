@@ -28,6 +28,10 @@ const viewer = observation(() => world, () => camera, (target, mode) => {
   camera.x = target.x;
   camera.y = target.y;
   camera.mode = mode;
+  const bounds = canvas.getBoundingClientRect();
+  if (bounds.bottom <= 0 || bounds.top >= window.innerHeight) {
+    canvas.scrollIntoView({ block: 'nearest' });
+  }
 });
 
 const overview = new WorldOverview(get('overview'), get('overview-toggle'), canvas, () => world, () => camera, (x, y) => {
