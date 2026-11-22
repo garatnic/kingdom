@@ -242,9 +242,15 @@ export function observation(getWorld, getCamera, focus) {
       }
       if (store?.steelTools) add(body, 'p', `鋼鉄の採掘道具（未装備） ${store.steelTools}`);
       showShipments(world, settlement);
-      for (const memory of observancesFor(settlement)) {
+      const traditions = observancesFor(settlement);
+      if (traditions.length) indexHistory(world.events);
+      for (const memory of traditions) {
         const label = memory.kind === 'thanksgiving' ? '豊穣への感謝' : '災害・食料難からの復旧記念';
         add(body, 'p', `${label} · 次の行事 ${calendar(memory.nextDay * TIME_TICKS_PER_DAY)}以降`);
+        const origin = eventsById.get(memory.originEventId);
+        if (origin) addEventLocation(body, world, origin, `行事の由来 · ${calendar(origin.worldTimeTick)}`);
+        const cause = origin && eventsById.get(origin.causeEventId);
+        if (cause) addEventLocation(body, world, cause, `${events[cause.type] ?? '最初の出来事'} · ${calendar(cause.worldTimeTick)}`);
         const remembrance = world.events.findLast(event => event.type === 'communityObservance' &&
           event.settlementId === settlement.id && event.kind === memory.kind);
         if (remembrance) showEvent(world, remembrance);

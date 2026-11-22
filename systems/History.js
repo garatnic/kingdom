@@ -36,9 +36,17 @@ export function historyFor(world, kind, id) {
 export function trimHistory(world) {
   const limits = { 1: 500, 2: 2000 };
   const counts = {};
+  const traditionOrigins = new Set(world.settlements.flatMap(settlement =>
+    (settlement.observances ?? (settlement.observance ? [settlement.observance] : []))
+      .map(memory => memory.originEventId)));
   const next = [];
   for (let i = world.events.length - 1; i >= 0; i--) {
     const event = world.events[i];
+    if (traditionOrigins.has(event.id)) {
+      next.push(event);
+      if (event.causeEventId) traditionOrigins.add(event.causeEventId);
+      continue;
+    }
     const level = eventImportance(event);
     counts[level] = (counts[level] ?? 0) + 1;
     if (level > 0 && counts[level] <= (limits[level] ?? Infinity)) next.push(event);

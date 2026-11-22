@@ -309,3 +309,20 @@ test('summer drought delays an unprotected farm and its recovery establishes a l
   assert.equal(recovery.causeEventId, droughts[0].id);
   assert.equal(restored.settlements[0].observances[0].originEventId, recovery.id);
 });
+
+test('local annual traditions retain their origin and its cause when ordinary history is pruned', () => {
+  const world = createWorld('lasting-traditions');
+  const settlement = world.settlements[0];
+  emitOnce(world, 'drought', 'seasonalDrought', { settlementId: settlement.id });
+  const cause = world.events.at(-1);
+  emitOnce(world, 'harvest', 'droughtHarvestRecovered', { causeEventId: cause.id });
+  const origin = world.events.at(-1);
+  settlement.observances = [{ kind: 'scarcity', originEventId: origin.id, nextDay: 5 }];
+  for (let i = 0; i < 2001; i++) {
+    world.events.push({ id: `temporary-${i}`, type: 'monsterThreat' });
+  }
+  trimHistory(world);
+  assert.ok(world.events.includes(cause));
+  assert.ok(world.events.includes(origin));
+  assert.equal(world.events.filter(event => event.type === 'monsterThreat').length, 2000);
+});
