@@ -113,7 +113,7 @@ function replenishSpecies(world, species, forbidden) {
   for (const parent of population) {
     const home = parent.homeTile;
     const homeTerrain = world.map.terrain[home.y * world.map.width + home.x];
-    if (world.worldTimeTick < (parent.nextBreedAt ?? 0) || distance(parent, home) > 4 ||
+    if (parent.relocating || world.worldTimeTick < (parent.nextBreedAt ?? 0) || distance(parent, home) > 4 ||
         !config.habitat.includes(homeTerrain) || findPath(world, home, home) === null) continue;
     const colony = population.filter(m => distance(m.homeTile, home) <= 6).length;
     if (colony >= 3 || nestQuestFor(world, parent)?.status === 'claimed') continue;
@@ -440,11 +440,57 @@ function pursuePrey(world, predator, config) {
   return null;
 }
 
+function relocateDisplacedNests(world) {
+  const { width, height, terrain } = world.map;
+  const bounds = { width: world.map.surveyedWidth ?? width, height: world.map.surveyedHeight ?? height };
+  const colonies = new Map();
+  for (const monster of world.monsters) {
+    if (!monster.alive || !monster.hasNest) continue;
+    const key = monster.species + '/' + tileKey(monster.homeTile);
+    if (!colonies.has(key)) colonies.set(key, []);
+    colonies.get(key).push(monster);
+  }
+  const activeTargets = new Set(world.quests.filter(q => q.status === 'claimed').map(q => q.targetId));
+  for (const colony of colonies.values()) {
+    const leader = colony[0];
+    const from = leader.homeTile;
+    const habitat = monsters[leader.species].habitat;
+    if (habitat.includes(terrain[from.y * width + from.x]) && findPath(world, from, from) !== null) continue;
+    if (nestQuestFor(world, leader)?.status === 'claimed' || colony.some(m => activeTargets.has(m.id))) continue;
+
+    const forbidden = spawnZones(world);
+    const candidates = [];
+    for (let y = Math.max(0, from.y - COMBAT.wanderRadius); y < Math.min(bounds.height, from.y + COMBAT.wanderRadius + 1); y++) {
+      for (let x = Math.max(0, from.x - COMBAT.wanderRadius); x < Math.min(bounds.width, from.x + COMBAT.wanderRadius + 1); x++) {
+        const tile = { x, y };
+        if (distance(from, tile) <= COMBAT.wanderRadius && habitat.includes(terrain[y * width + x]) &&
+            !forbidden.has(tileKey(tile)) && world.monsters.every(m => !m.alive || distance(m.homeTile, tile) > 0)) {
+          candidates.push(tile);
+        }
+      }
+    }
+    candidates.sort((a, b) => distance(from, a) - distance(from, b));
+    const destination = candidates.find(tile => colony.every(m => findPath(world, m, tile, bounds) !== null));
+    if (!destination) continue;
+
+    const quest = nestQuestFor(world, leader);
+    if (quest) quest.status = 'expired';
+    for (const monster of colony) {
+      monster.homeTile = { ...destination };
+      monster.relocating = true;
+    }
+    emitOnce(world, leader.id + '/relocate/' + world.worldTimeTick, 'monsterNestRelocated', {
+      ...destination, fromX: from.x, fromY: from.y, species: leader.species, quantity: colony.length
+    });
+  }
+}
+
 function moveMonsters(world) {
   const reserved = new Set(world.monsters.filter(m => m.alive).map(tileKey));
   for (const monster of world.monsters) {
     if (!monster.alive || world.worldTimeTick < monster.moveAt) continue;
     const config = monsters[monster.species];
+    if (monster.relocating && distance(monster, monster.homeTile) <= 1) delete monster.relocating;
     monster.moveAt = world.worldTimeTick + config.stepTicks;
     const quest = world.quests.find(q => q.status === 'claimed' && q.targetId === monster.id && q.stage === 'fight');
     const opponent = quest && world.citizens.find(c => c.alive && c.id === quest.claimedBy);
@@ -453,7 +499,7 @@ function moveMonsters(world) {
     let tile;
     if (distanceToOpponent <= config.sight) {
       tile = findPath(world, monster, tileOf(opponent))?.[0];
-    } else if (distance(monster, monster.homeTile) >= COMBAT.wanderRadius) {
+    } else if (monster.relocating || distance(monster, monster.homeTile) >= COMBAT.wanderRadius) {
       tile = findPath(world, monster, monster.homeTile)?.[0];
     } else {
       tile = pursuePrey(world, monster, config);
@@ -591,7 +637,10 @@ export function updateAdventureWorld(world, ticks) {
   }
   moveMonsters(world);
   const day = Math.floor(now / TIME_TICKS_PER_DAY) > Math.floor((now - ticks) / TIME_TICKS_PER_DAY);
-  if (day) huntPrey(world);
+  if (day) {
+    relocateDisplacedNests(world);
+    huntPrey(world);
+  }
   if (!first && !day) return;
   for (const settlement of world.settlements) {
     if (day) {

@@ -173,6 +173,7 @@ function validate(world) {
           (item.carrierId === null ? validTile(item) : people.get(item.carrierId)?.alive);
       }) ||
       !world.monsters.every(m => Object.hasOwn(monsters, m.species) && validTile(m) && validTile(m.homeTile) &&
+        (m.relocating === undefined || typeof m.relocating === 'boolean') &&
         typeof m.alive === 'boolean' && integer(m.hp, 0, monsters[m.species].hp)) ||
       !world.quests.every(q => (q.kind === 'recover_supplies'
         ? dropIds.has(q.targetId) && (q.claimedBy === null || (people.has(q.escortId) &&

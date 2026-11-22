@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createWorld } from '../engine/World.js';
 import { discoverFrontier } from '../engine/Expansion.js';
 import { issueQuest, spawnMonster, updateAdventureWorld } from '../simulation/Adventure.js';
+import { applyGodCommand } from '../systems/GodPowers.js';
+import { createSnapshot, readSnapshot } from '../systems/SaveManager.js';
 import { TIME_TICKS_PER_DAY } from '../data/balance.js';
 
 test('a colony reproduces in suitable terrain without ignoring local limits or cooldown', () => {
@@ -123,4 +125,48 @@ test('goblins can establish a second habitat near an inhabited settlement', () =
   assert.ok(distance >= 10 && distance <= 24);
   assert.equal(terrain[immigrant.homeTile.y * width + immigrant.homeTile.x], 'forest');
   assert.equal(immigrant.parentMonsterId, undefined);
+});
+
+test('a terrain edit displaces a nest after a claimed raid ends and the colony moves after reload', async () => {
+  const world = createWorld('displaced-nest');
+  world.map.terrain.fill('forest');
+  const leader = spawnMonster(world, 'slime', { x: 8, y: 8 });
+  const offspring = spawnMonster(world, 'slime', { x: 8, y: 9 });
+  offspring.homeTile = { ...leader.homeTile };
+  leader.hasNest = offspring.hasNest = true;
+  const raid = issueQuest(world, world.settlements[0], leader);
+  const adventurer = world.citizens[0];
+  raid.status = 'claimed';
+  raid.claimedBy = adventurer.id;
+  raid.stage = 'fight';
+  raid.expiresAt = 5 * TIME_TICKS_PER_DAY;
+  assert.equal(applyGodCommand(world, {
+    commandId: 'change-habitat', kind: 'terrain', payload: { x: 8, y: 8, value: 'mountain' }
+  }), null);
+
+  world.nextMonsterSpawnTick = 5 * TIME_TICKS_PER_DAY;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 12);
+  assert.deepEqual(leader.homeTile, { x: 8, y: 8 });
+
+  raid.status = 'open';
+  raid.claimedBy = null;
+  world.worldTimeTick += TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 12);
+  assert.equal(raid.status, 'expired');
+  assert.notDeepEqual(leader.homeTile, { x: 8, y: 8 });
+  assert.deepEqual(leader.homeTile, offspring.homeTile);
+  assert.equal(leader.relocating, true);
+  assert.equal(world.events.filter(event => event.type === 'monsterNestRelocated').length, 1);
+
+  const snapshot = await createSnapshot(world);
+  const restored = await readSnapshot(JSON.stringify(snapshot));
+  const restoredLeader = restored.monsters.find(monster => monster.id === leader.id);
+  for (let step = 0; step < 20; step++) {
+    restored.worldTimeTick += 125;
+    updateAdventureWorld(restored, 125);
+    if (!restoredLeader.relocating) break;
+  }
+  assert.equal(restoredLeader.relocating, undefined);
+  assert.equal(restored.events.filter(event => event.type === 'monsterNestRelocated').length, 1);
 });
