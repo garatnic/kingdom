@@ -4,7 +4,7 @@ import { FARM_HARVEST_TICKS, footprint } from '../data/buildings.js';
 import { monsters } from '../data/combat.js';
 import { createAdult } from '../simulation/CreateAdult.js';
 import { spawnMonster } from '../simulation/Adventure.js';
-import { resources } from '../simulation/Economy.js';
+import { available, resources } from '../simulation/Economy.js';
 import { territoryAt } from '../simulation/Territory.js';
 import { nextId } from '../simulation/Identity.js';
 import { reachableTiles } from '../simulation/path.js';
@@ -169,6 +169,9 @@ export function applyGodCommand(world, command) {
     }),
     ...(affectedFarms && {
       affectedBuildingIds: affectedFarms.map(b => b.id),
+      ...(kind === 'disaster' && { foodBeforeDrought: Object.fromEntries(world.stockpiles
+        .filter(store => affectedFarms.some(farm => farm.settlementId === store.settlementId))
+        .map(store => [store.settlementId, available(store, 'food')])) }),
       nationIds: [...new Set(world.settlements.filter(s =>
         s.nationId && affectedFarms.some(b => b.settlementId === s.id)).map(s => s.nationId))]
     })

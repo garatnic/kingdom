@@ -150,6 +150,7 @@ test('drought delays local harvests and remains idempotent after restoration', a
   assert.equal(recovery[0].causeEventId, revived.events.find(event => event.value === 'drought').id);
   assert.ok(recovery[0].quantity > 0);
   assert.equal(recovery[0].foodBeforeHarvest, storeFood);
+  assert.equal(recovery[0].foodBeforeDrought, storeFood);
   assert.equal(revived.buildings[1].droughtCommandId, undefined);
 });
 

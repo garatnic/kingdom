@@ -212,10 +212,12 @@ function harvestFarm(world, farm, farmer, store) {
     const id = farm.droughtCommandId;
     const drought = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
     const settlement = world.settlements.find(s => s.id === farm.settlementId);
+    const foodBeforeDrought = drought?.foodBeforeDrought?.[farm.settlementId];
     emitOnce(world, JSON.stringify([id, farm.id]), 'droughtHarvestRecovered', {
       causeEventId: drought?.id, buildingId: farm.id, settlementId: farm.settlementId,
       nationId: settlement?.nationId, actorIds: [farmer.id], x: farm.x, y: farm.y,
-      quantity, ...(store && { foodBeforeHarvest: available(store, 'food') })
+      quantity, ...(store && { foodBeforeHarvest: available(store, 'food') }),
+      ...(foodBeforeDrought !== undefined && { foodBeforeDrought })
     });
     delete farm.droughtCommandId;
   }

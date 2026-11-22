@@ -401,7 +401,10 @@ export function observation(getWorld, getCamera, focus) {
       if (reasons[event.reason]) title += `（${reasons[event.reason]}）`;
     }
     if (event.type === 'droughtHarvestRecovered') {
-      title += `（収穫 ${event.quantity}${event.foodBeforeHarvest === undefined ? '' : '・収穫前の備蓄 ' + event.foodBeforeHarvest}）`;
+      const stock = event.foodBeforeHarvest;
+      const baseline = event.foodBeforeDrought;
+      title += `（収穫 ${event.quantity}${stock === undefined ? '' : baseline === undefined
+        ? '・収穫前の備蓄 ' + stock : `・備蓄 ${baseline} → ${stock}（干ばつ時 → 収穫前）`}）`;
     }
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
