@@ -19,7 +19,7 @@ async function poll(fn, attempts = 100) {
 
 const realtimeMinutes = Number(process.env.KINGDOM_REALTIME_MINUTES ?? 0);
 
-test('Chromium renders the map and runs pause, speed, camera and JSON controls', { timeout: 90_000 + realtimeMinutes * 60_000 }, async () => {
+test('Chromium renders the map and runs pause, speed, camera and JSON controls', { timeout: 480_000 + realtimeMinutes * 60_000 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), 'kingdom-chromium-'));
   const probe = createServer().listen(0, '127.0.0.1');
   await once(probe, 'listening');
@@ -240,46 +240,72 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await poll(() => evaluate(`document.querySelector('[data-speed="5"]').getAttribute('aria-pressed') === 'true'`));
     assert.deepEqual(errors, []);
-    if (realtimeMinutes) {
-      await send('Emulation.clearDeviceMetricsOverride');
-      await evaluate("document.querySelector('#seed').value = 'world-tree'; document.querySelector('form').requestSubmit()");
-      await send('Page.bringToFront');
-      const clock = () => evaluate("document.querySelector('#clock').textContent");
-      const gameMinutes = label => {
-        const match = /第([0-9]+)日 ([0-9]+):([0-9]+)/.exec(label);
-        return (Number(match[1]) - 1) * 1440 + Number(match[2]) * 60 + Number(match[3]);
-      };
-      const measureFps = () => evaluate(`new Promise(resolve => {
-        let frames = 0;
-        const start = performance.now();
-        function sample(now) {
-          frames++;
-          if (now - start >= 2000) resolve(Math.round(frames * 1000 / (now - start)));
-          else requestAnimationFrame(sample);
-        }
-        requestAnimationFrame(sample);
-      })`);
-      const initialFps = await measureFps();
-      const started = gameMinutes(await clock());
-      const begin = performance.now();
-      console.log(`Starting ${realtimeMinutes}-minute foreground stability check`);
-      await delay(realtimeMinutes * 60_000);
-      const elapsed = performance.now() - begin;
-      const minutes = gameMinutes(await clock()) - started;
-      const expectedMinutes = elapsed * 12 / 1000;
-      assert.ok(Math.abs(minutes - expectedMinutes) / expectedMinutes <= 0.01,
-        `Observed ${minutes} game minutes, expected ${expectedMinutes.toFixed(1)}`);
-      assert.equal(await evaluate("document.querySelector('#population').textContent.startsWith('住民 ')"), true);
-      assert.equal(await evaluate(`(async () => {
-        const { openSaveStorage, readLatestGeneration } = await import('/systems/SaveStorage.js');
-        const database = await openSaveStorage();
+    await send('Emulation.clearDeviceMetricsOverride');
+    const cityPath = join(profile, 'natural-city.json');
+    const generator = spawn(process.execPath, ['test/natural-city.js', cityPath], { stdio: 'inherit' });
+    const [generationCode] = await once(generator, 'exit');
+    assert.equal(generationCode, 0);
+    const city = JSON.parse(await readFile(cityPath, 'utf8')).world;
+    const residents = city.citizens.filter(citizen => citizen.alive).length;
+    const { root: cityRoot } = await send('DOM.getDocument');
+    const { nodeId: cityInput } = await send('DOM.querySelector', { nodeId: cityRoot.nodeId, selector: '#file' });
+    await send('DOM.setFileInputFiles', { nodeId: cityInput, files: [cityPath] });
+    await poll(() => evaluate("document.querySelector('#status').textContent === 'セーブを読み込みました'"));
+    assert.equal(await evaluate("document.querySelector('#population').textContent"), `住民 ${residents}人`);
+    await send('Page.bringToFront');
+    const clock = () => evaluate("document.querySelector('#clock').textContent");
+    const gameMinutes = label => {
+      const [, year, day, hour, minute] = /第([0-9]+)年 .*? 第([0-9]+)日 ([0-9]+):([0-9]+)/.exec(label).map(Number);
+      return ((year - 1) * 30 + day - 1) * 1440 + hour * 60 + minute;
+    };
+    const measureFps = () => evaluate(`new Promise(resolve => {
+      let frames = 0;
+      const start = performance.now();
+      function sample(now) {
+        frames++;
+        if (now - start >= 2000) resolve(Math.round(frames * 1000 / (now - start)));
+        else requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    })`);
+    const initialFps = await measureFps();
+    const startMinutes = gameMinutes(await clock());
+    await evaluate("document.querySelector('[data-speed=\"1\"]').click()");
+    const begin = performance.now();
+    const duration = realtimeMinutes ? realtimeMinutes * 60_000 : 65_000;
+    console.log(`Starting ${duration / 1000}-second natural-city stability check`);
+    await delay(duration);
+    const elapsed = performance.now() - begin;
+    const minutes = gameMinutes(await clock()) - startMinutes;
+    const expectedMinutes = elapsed * 12 / 1000;
+    assert.ok(Math.abs(minutes - expectedMinutes) / expectedMinutes <= 0.03,
+      `Observed ${minutes} game minutes, expected ${expectedMinutes.toFixed(1)}`);
+    const finalFps = await measureFps();
+    const savedTick = await evaluate(`(async () => {
+      const { openSaveStorage, readLatestGeneration } = await import('/systems/SaveStorage.js');
+      const database = await openSaveStorage();
+      try {
         const saved = await readLatestGeneration(database);
+        return saved.seed === 'world-tree' ? saved.worldTimeTick : 0;
+      } finally {
         database.close();
-        return saved.seed === 'world-tree' && saved.worldTimeTick > 0;
-      })()`), true);
-      console.log(JSON.stringify({ seed: 'world-tree', realtimeElapsedMs: Math.round(elapsed), approximateGameMinutes: minutes,
-        javascriptExceptions: errors.length, speed: 1, initialFps, finalFps: await measureFps() }));
-    }
+      }
+    })()`);
+    assert.ok(savedTick > city.worldTimeTick, 'The running city must be automatically saved');
+    await send('Page.reload');
+    await poll(() => evaluate("document.querySelector('#status')?.textContent === 'ブラウザのセーブを復元しました'"));
+    assert.ok(Math.abs(gameMinutes(await clock()) - savedTick / 10) <= 12);
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    await poll(() => evaluate("innerWidth === 390 && document.documentElement.scrollWidth === 390"));
+    const pauseButton = await evaluate(`(() => {
+      const rect = document.querySelector('[data-speed="0"]').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    })()`);
+    await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [pauseButton] });
+    await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await poll(() => evaluate(`document.querySelector('[data-speed="0"]').getAttribute('aria-pressed') === 'true'`));
+    console.log(JSON.stringify({ naturalPopulation: residents, realtimeElapsedMs: Math.round(elapsed),
+      approximateGameMinutes: minutes, javascriptExceptions: errors.length, initialFps, finalFps, savedTick }));
     await send('Emulation.clearDeviceMetricsOverride');
     await send('Page.bringToFront');
     await evaluate(`(async () => {

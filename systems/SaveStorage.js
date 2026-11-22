@@ -28,18 +28,29 @@ export function writeGeneration(database, snapshot) {
 }
 
 export async function readLatestGeneration(database) {
-  const saves = await new Promise((resolve, reject) => {
-    const request = database.transaction(STORE, 'readonly').objectStore(STORE).getAll();
-    request.onsuccess = () => resolve(request.result);
+  const latest = await readStore(database, store => store.openCursor(null, 'prev'), cursor => cursor?.value);
+  if (latest === undefined) return null;
+  try {
+    return await readSnapshot(JSON.stringify(latest));
+  } catch {
+    // Read the remaining generations together when the newest one is damaged.
+    const saves = await readStore(database, store => store.getAll());
+    for (const snapshot of saves.reverse()) {
+      try {
+        return await readSnapshot(JSON.stringify(snapshot));
+      } catch {
+        // Continue to the preceding generation.
+      }
+    }
+    throw new Error('読み込める保存世代がありません。');
+  }
+}
+
+function readStore(database, read, value = result => result) {
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(STORE, 'readonly');
+    const request = read(tx.objectStore(STORE));
+    request.onsuccess = () => resolve(value(request.result));
     request.onerror = () => reject(request.error);
   });
-  for (const snapshot of saves.reverse()) {
-    try {
-      return await readSnapshot(JSON.stringify(snapshot));
-    } catch {
-      // A damaged newest generation does not prevent opening a valid older one.
-    }
-  }
-  if (saves.length) throw new Error('読み込める保存世代がありません。');
-  return null;
 }
