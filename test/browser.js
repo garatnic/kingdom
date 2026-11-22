@@ -242,6 +242,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       tab.dispatchEvent(new Event('change'));
     })()`);
     await poll(() => evaluate("document.querySelector('#history-body').textContent.includes('住宅') && document.querySelector('#history-body').textContent.includes('倉庫')"));
+    assert.equal(await evaluate("document.querySelector('#history-body').textContent.includes('種族別人口')"), true);
     await send('Emulation.setDeviceMetricsOverride', {
       width: 390, height: 844, deviceScaleFactor: 2, mobile: true
     });
@@ -349,6 +350,9 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       emitOnce(world, 'settlement:1/settlement:2/trade/1', 'internationalTradeCompleted', { questId: 'quest:1', x: 24, y: 24 });
       emitOnce(world, 'settlement:1/food/1', 'foodShortage', { x: 30, y: 30, food: 0 });
       const shortage = world.events.at(-1);
+      emitOnce(world, 'settlement:1/food/2', 'aidReturning', {
+        x: 30, y: 30, resource: 'food', quantity: 4, reason: 'relations'
+      });
       emitOnce(world, 'settlement:1/food/3', 'foodRecovered', {
         x: 30, y: 30, food: 36, foodAtShortage: 0, causeEventId: shortage.id
       });
@@ -390,7 +394,8 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       tab.dispatchEvent(new Event('change'));
     })()`);
     assert.equal(await evaluate(`document.querySelector('#history-body').textContent.includes('備蓄 0 → 36') &&
-      document.querySelector('#history-body').textContent.includes('食料難が発生した集落')`), true);
+      document.querySelector('#history-body').textContent.includes('食料難が発生した集落') &&
+      document.querySelector('#history-body').textContent.includes('援助物資の返送を開始（食料 4・外交上の援助条件が崩れた）')`), true);
     const relatedLocation = (record, related) => `(() => {
       const recordButton = [...document.querySelectorAll('#history-body > button')].find(button =>
         button.textContent.startsWith(${JSON.stringify(record)}));
@@ -430,6 +435,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     assert.equal(await evaluate("document.querySelector('#history-tab').value"), 'citizen');
     assert.equal(await evaluate("document.querySelector('#history-body h3').textContent"), participantName);
+    assert.equal(await evaluate("document.querySelector('#history-body').textContent.includes('魔力適性')"), true);
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
     const eventButton = await evaluate(`(() => {
       const tab = document.querySelector('#history-tab');

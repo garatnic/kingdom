@@ -1,10 +1,10 @@
 import { alliedNations } from '../simulation/Diplomacy.js';
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
-import { citizenRaces, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
+import { citizenRaces, MAGIC_AFFINITY_THRESHOLD, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
 import { adventurerRanks, gear, monsters } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
-import { civilizationNames, technologies } from '../data/technologies.js';
+import { civilizationNames, TECH, technologies } from '../data/technologies.js';
 import { calendar } from '../engine/GameLoop.js';
 import { relationLabel } from '../simulation/Nations.js';
 import { activeNations, truceBetween } from '../simulation/War.js';
@@ -16,7 +16,9 @@ const events = {
   tradeEscortClash: '護衛隊が街道で交戦', tradeEscortDeparted: '交易品の護衛に出発', tradeEscortReturned: '交易品の護衛から帰還',
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換', internationalTradeReturning: '国際交易の荷を返送',
+  internationalTradeReturned: '国際交易の荷が発送元へ戻った',
   friendshipReached: '国家間の友好が成立',
+  aidReturning: '援助物資の返送を開始', aidReturned: '援助物資が発送元へ戻った',
   foreignFoodAidDelivered: '友好国から食料援助が到着',
   materialAidDelivered: '同じ国の集落から資材が到着',
   manaVeinDiscovered: '協力調査で魔石鉱脈を発見', resourceSurveyDeparted: '資源調査に出発', resourceSurveyReturned: '資源調査を報告',
@@ -32,9 +34,9 @@ const events = {
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
-  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
+  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
-  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered'],
+  people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'tradeEscortClash', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
@@ -208,6 +210,7 @@ export function observation(getWorld, getCamera, focus) {
       const site = world.constructionSites.find(s => s.settlementId === settlement.id);
       add(body, 'h3', settlementName(settlement));
       add(body, 'p', `人口 ${residents.length}人 · 住宅 ${housed}/${beds}床`);
+      showDemographics(residents);
       showResearch(world, researchOwner(world, settlement));
       add(body, 'p', Object.entries(jobs).map(([role, label]) =>
         `${label} ${residents.filter(c => c.profession === role).length}`).join(' / '));
@@ -332,9 +335,13 @@ export function observation(getWorld, getCamera, focus) {
       add(body, 'p', `HP ${person.hp} / 空腹 ${person.hunger} / 疲労 ${person.fatigue} · ${actions[person.action.kind] ?? '待機'}`);
       if (person.profession === 'adventurer' || person.adventuresCompleted) {
         add(body, 'p', `${adventurerRanks[adventurerRank(person)]} · 戦闘 Lv.${person.skills.combat} · 討伐達成 ${person.adventuresCompleted ?? 0}回`);
-        if (person.steelMiningTools) add(body, 'p', '鋼鉄の採掘道具');
         if (person.gearId) add(body, 'p', gear[person.gearId]?.label ?? person.gearId);
       }
+      if (person.steelMiningTools) add(body, 'p', '鋼鉄の採掘道具');
+      const affinity = person.traits.magicAffinity;
+      const affinityLabel = affinity >= MAGIC_AFFINITY_THRESHOLD ? '適性あり' : '適性未達';
+      const magic = person.skills.magic > 0 ? ` · 魔法 Lv.${person.skills.magic} · MP ${person.mp ?? 0}/${TECH.maxMp}` : '';
+      add(body, 'p', `魔力適性 ${Math.round(affinity * 100)}%（${affinityLabel}）${magic}`);
       const inventory = Object.entries(person.inventory).filter(([, qty]) => qty > 0);
       if (inventory.length) add(body, 'p', inventory.map(([key, qty]) => `${resources[key]} ${qty}`).join(' / '));
       const starred = favorites.includes(person.id);
@@ -368,7 +375,9 @@ export function observation(getWorld, getCamera, focus) {
       }
     } else if (nation) {
       add(body, 'h3', nation.name + (nation.fallenAt === undefined ? '' : '（滅亡）'));
-      add(body, 'p', `人口 ${world.citizens.filter(c => c.alive && c.nationId === nation.id).length}人`);
+      const residents = world.citizens.filter(c => c.alive && c.nationId === nation.id);
+      add(body, 'p', `人口 ${residents.length}人`);
+      showDemographics(residents);
       const leader = world.citizens.find(c => c.id === nation.leaderId);
       if (leader) add(body, 'p', `指導者 ${leader.name}`);
       else if (nation.fallenAt === undefined) add(body, 'p', '指導者 空席');
@@ -393,6 +402,20 @@ export function observation(getWorld, getCamera, focus) {
       }
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);
     } else add(body, 'p', '対象がまだありません。');
+  }
+
+  function showDemographics(residents) {
+    if (!residents.length) return;
+    const counts = new Map();
+    let affinityCount = 0;
+    for (const citizen of residents) {
+      counts.set(citizen.race, (counts.get(citizen.race) ?? 0) + 1);
+      if (citizen.traits.magicAffinity >= MAGIC_AFFINITY_THRESHOLD) affinityCount++;
+    }
+    const breakdown = Object.entries(citizenRaces).filter(([race]) => counts.has(race))
+      .map(([race, config]) => `${config.label} ${counts.get(race)}人`).join(' / ');
+    add(body, 'p', `種族別人口 ${breakdown}`);
+    add(body, 'p', `魔法の適性者 ${affinityCount}人`);
   }
 
   function showResearch(world, owner) {
@@ -433,6 +456,12 @@ export function observation(getWorld, getCamera, focus) {
     if (['supplyRecoveryReturned', 'resourceSurveyReturned'].includes(event.type)) title += `（${resources[event.resource]} ${event.quantity}）`;
     if (event.type === 'materialAidDelivered') title += `（${resources[event.resource]} ${event.quantity}）`;
     if (['foodAidDelivered', 'foreignFoodAidDelivered'].includes(event.type)) title += `（食料 ${event.food}）`;
+    if (['aidReturning', 'aidReturned', 'internationalTradeReturned'].includes(event.type)) {
+      const reasons = { ownership: '所属国が変わった', relations: '外交上の援助条件が崩れた',
+        population: '受取先に住民がいない', route: '道が通れない', capacity: '受取先の倉庫に収まらない' };
+      const reason = reasons[event.reason];
+      title += `（${resources[event.resource]} ${event.quantity}${reason ? '・' + reason : ''}）`;
+    }
     if (event.type === 'internationalTradeReturning') {
       const reasons = { conditions: '交易条件が崩れた', route: '道が通れない', timeout: '護衛が期限に間に合わない', escort: '護衛を完了できない' };
       if (reasons[event.reason]) title += `（${reasons[event.reason]}）`;

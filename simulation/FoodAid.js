@@ -33,17 +33,23 @@ export function updateFoodAid(world) {
     const from = stores.get(aid.sourceId);
     const to = stores.get(destination.id);
     const residents = population.get(destination.id) ?? 0;
-    const partiesValid = source.nationId === aid.nationId &&
-      destination.nationId === (aid.recipientNationId ?? aid.nationId) &&
-      (!aid.recipientNationId || friendly(aid.nationId, aid.recipientNationId)) &&
+    const ownershipMatches = source.nationId === aid.nationId &&
+      destination.nationId === (aid.recipientNationId ?? aid.nationId);
+    const relationsAllowAid = (!aid.recipientNationId || friendly(aid.nationId, aid.recipientNationId)) &&
       (!aid.allianceRelief || alliedNations(world, nations.get(aid.nationId), nations.get(aid.recipientNationId)));
-    if (!aid.returning && partiesValid && residents && route(from, to)) {
+    const eventKey = `${destination.id}/${field}/${day}`;
+    const participants = {
+      settlementId: destination.id, sourceSettlementId: source.id, nationId: aid.nationId,
+      ...(aid.recipientNationId ? { nationIds: [aid.nationId, aid.recipientNationId] } : {})
+    };
+    const deliveryRoute = !aid.returning && ownershipMatches && relationsAllowAid && residents && route(from, to);
+    if (deliveryRoute) {
       const delivered = Math.min(aid[quantityKey], storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (delivered) {
         to.total[resource] += delivered;
         aid[quantityKey] -= delivered;
         const food = resource === 'food';
-        emitOnce(world, `${destination.id}/${field}/${day}`, food ? (aid.recipientNationId ? 'foreignFoodAidDelivered' : 'foodAidDelivered') : 'materialAidDelivered', {
+        emitOnce(world, eventKey, food ? (aid.recipientNationId ? 'foreignFoodAidDelivered' : 'foodAidDelivered') : 'materialAidDelivered', {
           settlementId: destination.id, nationId: destination.nationId, sourceSettlementId: source.id,
           x: destination.x, y: destination.y, ...(food ? { food: delivered } : { resource, quantity: delivered }),
           ...(aid.recipientNationId ? { nationIds: [aid.nationId, aid.recipientNationId] } : {}),
@@ -54,12 +60,22 @@ export function updateFoodAid(world) {
     if (!aid[quantityKey]) {
       delete destination[field];
     } else if (!aid.returning) {
+      const reason = !ownershipMatches ? 'ownership' : !relationsAllowAid ? 'relations' :
+        !residents ? 'population' : !deliveryRoute ? 'route' : 'capacity';
+      emitOnce(world, eventKey, 'aidReturning', {
+        ...participants, reason, resource, quantity: aid[quantityKey], x: destination.x, y: destination.y
+      });
       aid.returning = true;
       aid.arrivalDay = day + aid.travelDays;
     } else if (route(to, from)) {
       const returned = Math.min(aid[quantityKey], storageRoom(from, resource));
       from.total[resource] += returned;
       aid[quantityKey] -= returned;
+      if (returned) {
+        emitOnce(world, eventKey, 'aidReturned', {
+          ...participants, resource, quantity: returned, x: source.x, y: source.y
+        });
+      }
       if (!aid[quantityKey]) delete destination[field];
     }
   }

@@ -260,6 +260,7 @@ test('food aid survives reload, delivers once and returns if the destination cha
   world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
   updateFoodAid(world);
   assert.equal(away.foodAid.returning, true);
+  assert.equal(world.events.find(e => e.type === 'aidReturning').reason, 'ownership');
   const barrier = [];
   for (let y = 0; y < world.map.height; y++) {
     const index = y * world.map.width + 22;
@@ -283,6 +284,7 @@ test('food aid survives reload, delivers once and returns if the destination cha
   assert.equal(awayStore.total.food, 0);
   assert.equal(homeStore.total.food, 52);
   assert.equal(away.foodAid, undefined);
+  assert.deepEqual(world.events.filter(e => e.type === 'aidReturned').map(e => e.quantity), [6]);
 });
 
 test('the scarcest reserve per resident receives limited food aid first', async () => {
@@ -377,6 +379,9 @@ test('friendly emergency aid survives saving but turns back when relations break
   world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
   updateFoodAid(world);
   assert.equal(away.foodAid.returning, true);
+  const returning = world.events.find(e => e.type === 'aidReturning');
+  assert.equal(returning.reason, 'relations');
+  assert.deepEqual(returning.nationIds, [invader.id, defender.id]);
   world.worldTimeTick = away.foodAid.arrivalDay * TIME_TICKS_PER_DAY;
   updateFoodAid(world);
   assert.equal(awayStore.total.food, 0);
@@ -446,6 +451,8 @@ test('barter delivers both loads exactly once or returns both after hostilities'
   updateTrade(returned);
   assert.equal(returnedHome.trade, undefined);
   assert.equal(returnedStore.total.wood, 20);
+  assert.deepEqual(returned.events.filter(e => e.type === 'internationalTradeReturned')
+    .map(e => [e.resource, e.quantity, e.settlementId]), [['stone', 2, away.id], ['wood', 2, home.id]]);
   assert.equal(returned.stockpiles[1].total.stone, 10);
   assert.equal(away.nationId, defender.id);
 });

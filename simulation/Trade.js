@@ -96,12 +96,19 @@ export function updateTrade(world) {
     }
 
     if (!route(second, first)) continue;
-    const returnedOutgoing = Math.min(trade.outgoingQuantity, storageRoom(first, trade.outgoing));
-    const returnedIncoming = Math.min(trade.incomingQuantity, storageRoom(second, trade.incoming));
-    first.total[trade.outgoing] += returnedOutgoing;
-    second.total[trade.incoming] += returnedIncoming;
-    trade.outgoingQuantity -= returnedOutgoing;
-    trade.incomingQuantity -= returnedIncoming;
+    function returnCargo(settlement, store, resource, quantity) {
+      const returned = Math.min(quantity, storageRoom(store, resource));
+      if (!returned) return quantity;
+      store.total[resource] += returned;
+      emitOnce(world, `${a.id}/${b.id}/trade-returned/${settlement.id}/${day}`, 'internationalTradeReturned', {
+        settlementId: settlement.id, nationIds: [trade.firstNationId, trade.secondNationId],
+        x: settlement.x, y: settlement.y, resource, quantity: returned,
+        ...(trade.escortQuestId && { questId: trade.escortQuestId })
+      });
+      return quantity - returned;
+    }
+    trade.outgoingQuantity = returnCargo(a, first, trade.outgoing, trade.outgoingQuantity);
+    trade.incomingQuantity = returnCargo(b, second, trade.incoming, trade.incomingQuantity);
     if (!trade.outgoingQuantity && !trade.incomingQuantity) delete a.trade;
   }
 
