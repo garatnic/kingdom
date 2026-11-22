@@ -201,6 +201,8 @@ test('five nations can handle independent fronts and preserve a fallen nation in
   assert.equal(capturedSave.stockpiles.find(s => s.id === depotBefore.id).total.wood, 10);
   assert.equal(outbound.status, 'repelled');
   assert.equal(outbound.rations, 0);
+  const recovered = activeSave.events.find(event => event.type === 'campaignRationsRecovered' && event.sourceTransactionId === outbound.id);
+  assert.equal(recovered.food + recovered.dropped, 24);
   assert.equal(truceBetween(activeSave, multiInvader, multiDefender), undefined);
   assert.ok(activeSave.events.some(e => e.type === 'campaignCancelled'));
   await readSnapshot(JSON.stringify(await createSnapshot(activeSave)));

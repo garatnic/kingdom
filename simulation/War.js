@@ -139,16 +139,20 @@ function resolveCampaign(world, campaign, attacker, defender) {
 }
 
 function recoverRations(world, campaign, attacker) {
+  if (campaign.rations === 0) return;
   const capitalStore = world.stockpiles.find(p => p.settlementId === attacker.capitalId);
   const supplyStore = world.stockpiles.find(p => p.settlementId === campaign.supplySettlementId);
   const returned = capitalStore ? Math.min(campaign.rations, Math.max(0, freeCapacity(capitalStore))) : 0;
   if (capitalStore) capitalStore.total.food += returned;
   const quantity = campaign.rations - returned;
+  const store = capitalStore ?? supplyStore;
+  const { x, y } = store ? storeTile(world, store) : campaign;
   if (quantity) {
-    const store = capitalStore ?? supplyStore;
-    const { x, y } = store ? storeTile(world, store) : campaign;
     world.resourceNodes.push({ id: nextId(world, 'node'), resource: 'food', x, y, quantity, dropped: true });
   }
+  emitOnce(world, campaign.id, 'campaignRationsRecovered', {
+    x, y, nationId: campaign.attackerId, food: returned, dropped: quantity
+  });
   campaign.rations = 0;
 }
 

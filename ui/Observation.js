@@ -1,7 +1,7 @@
 import { alliedNations } from '../simulation/Diplomacy.js';
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
-import { citizenRaces, MAGIC_AFFINITY_THRESHOLD, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS } from '../data/balance.js';
+import { citizenRaces, MAGIC_AFFINITY_THRESHOLD, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { adventurerRanks, gear, monsters } from '../data/combat.js';
 import { adventurerRank } from '../simulation/AdventurerGrowth.js';
 import { civilizationNames, TECH, technologies } from '../data/technologies.js';
@@ -32,11 +32,12 @@ const events = {
   settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', droughtHarvestRecovered: '干ばつ後に収穫を再開', founding: '建国', leaderSucceeded: '指導者が交代',
   miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
+  campaignRationsRecovered: '遠征の残り兵糧を回収',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
   nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
-    'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
+    'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'campaignRationsRecovered', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortReturned', 'tradeEscortClash', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
@@ -230,23 +231,7 @@ export function observation(getWorld, getCamera, focus) {
           add(body, 'p', `食料備蓄 ${food}/${residents.length * FOOD_TARGET_PER_PERSON}（目標） · 空腹 ${hungry}人${shortage}`);
         }
       }
-      const counterpart = world.settlements.find(other => other.trade?.partnerId === settlement.id);
-      const trade = settlement.trade ?? counterpart?.trade;
-      if (trade) {
-        const other = counterpart ?? world.settlements.find(item => item.id === trade.partnerId);
-        const goods = settlement.trade ? [trade.outgoing, trade.incoming] : [trade.incoming, trade.outgoing];
-        add(body, 'p', `交易 ${settlementName(other)} · ${resources[goods[0]]} ⇄ ${resources[goods[1]]} · ${trade.returning ? '返送中' : '輸送中'}`);
-      }
-      if (settlement.foodAid) {
-        const { sourceId, food, returning, recipientNationId, allianceRelief } = settlement.foodAid;
-        const source = world.settlements.find(s => s.id === sourceId);
-        add(body, 'p', `${allianceRelief ? '同盟の防衛補給' : recipientNationId ? '国際食料援助' : '食料援助'} ${food} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
-      }
-      if (settlement.materialAid) {
-        const { sourceId, resource, quantity, returning } = settlement.materialAid;
-        const source = world.settlements.find(s => s.id === sourceId);
-        add(body, 'p', `資材融通 ${resources[resource]} ${quantity} · ${source ? settlementName(source) : sourceId}${returning ? 'へ返送中' : 'から輸送中'}`);
-      }
+      showShipments(world, settlement);
       const recent = settlement.dailyRecords?.slice(-7);
       if (recent?.length) {
         const last = recent.at(-1);
@@ -385,6 +370,7 @@ export function observation(getWorld, getCamera, focus) {
       const priorities = { food: '農業', housing: '住宅', defense: '防衛', research: '研究', exploration: '探索' };
       add(body, 'p', `主要方針 ${priorities[nation.policy.primary] ?? '選択中'}`);
       showResearch(world, nation);
+      showFronts(world, nation);
       const rivals = nation.fallenAt === undefined ? activeNations(world).filter(other => other.id !== nation.id) : [];
       if (rivals.length) {
         add(body, 'h4', '外交');
@@ -403,6 +389,60 @@ export function observation(getWorld, getCamera, focus) {
       }
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);
     } else add(body, 'p', '対象がまだありません。');
+  }
+
+  function showShipments(world, settlement) {
+    const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
+    const stock = (resource, amount) => `${resources[resource]} ${amount}`;
+    const route = (label, from, to, shipment) => {
+      const origin = settlementName(shipment.returning ? to : from);
+      const destination = settlementName(shipment.returning ? from : to);
+      const due = shipment.arrivalDay > day ? `あと${shipment.arrivalDay - day}ゲーム日` : '予定日到達';
+      const other = from === settlement ? to : from;
+      addEventLocation(body, world, other,
+        `${label} · ${shipment.returning ? '返送中' : '輸送中'} ${origin} → ${destination} · ${due}`);
+    };
+    const source = settlement.trade ? settlement : world.settlements.find(other => other.trade?.partnerId === settlement.id);
+    if (source?.trade) {
+      const trade = source.trade;
+      const partner = world.settlements.find(other => other.id === trade.partnerId);
+      if (partner) {
+        const loads = [];
+        if (trade.outgoingQuantity) loads.push(`${settlementName(source)}発 ${stock(trade.outgoing, trade.outgoingQuantity)}`);
+        if (trade.incomingQuantity) loads.push(`${settlementName(partner)}発 ${stock(trade.incoming, trade.incomingQuantity)}`);
+        const due = trade.arrivalDay > day ? `あと${trade.arrivalDay - day}ゲーム日` : '予定日到達';
+        addEventLocation(body, world, source === settlement ? partner : source,
+          `交易 ${trade.returning ? '返送中' : '輸送中'} · ${loads.join(' / ')} · ${due}`);
+      }
+    }
+    for (const receiver of world.settlements) {
+      for (const field of ['foodAid', 'materialAid']) {
+        const aid = receiver[field];
+        if (!aid || (receiver !== settlement && aid.sourceId !== settlement.id)) continue;
+        const sender = world.settlements.find(other => other.id === aid.sourceId);
+        if (!sender) continue;
+        const label = field === 'materialAid' ? `資材融通 ${stock(aid.resource, aid.quantity)}` :
+          `${aid.allianceRelief ? '同盟の防衛補給' : aid.recipientNationId ? '国際食料援助' : '食料援助'} ${stock('food', aid.food)}`;
+        route(label, sender, receiver, aid);
+      }
+    }
+  }
+
+  function showFronts(world, nation) {
+    const fronts = (world.campaigns ?? []).filter(c => (c.attackerId === nation.id || c.defenderId === nation.id) &&
+      (c.status === 'marching' || c.status === 'siege'));
+    if (!fronts.length) return;
+    add(body, 'h4', '進行中の戦線');
+    for (const campaign of fronts) {
+      const offensive = campaign.attackerId === nation.id;
+      const target = world.settlements.find(settlement => settlement.id === campaign.settlementId);
+      const rival = world.nations.find(other => other.id === (offensive ? campaign.defenderId : campaign.attackerId));
+      const team = world.citizens.filter(c => c.alive && c.nationId === campaign.attackerId && campaign.memberIds.includes(c.id));
+      const arrived = team.filter(c => campaign.arrivedIds.includes(c.id)).length;
+      const status = campaign.status === 'siege' ? `包囲中（${campaign.siegeDays}日）` : '進軍中';
+      addEventLocation(body, world, campaign,
+        `${offensive ? '攻勢' : '防衛'} · ${rival.name} · ${settlementName(target)} · ${status} · 部隊 ${team.length}人（到着 ${arrived}人） · 兵糧 ${campaign.rations}`);
+    }
   }
 
   function showDemographics(residents) {
@@ -476,6 +516,9 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'foodShortage' || event.type === 'foodRecovered') {
       const stock = event.foodAtShortage === undefined ? event.food : `${event.foodAtShortage} → ${event.food}`;
       if (stock !== undefined) title += `（備蓄 ${stock}）`;
+    }
+    if (event.type === 'campaignRationsRecovered') {
+      title += `（倉庫 ${event.food}・地面 ${event.dropped}）`;
     }
     if (event.type === 'healingReceived') title += `（HP +${event.quantity}）`;
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;

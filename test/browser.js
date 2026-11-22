@@ -345,6 +345,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       for (let i = 0; i < 2100; i++) emitOnce(world, 'construction:' + i, 'constructionCompleted', { x: 31, y: 31 });
       emitOnce(world, 'campaign:1', 'warDeclared', { x: 18, y: 18, actorIds: [world.citizens[0].id] });
       emitOnce(world, 'campaign:1', 'fieldBattle', { x: 50, y: 50, nationIds: [] });
+      emitOnce(world, 'campaign:1', 'campaignRationsRecovered', { x: 31, y: 31, food: 8, dropped: 4 });
       emitOnce(world, 'quest:1', 'tradeEscortDeparted', { questId: 'quest:1', x: 21, y: 21 });
       emitOnce(world, 'quest:1/monster:1', 'tradeEscortClash', { questId: 'quest:1', x: 44, y: 44 });
       emitOnce(world, 'settlement:1/settlement:2/trade/1', 'internationalTradeCompleted', { questId: 'quest:1', x: 24, y: 24 });
@@ -395,7 +396,8 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     assert.equal(await evaluate(`document.querySelector('#history-body').textContent.includes('備蓄 0 → 36') &&
       document.querySelector('#history-body').textContent.includes('食料難が発生した集落') &&
-      document.querySelector('#history-body').textContent.includes('援助物資の返送を開始（食料 4・外交上の援助条件が崩れた）')`), true);
+      document.querySelector('#history-body').textContent.includes('援助物資の返送を開始（食料 4・外交上の援助条件が崩れた）') &&
+      document.querySelector('#history-body').textContent.includes('遠征の残り兵糧を回収（倉庫 8・地面 4）')`), true);
     const relatedLocation = (record, related) => `(() => {
       const recordButton = [...document.querySelectorAll('#history-body > button')].find(button =>
         button.textContent.startsWith(${JSON.stringify(record)}));
