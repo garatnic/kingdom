@@ -78,6 +78,12 @@ export function updateTrade(world) {
         });
         delete a.trade;
       } else {
+        const reason = !valid ? 'conditions' : !path ? 'route' :
+          !escort || ['open', 'claimed', 'expired'].includes(escort.status) ? 'timeout' : 'escort';
+        emitOnce(world, `${a.id}/${b.id}/trade-return/${day}`, 'internationalTradeReturning', {
+          settlementId: a.id, sourceSettlementId: b.id, nationIds: [trade.firstNationId, trade.secondNationId],
+          x: a.x, y: a.y, reason
+        });
         if (escort?.status === 'open') escort.status = 'expired';
         if (escort?.status === 'claimed') {
           escort.retreated = true;

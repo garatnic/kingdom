@@ -15,7 +15,7 @@ import { eventImportance, historyFor, involvesCitizen } from '../systems/History
 const events = {
   tradeEscortClash: '護衛隊が街道で交戦', tradeEscortDeparted: '交易品の護衛に出発', tradeEscortReturned: '交易品の護衛から帰還',
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
-  internationalTradeCompleted: '友好国間で物資を交換',
+  internationalTradeCompleted: '友好国間で物資を交換', internationalTradeReturning: '国際交易の荷を返送',
   friendshipReached: '国家間の友好が成立',
   foreignFoodAidDelivered: '友好国から食料援助が到着',
   materialAidDelivered: '同じ国の集落から資材が到着',
@@ -32,7 +32,7 @@ const events = {
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
-  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
+  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
@@ -396,6 +396,10 @@ export function observation(getWorld, getCamera, focus) {
     if (['supplyRecoveryReturned', 'resourceSurveyReturned'].includes(event.type)) title += `（${resources[event.resource]} ${event.quantity}）`;
     if (event.type === 'materialAidDelivered') title += `（${resources[event.resource]} ${event.quantity}）`;
     if (['foodAidDelivered', 'foreignFoodAidDelivered'].includes(event.type)) title += `（食料 ${event.food}）`;
+    if (event.type === 'internationalTradeReturning') {
+      const reasons = { conditions: '交易条件が崩れた', route: '道が通れない', timeout: '護衛が期限に間に合わない', escort: '護衛を完了できない' };
+      if (reasons[event.reason]) title += `（${reasons[event.reason]}）`;
+    }
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);

@@ -427,6 +427,9 @@ test('barter delivers both loads exactly once or returns both after hostilities'
   world.worldTimeTick = home.trade.arrivalDay * TIME_TICKS_PER_DAY;
   updateTrade(world);
   assert.equal(home.trade.returning, true);
+  const returnEvents = world.events.filter(e => e.type === 'internationalTradeReturning');
+  assert.equal(returnEvents.length, 1);
+  assert.equal(returnEvents[0].reason, 'conditions');
   world.worldTimeTick = home.trade.arrivalDay * TIME_TICKS_PER_DAY;
   const originalCapacity = homeStore.capacity;
   homeStore.capacity = Object.values(homeStore.total).reduce((sum, quantity) => sum + quantity, 0);
