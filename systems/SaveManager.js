@@ -226,6 +226,8 @@ function validate(world) {
         (c.homeBuildingId !== null && !world.buildings.some(b => b.id === c.homeBuildingId)) ||
         !integer(c.decisionAt, 0) || !(c.alive ? passable(c.lastKnownSafeTile) : validTile(c.lastKnownSafeTile)) ||
         !action || !['plan', 'travel', 'perform'].includes(action.phase) ||
+        (action.droughtForageId !== undefined && (action.kind !== 'gather' ||
+          typeof action.droughtForageId !== 'string' || !action.droughtForageId.length || action.droughtForageId.length > 80)) ||
         (action.phase === 'travel' && !validRoute(c, passable, terrainAt, map.navigationVersion))) {
       throw new Error('保存データの住民・経路が無効です。');
     }

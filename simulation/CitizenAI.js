@@ -169,6 +169,9 @@ function chooseRoute(world, citizen, store, population) {
         if (goal && travel(world, citizen, goal, 'farm', farm.id)) return;
       }
     }
+    if (citizen.profession === 'adventurer' && !active && !campaign &&
+        citizen.inventory.food === 0 && available(store, 'food') < population &&
+        storageRoom(store, 'food', foodTarget) > 0 && routeDroughtForager(world, citizen, store)) return;
     const candidates = (jobs[citizen.profession] ?? []).filter(key =>
       storageRoom(store, key, foodTarget) > 0 && available(store, key) < (key === 'food' ? population * FOOD_TARGET_PER_PERSON : key === 'wood' ? 24 : 12));
     candidates.sort((a, b) => available(store, a) - available(store, b));
@@ -196,6 +199,28 @@ function chooseRoute(world, citizen, store, population) {
   const { x, y } = world.settlements.find(s => s.id === citizen.settlementId) ?? citizen.lastKnownSafeTile;
   const offset = () => Math.floor(random(world.rngState) * (2 * WANDER_RADIUS + 1)) - WANDER_RADIUS;
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
+}
+
+function routeDroughtForager(world, citizen, store) {
+  const settlementId = citizen.settlementId;
+  if (world.citizens.some(c => c.alive && c.settlementId === settlementId && c.action.droughtForageId)) return false;
+  const field = world.buildings.find(b => b.settlementId === settlementId &&
+    b.droughtCommandId && b.harvestAt > world.worldTimeTick);
+  if (!field) return false;
+
+  const origin = tileOf(citizen);
+  const depot = storeTile(world, store);
+  const claimed = new Set(world.citizens.filter(c => c.alive &&
+    ['forage', 'gather'].includes(c.action.kind)).map(c => c.action.targetId));
+  const sources = world.resourceNodes.filter(node => node.resource === 'food' && !node.dropped &&
+    node.quantity > 0 && tileDistance(depot, node) <= 12 && !claimed.has(node.id))
+    .sort((a, b) => tileDistance(origin, a) - tileDistance(origin, b));
+  for (const source of sources) {
+    if (!travel(world, citizen, source, 'gather', source.id)) continue;
+    citizen.action.droughtForageId = field.droughtCommandId;
+    return true;
+  }
+  return false;
 }
 
 function blessedFarmFirst(a, b) {
@@ -416,10 +441,19 @@ function perform(world, citizen, store, ticks, population) {
     action.progress += ticks;
     if (action.progress < GATHER_TICKS) return;
     const node = world.resourceNodes.find(n => n.id === action.targetId);
-    if (node && !isQuestCargo(world, node) && harvest(world, citizen, node) &&
-        action.kind === 'forage' && citizen.hunger >= NEEDS.eat) {
-      citizen.inventory.food--;
-      citizen.hunger = Math.max(0, citizen.hunger - FOOD_HUNGER_RESTORED);
+    if (node && !isQuestCargo(world, node) && harvest(world, citizen, node)) {
+      if (action.kind === 'forage' && citizen.hunger >= NEEDS.eat) {
+        citizen.inventory.food--;
+        citizen.hunger = Math.max(0, citizen.hunger - FOOD_HUNGER_RESTORED);
+      }
+      if (action.droughtForageId) {
+        const id = action.droughtForageId;
+        const drought = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
+        emitOnce(world, JSON.stringify([id, citizen.settlementId]), 'droughtFoodForaged', {
+          causeEventId: drought?.id, settlementId: citizen.settlementId, nationId: citizen.nationId,
+          actorIds: [citizen.id], x: node.x, y: node.y, quantity: citizen.inventory.food
+        });
+      }
     }
     if (store && node && citizen.inventory[node.resource] && travel(world, citizen, storeTile(world, store), 'haul', store.id)) return;
   }

@@ -208,3 +208,36 @@ test('frost is recorded in the history of the nation that owns the affected tile
   assert.ok(event?.affectedNodeIds.includes(wild.id));
   assert.equal(historyFor(world, 'nation', 'nation:2').length, 0);
 });
+
+test('a drought sends one available adventurer to gather real food and links that response after reload', async () => {
+  const { GATHER_TICKS } = await import('../data/balance.js');
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const world = createWorld('drought-forage');
+  world.map.terrain.fill('grass');
+  const store = world.stockpiles[0];
+  store.total.food = 0;
+  const farm = { id: 'building:2', kind: 'farm', settlementId: store.settlementId, x: 39, y: 39,
+    width: 2, height: 2, capacity: 0, completedAt: 0 };
+  world.buildings.push(farm);
+  world.idCounters.building = 3;
+
+  const actor = world.citizens.find(citizen => citizen.profession === 'adventurer');
+  const node = world.resourceNodes.find(item => item.resource === 'food');
+  Object.assign(node, { x: store.x + 1, y: store.y });
+  actor.lastKnownSafeTile = { x: node.x, y: node.y };
+  actor.x = node.x + 0.5;
+  actor.y = node.y + 0.5;
+  for (const citizen of world.citizens) citizen.decisionAt = citizen === actor ? 0 : TIME_TICKS_PER_DAY;
+  const previousQuantity = node.quantity;
+  assert.equal(applyGodCommand(world, command('drought-response', 'disaster', farm, 'drought')), null);
+  updateCitizens(world, 1);
+  assert.equal(actor.action.droughtForageId, 'drought-response');
+
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  updateCitizens(restored, GATHER_TICKS);
+  const response = restored.events.find(event => event.type === 'droughtFoodForaged');
+  assert.equal(response.causeEventId, restored.events.find(event => event.value === 'drought').id);
+  assert.deepEqual(response.actorIds, [actor.id]);
+  assert.equal(restored.resourceNodes.find(item => item.id === node.id).quantity, previousQuantity - response.quantity);
+  assert.equal(restored.citizens.find(citizen => citizen.id === actor.id).inventory.food, response.quantity);
+});
