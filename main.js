@@ -227,9 +227,18 @@ get('file').addEventListener('change', async event => {
     const next = await readSnapshot(await file.text());
     if (request !== loadRequest) return;
     replaceWorld(next);
-    get('status').textContent = 'セーブを読み込みました';
   } catch (error) {
     if (request === loadRequest) get('status').textContent = `読込失敗：${error.message}`;
+    return;
+  }
+  lastBackup = performance.now();
+  try {
+    await keepGeneration(createSnapshot(world, camera));
+    if (request === loadRequest) get('status').textContent = 'セーブを読み込みました';
+  } catch (error) {
+    if (request === loadRequest) {
+      get('status').textContent = `セーブを読み込みました。ブラウザ内保存失敗：${error.message}`;
+    }
   }
 });
 

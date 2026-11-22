@@ -122,6 +122,17 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await poll(async () => (await evaluate(canvasImage)) !== beforeOverviewJump);
     await evaluate("document.querySelector('#overview-toggle').click()");
 
+    await evaluate(`(async () => {
+      const { createWorld } = await import('/engine/World.js');
+      const { createSnapshot } = await import('/systems/SaveManager.js');
+      const { openSaveStorage, writeGeneration } = await import('/systems/SaveStorage.js');
+      const database = await openSaveStorage();
+      try {
+        await writeGeneration(database, await createSnapshot(createWorld('previous-browser-save')));
+      } finally {
+        database.close();
+      }
+    })()`);
     await evaluate("document.querySelector('#seed').value = 'new-seed'; document.querySelector('form').requestSubmit()");
     const { root } = await send('DOM.getDocument');
     const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#file' });
@@ -129,6 +140,10 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await poll(() => evaluate("document.querySelector('#status').textContent === 'セーブを読み込みました'"));
     assert.equal(await evaluate("document.querySelector('#clock').textContent"), paused);
     assert.equal(await evaluate("document.querySelector('#seed').value"), 'world-tree');
+    await send('Page.reload');
+    await poll(() => evaluate("document.querySelector('#status')?.textContent === 'ブラウザのセーブを復元しました'"));
+    assert.equal(await evaluate("document.querySelector('#seed').value"), 'world-tree');
+    assert.equal(await evaluate("document.querySelector('#clock').textContent"), paused);
 
     const generations = await evaluate(`(async () => {
       const { createSnapshot } = await import('/systems/SaveManager.js');

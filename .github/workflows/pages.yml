@@ -41,7 +41,7 @@ jobs:
         env:
           CHROMIUM: google-chrome
   deploy:
-    needs: build
+    needs: [build, browser]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
