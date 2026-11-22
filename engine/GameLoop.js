@@ -13,6 +13,7 @@ import { updateFoodAid } from '../simulation/FoodAid.js';
 import { updateAlliances } from '../simulation/Diplomacy.js';
 import { updateTrade } from '../simulation/Trade.js';
 import { recordSettlements } from '../simulation/SettlementRecords.js';
+import { updateWeather } from '../simulation/Weather.js';
 import { updatePopulation } from '../simulation/Population.js';
 
 export function advanceFrame(world, elapsedMs, hidden = false, camera) {
@@ -35,6 +36,7 @@ export function advanceFrame(world, elapsedMs, hidden = false, camera) {
         produceMiningTools(world);
         prepareArcaneGear(world);
         installArcaneIrrigation(world);
+        updateWeather(world);
         recordSettlements(world);
         updateAlliances(world);
         updateFoodAid(world);

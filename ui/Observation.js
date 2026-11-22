@@ -34,7 +34,7 @@ const events = {
   arcaneIrrigationInstalled: '農地に魔導灌漑を設置',
   constructionCompleted: '施設が完成', foodShortage: '集落で食料難', foodRecovered: '集落の食料備蓄が回復', foodAidDelivered: '同じ国の集落から食料が到着', monsterDefeated: '魔物を討伐', monsterThreat: '集落に魔物が接近', monsterPredation: '魔物が別の魔物を捕食', monsterNestFounded: '魔物の巣ができた', monsterNestRelocated: '魔物の群れが巣を移した', monsterNestCleared: '魔物の巣を攻略', cooperativeExpedition: '協力遠征に出発', supplyRecoveryDeparted: '物資回収に出発', supplyRecoveryReturned: '物資回収隊が帰還', borderFriction: '国境摩擦',
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
-  settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', blessedFarmHarvested: '豊穣の祝福を受けた畑で収穫', droughtHarvestRecovered: '干ばつ後に収穫を再開', droughtFoodForaged: '干ばつに備えて野生食料を採集', founding: '建国', leaderSucceeded: '指導者が交代',
+  settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', blessedFarmHarvested: '豊穣の祝福を受けた畑で収穫', seasonalDrought: '夏の日照りで収穫が遅れる', droughtHarvestRecovered: '干ばつ後に収穫を再開', droughtFoodForaged: '干ばつに備えて野生食料を採集', founding: '建国', leaderSucceeded: '指導者が交代',
   miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', miningToolsDispatched: '採掘道具を別の集落へ出荷', miningToolsIssued: '鉱夫が鋼鉄の採掘道具を受け取った', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
   alliedDefenseMobilized: '防衛協定により同盟国が参戦', warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   campaignRationsRecovered: '遠征の残り兵糧を回収',
@@ -47,7 +47,7 @@ const eventGroups = {
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestRelocated', 'monsterNestCleared',
     'cooperativeExpedition', 'supplyRecoveryReturned', 'resourceSurveyReturned', 'tradeEscortRequested', 'tradeEscortReturned', 'tradeEscortClash', 'tradeEscortSpell', 'manaVeinDiscovered', 'adventurerRankUp', 'combatLevelUp', 'adventurerEquipped', 'frontierDiscovered'],
   science: ['research_unlocked', 'civilizationAdvanced'],
-  god: ['god_intervention', 'blessedFarmHarvested', 'frostRecovered', 'droughtHarvestRecovered', 'droughtFoodForaged', 'communityObservance']
+  god: ['god_intervention', 'blessedFarmHarvested', 'seasonalDrought', 'frostRecovered', 'droughtHarvestRecovered', 'droughtFoodForaged', 'communityObservance']
 };
 const relatedEventKey = event => event.questId ??
   (event.sourceTransactionId?.startsWith('campaign:') ? event.sourceTransactionId : undefined);
@@ -323,9 +323,9 @@ export function observation(getWorld, getCamera, focus) {
         for (const change of changes) showEvent(world, change);
       }
       const responses = world.events.filter(event => (event.type === 'blessedFarmHarvested' ||
-        event.type === 'droughtHarvestRecovered' || event.type === 'droughtFoodForaged') && event.settlementId === settlement.id).slice(-3).reverse();
+        event.type === 'droughtHarvestRecovered' || event.type === 'droughtFoodForaged' || event.type === 'seasonalDrought') && event.settlementId === settlement.id).slice(-3).reverse();
       if (responses.length) {
-        add(body, 'h4', '神の介入後の食料調達');
+        add(body, 'h4', '祝福・災害と食料調達');
         for (const response of responses) showEvent(world, response);
       }
       const center = add(body, 'button', '地図で見る');

@@ -251,20 +251,23 @@ function harvestFarm(world, farm, farmer, store) {
   const quantity = farmYield(world, farm, farmer);
   if (farm.droughtCommandId) {
     const id = farm.droughtCommandId;
-    const drought = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
+    const drought = world.events.find(e => e.sourceTransactionId === id && (e.type === 'god_intervention' || e.type === 'seasonalDrought'));
     const settlement = world.settlements.find(s => s.id === farm.settlementId);
     const foodBeforeDrought = drought?.foodBeforeDrought?.[farm.settlementId];
-    emitOnce(world, JSON.stringify([id, farm.id]), 'droughtHarvestRecovered', {
+    const recorded = emitOnce(world, JSON.stringify([id, farm.id]), 'droughtHarvestRecovered', {
       causeEventId: drought?.id, buildingId: farm.id, settlementId: farm.settlementId,
       nationId: settlement?.nationId, actorIds: [farmer.id], x: farm.x, y: farm.y,
       quantity, ...(store && { foodBeforeHarvest: available(store, 'food') }),
       ...(foodBeforeDrought !== undefined && { foodBeforeDrought })
     });
+    if (recorded && drought?.type === 'seasonalDrought') {
+      rememberRecovery(world, settlement, world.events.at(-1), 'scarcity');
+    }
     delete farm.droughtCommandId;
   }
   if (farm.fertilityCommandId) {
     const id = farm.fertilityCommandId;
-    const blessing = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
+    const blessing = world.events.find(e => e.sourceTransactionId === id && (e.type === 'god_intervention' || e.type === 'seasonalDrought'));
     const nationId = world.settlements.find(s => s.id === farm.settlementId)?.nationId;
     const recorded = emitOnce(world, JSON.stringify([id, farm.id]), 'blessedFarmHarvested', {
       causeEventId: blessing?.id, buildingId: farm.id, settlementId: farm.settlementId,
@@ -461,7 +464,7 @@ function perform(world, citizen, store, ticks, population) {
       }
       if (action.droughtForageId) {
         const id = action.droughtForageId;
-        const drought = world.events.find(e => e.sourceTransactionId === id && e.type === 'god_intervention');
+        const drought = world.events.find(e => e.sourceTransactionId === id && (e.type === 'god_intervention' || e.type === 'seasonalDrought'));
         emitOnce(world, JSON.stringify([id, citizen.settlementId]), 'droughtFoodForaged', {
           causeEventId: drought?.id, settlementId: citizen.settlementId, nationId: citizen.nationId,
           actorIds: [citizen.id], x: node.x, y: node.y, quantity: citizen.inventory.food

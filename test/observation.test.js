@@ -274,3 +274,36 @@ test('a drought sends one available adventurer to gather real food and links tha
   assert.equal(restored.resourceNodes.find(item => item.id === node.id).quantity, previousQuantity - response.quantity);
   assert.equal(restored.citizens.find(citizen => citizen.id === actor.id).inventory.food, response.quantity);
 });
+
+test('summer drought delays an unprotected farm and its recovery establishes a local observance', async () => {
+  const { TIME_TICKS_PER_YEAR } = await import('../data/balance.js');
+  const { seedState } = await import('../engine/random.js');
+  const { updateWeather } = await import('../simulation/Weather.js');
+  const { updateCitizens } = await import('../simulation/CitizenAI.js');
+  const world = createWorld('weather-observance');
+  const settlement = world.settlements[0];
+  world.map.terrain.fill('grass');
+  const farm = { id: 'building:2', kind: 'farm', settlementId: settlement.id, x: 35, y: 35,
+    width: 2, height: 2, capacity: 0, completedAt: 0 };
+  const protectedFarm = { ...farm, id: 'building:3', x: 48, arcaneIrrigation: true };
+  world.buildings.push(farm, protectedFarm);
+  world.idCounters.building = 4;
+  let year = 1;
+  while (seedState(JSON.stringify([world.seed, year, 'summer-drought']))[0] % 3 !== 0) year++;
+  world.worldTimeTick = year * TIME_TICKS_PER_YEAR + 18 * TIME_TICKS_PER_DAY;
+
+  updateWeather(world);
+  updateWeather(world);
+  const droughts = world.events.filter(event => event.type === 'seasonalDrought');
+  assert.equal(droughts.length, 1);
+  assert.ok(farm.harvestAt > world.worldTimeTick);
+  assert.equal(protectedFarm.harvestAt, undefined);
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.worldTimeTick = farm.harvestAt + 24;
+  const farmer = restored.citizens.find(citizen => citizen.profession === 'farmer');
+  farmer.action = { kind: 'farm', phase: 'perform', targetId: farm.id, startedAt: 0, progress: 0 };
+  updateCitizens(restored, 12);
+  const recovery = restored.events.find(event => event.type === 'droughtHarvestRecovered');
+  assert.equal(recovery.causeEventId, droughts[0].id);
+  assert.equal(restored.settlements[0].observances[0].originEventId, recovery.id);
+});
