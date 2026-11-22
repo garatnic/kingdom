@@ -20,12 +20,20 @@ export function updateAlliances(world) {
   const now = world.worldTimeTick;
   const lookback = 90 * TIME_TICKS_PER_DAY;
   const exchanges = new Map();
+  const envoyVisits = new Map();
   for (const event of world.events) {
-    if (!['internationalTradeCompleted', 'foreignFoodAidDelivered'].includes(event.type) ||
-        event.worldTimeTick < now - lookback || event.nationIds?.length !== 2) continue;
-    const key = [...event.nationIds].sort().join('/');
-    const count = exchanges.get(key) ?? 0;
-    exchanges.set(key, count + 1);
+    if (event.worldTimeTick < now - lookback || event.nationIds?.length !== 2) continue;
+    if (event.type === 'internationalTradeCompleted' || event.type === 'foreignFoodAidDelivered') {
+      const key = [...event.nationIds].sort().join('/');
+      exchanges.set(key, (exchanges.get(key) ?? 0) + 1);
+    } else if (world.settings.alliedIntervention) {
+      if (event.type === 'pactEnvoyArrived') {
+        const key = [...event.nationIds].sort().join('/');
+        envoyVisits.set(key, (envoyVisits.get(key) ?? 0) + 1);
+      } else if (['borderFriction', 'allianceEnded', 'friendshipReached', 'warDeclared'].includes(event.type)) {
+        envoyVisits.delete([...event.nationIds].sort().join('/'));
+      }
+    }
   }
 
   for (const [index, first] of world.nations.entries()) {
@@ -33,11 +41,13 @@ export function updateAlliances(world) {
       const key = [first.id, second.id].sort().join('/');
       const friendly = friendlyNations(world, first, second);
       const since = first.alliances?.[second.id];
+      const throughExchange = (exchanges.get(key) ?? 0) >= 2;
+      const throughEnvoys = (envoyVisits.get(key) ?? 0) >= 3;
       if (since !== undefined && !friendly) {
         delete first.alliances[second.id];
         delete second.alliances[first.id];
         emitOnce(world, `${key}/${since}`, 'allianceEnded', { nationIds: [first.id, second.id] });
-      } else if (since === undefined && friendly && (exchanges.get(key) ?? 0) >= 2) {
+      } else if (since === undefined && friendly && (throughExchange || throughEnvoys)) {
         // Let the previous exchange window expire before the pair can form another pact.
         const ended = world.events.findLast(event => event.type === 'allianceEnded' &&
           event.nationIds.includes(first.id) && event.nationIds.includes(second.id));
@@ -47,7 +57,8 @@ export function updateAlliances(world) {
         first.alliances[second.id] = second.alliances[first.id] = now;
         const capital = world.settlements.find(settlement => settlement.id === first.capitalId);
         emitOnce(world, `${key}/${now}`, 'allianceFormed', {
-          nationIds: [first.id, second.id], x: capital.x, y: capital.y
+          nationIds: [first.id, second.id], x: capital.x, y: capital.y,
+          ...(throughEnvoys && !throughExchange && { basis: 'envoys' })
         });
       }
     }

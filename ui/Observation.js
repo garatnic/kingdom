@@ -17,6 +17,7 @@ const events = {
   allianceFormed: '防衛協定を締結', allianceEnded: '防衛協定を解消',
   internationalTradeCompleted: '友好国間で物資を交換', internationalTradeReturning: '国際交易の荷を返送',
   internationalTradeReturned: '国際交易の荷が発送元へ戻った',
+  pactEnvoyArrived: '友好国の使節が到着',
   friendshipReached: '国家間の友好が成立',
   aidReturning: '援助物資の返送を開始', aidReturned: '援助物資が発送元へ戻った',
   foreignFoodAidDelivered: '友好国から食料援助が到着',
@@ -36,7 +37,7 @@ const events = {
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
-  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'alliedDefenseMobilized', 'fieldBattle', 'siegeStarted',
+  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'pactEnvoyArrived', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'alliedDefenseMobilized', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'campaignRationsRecovered', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
@@ -539,6 +540,7 @@ export function observation(getWorld, getCamera, focus) {
       const stock = event.foodAtShortage === undefined ? event.food : `${event.foodAtShortage} → ${event.food}`;
       if (stock !== undefined) title += `（備蓄 ${stock}）`;
     }
+    if (event.type === 'allianceFormed' && event.basis === 'envoys') title += '（使節交流）';
     if (event.type === 'campaignRationsRecovered') {
       title += `（倉庫 ${event.food}・地面 ${event.dropped}）`;
     }

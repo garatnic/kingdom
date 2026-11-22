@@ -1,4 +1,5 @@
 import { activeNations, truceBetween, updateWar } from './War.js';
+import { alliedNations, friendlyNations } from './Diplomacy.js';
 import { emitOnce } from '../systems/History.js';
 import { ADULT_AGE, FOOD_EMERGENCY_PER_PERSON, LAYOUT, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { buildings, footprint } from '../data/buildings.js';
@@ -243,7 +244,9 @@ function updateRelations(world) {
       if (truceBetween(world, first, second)) continue;
       const previous = first.relations[second.id] ?? 0;
       if (!crossing) {
-        if (!envoyDay || previous <= NATIONS.hostile || previous >= NATIONS.friendly ||
+        const pactVisit = envoyDay && previous >= NATIONS.friendly && world.settings.alliedIntervention &&
+          friendlyNations(world, first, second) && !alliedNations(world, first, second);
+        if (!envoyDay || previous <= NATIONS.hostile || (previous >= NATIONS.friendly && !pactVisit) ||
             (second.relations[first.id] ?? 0) <= NATIONS.hostile) continue;
         const a = capitals.get(first.capitalId);
         const b = capitals.get(second.capitalId);
@@ -252,6 +255,12 @@ function updateRelations(world) {
         if (!a || !b || !from || !to || a.foodWarning || b.foodWarning ||
             available(from, 'food') < 1 || available(to, 'food') < 1 ||
             findPath(world, origin(a, from), origin(b, to)) === null) continue;
+        if (pactVisit) {
+          emitOnce(world, `envoy/${world.worldTimeTick}/${key}`, 'pactEnvoyArrived', {
+            nationIds: [first.id, second.id], x: b.x, y: b.y
+          });
+          continue;
+        }
         const value = Math.min(NATIONS.friendly, previous + NATIONS.envoyRelationGain);
         first.relations[second.id] = second.relations[first.id] = value;
         if (value === NATIONS.friendly) {

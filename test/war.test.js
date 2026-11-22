@@ -537,6 +537,43 @@ test('a capital can exchange surplus reserves for a scarce good even if its part
   assert.deepEqual([trade.outgoing, trade.incoming, trade.outgoingQuantity], ['wood', 'manaStone', 2]);
 });
 
+test('friendly envoy visits can form a defense pact without cargo when intervention is enabled', async () => {
+  const { updateAlliances, alliedNations } = await import('../simulation/Diplomacy.js');
+  const { world, invader, defender, away } = twoNations();
+  for (const c of world.citizens.filter(c => c.nationId === defender.id)) {
+    c.lastKnownSafeTile = { x: away.x, y: away.y };
+    Object.assign(c, { x: away.x + 0.5, y: away.y + 0.5 });
+  }
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  const tick = (state, day) => {
+    state.worldTimeTick = day * TIME_TICKS_PER_DAY;
+    updateNations(state, 12);
+    updateAlliances(state);
+  };
+  tick(world, 10);
+  assert.ok(!world.events.some(e => e.type === 'pactEnvoyArrived'));
+  world.settings.alliedIntervention = true;
+  tick(world, 20);
+  tick(world, 30);
+  assert.equal(alliedNations(world, invader, defender), false);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  tick(saved, 40);
+  const [ally, partner] = saved.nations;
+  assert.equal(alliedNations(saved, ally, partner), true);
+  assert.equal(saved.events.find(e => e.type === 'allianceFormed')?.basis, 'envoys');
+  assert.equal(saved.events.filter(e => e.type === 'pactEnvoyArrived').length, 3);
+
+  const interrupted = structuredClone(world);
+  const { emitOnce } = await import('../systems/History.js');
+  interrupted.worldTimeTick = 35 * TIME_TICKS_PER_DAY;
+  emitOnce(interrupted, 'interrupted-contact', 'borderFriction', { nationIds: [invader.id, defender.id] });
+  tick(interrupted, 40);
+  tick(interrupted, 50);
+  assert.equal(alliedNations(interrupted, ...interrupted.nations), false);
+  tick(interrupted, 60);
+  assert.equal(alliedNations(interrupted, ...interrupted.nations), true);
+});
+
 test('an alliance survives reload, supplies a besieged partner and dissolves if friendship breaks', async () => {
   const { updateAlliances, alliedNations } = await import('../simulation/Diplomacy.js');
   const { updateFoodAid } = await import('../simulation/FoodAid.js');
