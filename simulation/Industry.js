@@ -45,17 +45,31 @@ export function produceMiningTools(world) {
   }
 }
 
+function irrigableFarm(world, store) {
+  const id = store.settlementId;
+  if (!unlocked(world, id, 'magic_2') || !unlocked(world, id, 'irrigation_1') ||
+      !world.buildings.some(b => b.kind === 'guild' && b.settlementId === id)) return;
+  const depot = storeTile(world, store);
+  return world.buildings.find(b => b.kind === 'farm' && b.settlementId === id &&
+    !b.arcaneIrrigation && workTile(world, depot, b));
+}
+
+const irrigationInputs = {
+  stone: TECH.arcaneIrrigationStone,
+  manaStone: TECH.arcaneIrrigationMana + TECH.arcaneIrrigationReserve
+};
+
+export function arcaneIrrigationDemand(world, store) {
+  return irrigableFarm(world, store) ? irrigationInputs : {};
+}
+
 export function installArcaneIrrigation(world) {
   for (const settlement of world.settlements) {
     const id = settlement.id;
-    if (!unlocked(world, id, 'magic_2') || !unlocked(world, id, 'irrigation_1') ||
-        !world.buildings.some(b => b.kind === 'guild' && b.settlementId === id)) continue;
     const store = world.stockpiles.find(s => s.settlementId === id);
-    if (!store || available(store, 'stone') < TECH.arcaneIrrigationStone ||
-        available(store, 'manaStone') < TECH.arcaneIrrigationMana + TECH.arcaneIrrigationReserve) continue;
-    const depot = storeTile(world, store);
-    const farm = world.buildings.find(b => b.kind === 'farm' && b.settlementId === id &&
-      !b.arcaneIrrigation && workTile(world, depot, b));
+    if (!store || available(store, 'stone') < irrigationInputs.stone ||
+        available(store, 'manaStone') < irrigationInputs.manaStone) continue;
+    const farm = irrigableFarm(world, store);
     if (!farm) continue;
     store.total.stone -= TECH.arcaneIrrigationStone;
     store.total.manaStone -= TECH.arcaneIrrigationMana;

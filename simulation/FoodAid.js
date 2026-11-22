@@ -1,4 +1,4 @@
-import { arcaneGearDemand, forgeMiningTools, miningToolRecipient, STEEL_TOOLS } from './Industry.js';
+import { arcaneGearDemand, arcaneIrrigationDemand, forgeMiningTools, miningToolRecipient, STEEL_TOOLS } from './Industry.js';
 import { gear } from '../data/combat.js';
 import { CONSTRUCTION_STORAGE_RESERVE, FOOD_BIRTH_PER_PERSON, FOOD_TARGET_PER_PERSON, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { alliedNations, friendlyNations } from './Diplomacy.js';
@@ -169,14 +169,22 @@ export function updateFoodAid(world) {
     }
   }
 
-  const arcaneNeeds = new Map(world.stockpiles.map(store => [store.settlementId, arcaneGearDemand(world, store)]));
+  const arcaneNeeds = new Map(world.stockpiles.map(store => {
+    const gearNeeds = arcaneGearDemand(world, store);
+    const farmNeeds = arcaneIrrigationDemand(world, store);
+    return [store.settlementId, {
+      iron: gearNeeds.iron ?? 0, stone: farmNeeds.stone ?? 0,
+      manaStone: Math.max(gearNeeds.manaStone ?? 0, farmNeeds.manaStone ?? 0)
+    }];
+  }));
   for (const destination of world.settlements) {
     const residents = population.get(destination.id);
     if (!residents || destination.foodWarning || !destination.nationId || destination.materialAid) continue;
     const to = stores.get(destination.id);
     const demand = { ...projectNeeds.get(destination.id) };
     demand.iron = Math.max(demand.iron ?? 0, industrialNeeds.get(destination.id) ?? 0, arcaneNeeds.get(destination.id).iron ?? 0);
-    demand.manaStone = arcaneNeeds.get(destination.id).manaStone ?? 0;
+    demand.stone = Math.max(demand.stone ?? 0, arcaneNeeds.get(destination.id).stone);
+    demand.manaStone = arcaneNeeds.get(destination.id).manaStone;
     for (const [resource, target] of Object.entries(demand)) {
       const needed = Math.min(target - available(to, resource), storageRoom(to, resource, residents * FOOD_TARGET_PER_PERSON));
       if (needed <= 0) continue;

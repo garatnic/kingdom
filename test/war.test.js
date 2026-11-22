@@ -897,3 +897,41 @@ test('steel tools ship from a smithy, survive reload, and equip once or return a
   assert.equal(returning.stockpiles[0].total.iron, 3);
   assert.equal(returning.stockpiles[1].steelTools, undefined);
 });
+
+test('a guild receives missing domestic inputs to install arcane irrigation', async () => {
+  const { updateFoodAid } = await import('../simulation/FoodAid.js');
+  const { installArcaneIrrigation } = await import('../simulation/Industry.js');
+  const { ensureResearch } = await import('../simulation/Research.js');
+  const { world, invader, defender, away, homeStore } = twoNations();
+  away.nationId = invader.id;
+  invader.settlementIds.push(away.id);
+  Object.assign(defender, { capitalId: null, settlementIds: [], fallenAt: 0 });
+  for (const citizen of world.citizens.filter(c => c.settlementId === away.id)) citizen.nationId = invader.id;
+  const store = world.stockpiles[1];
+  store.capacity += 20;
+  Object.assign(store.total, { food: 8, stone: 0, manaStone: 5 });
+  homeStore.capacity += 20;
+  Object.assign(homeStore.total, { stone: 16, manaStone: 6 });
+  const field = { id: nextId(world, 'building'), kind: 'farm', settlementId: away.id,
+    x: 16, y: 16, width: 2, height: 2, completedAt: 0 };
+  world.buildings.push(field, { id: nextId(world, 'building'), kind: 'guild', settlementId: away.id,
+    x: 19, y: 16, width: 2, height: 2, completedAt: 0 });
+  ensureResearch(world, invader, ['magic_2', 'irrigation_1']);
+  installArcaneIrrigation(world);
+  assert.equal(field.arcaneIrrigation, undefined);
+
+  updateFoodAid(world);
+  assert.equal(away.materialAid.resource, 'stone');
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const destination = saved.settlements[1];
+  saved.worldTimeTick = destination.materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(saved);
+  assert.equal(destination.materialAid.resource, 'manaStone');
+  saved.worldTimeTick = destination.materialAid.arrivalDay * TIME_TICKS_PER_DAY;
+  updateFoodAid(saved);
+  installArcaneIrrigation(saved);
+  installArcaneIrrigation(saved);
+  assert.equal(saved.buildings.find(b => b.id === field.id).arcaneIrrigation, true);
+  assert.equal(saved.stockpiles[1].total.manaStone, 5);
+  assert.equal(saved.events.filter(event => event.type === 'arcaneIrrigationInstalled').length, 1);
+});
