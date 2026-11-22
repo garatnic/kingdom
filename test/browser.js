@@ -343,7 +343,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       const { TIME_TICKS_PER_YEAR } = await import('/data/balance.js');
       const { createSnapshot } = await import('/systems/SaveManager.js');
       const { emitOnce, trimHistory } = await import('/systems/History.js');
-      const world = createWorld('dense-browser-test', { mixedFamilies: true });
+      const world = createWorld('dense-browser-test', { mixedFamilies: true, alliedIntervention: true });
       const [resident, former, parent, sibling] = world.citizens;
       resident.birthWorldTimeTick = sibling.birthWorldTimeTick = -20 * TIME_TICKS_PER_YEAR;
       parent.birthWorldTimeTick = -36 * TIME_TICKS_PER_YEAR;
@@ -387,6 +387,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     })()`);
     await poll(() => evaluate("document.querySelector('#population').textContent === '住民 300人'"));
     assert.equal(await evaluate("document.querySelector('#mixed-families').checked"), true);
+    assert.equal(await evaluate("document.querySelector('#allied-intervention').checked"), true);
     const denseClock = await evaluate("document.querySelector('#clock').textContent");
     const denseFps = await evaluate(`new Promise(resolve => {
       const start = performance.now();

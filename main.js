@@ -120,6 +120,7 @@ function replaceWorld(next) {
   lastTime = null;
   get('seed').value = world.seed;
   get('mixed-families').checked = world.settings.mixedFamilies === true;
+  get('allied-intervention').checked = world.settings.alliedIntervention === true;
   showState();
 }
 
@@ -130,7 +131,8 @@ get('speeds').addEventListener('click', event => {
 get('new-world').addEventListener('submit', event => {
   event.preventDefault();
   loadRequest++;
-  replaceWorld(createWorld(get('seed').value, { mixedFamilies: get('mixed-families').checked }));
+  replaceWorld(createWorld(get('seed').value, { mixedFamilies: get('mixed-families').checked,
+    alliedIntervention: get('allied-intervention').checked }));
   get('status').textContent = '新しい世界を生成しました';
 });
 document.addEventListener('visibilitychange', () => { lastTime = null; });

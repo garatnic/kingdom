@@ -62,6 +62,55 @@ test('hostile nations send real citizens, occupying and inheriting ownership wit
   assert.deepEqual(await readSnapshot(JSON.stringify(await createSnapshot(world))), world);
 });
 
+test('opt-in allied intervention uses an ordinary front and withdraws when the pact ends', async () => {
+  const { world, invader, defender, away, homeStore } = twoNations();
+  const home = { id: nextId(world, 'settlement'), x: 37, y: 32 };
+  const ally = { ...defender, id: nextId(world, 'nation'), name: 'East', capitalId: home.id,
+    settlementIds: [home.id], leaderId: null, relations: { [defender.id]: 60 }, alliances: { [defender.id]: 0 } };
+  defender.relations[ally.id] = 60;
+  defender.alliances = { [ally.id]: 0 };
+  home.nationId = ally.id;
+  world.nations.push(ally);
+  world.settlements.push(home);
+  const reserve = { ...structuredClone(homeStore), id: nextId(world, 'stockpile'), settlementId: home.id, x: 37, y: 32 };
+  world.stockpiles.push(reserve);
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'barracks', settlementId: home.id, x: 39, y: 32 });
+  for (const citizen of world.citizens.slice(5, 9)) {
+    Object.assign(citizen, { nationId: ally.id, settlementId: home.id, homeBuildingId: null });
+  }
+  updateWar(world);
+  const [siege] = world.campaigns;
+  for (const citizen of world.citizens.filter(c => siege.memberIds.includes(c.id))) {
+    citizen.lastKnownSafeTile = { x: siege.x, y: siege.y };
+  }
+  siege.arrivedIds = [...siege.memberIds];
+  siege.status = 'siege';
+  assert.equal(siege.settlementId, away.id);
+  updateWar(world);
+  assert.equal(world.campaigns.length, 1);
+
+  world.settings.alliedIntervention = true;
+  ally.relations[invader.id] = invader.relations[ally.id] = 60;
+  updateWar(world);
+  assert.equal(world.campaigns.length, 1);
+  ally.relations[invader.id] = invader.relations[ally.id] = 0;
+  siege.occupationDays = 0;
+  updateWar(world);
+  const [, relief] = world.campaigns;
+  assert.equal(relief.attackerId, ally.id);
+  assert.equal(relief.defenderId, invader.id);
+  assert.equal(relief.supportsCampaignId, siege.id);
+  assert.equal(reserve.total.food, 28);
+  assert.deepEqual(world.events.find(e => e.type === 'alliedDefenseMobilized').nationIds, [ally.id, invader.id, defender.id]);
+
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  restored.nations.find(n => n.id === defender.id).relations[ally.id] = 0;
+  updateWar(restored);
+  assert.equal(restored.campaigns.length, 2);
+  assert.equal(restored.campaigns[1].cancelled, true);
+  assert.equal(restored.stockpiles.find(s => s.settlementId === home.id).total.food, 52);
+});
+
 test('a failed campaign establishes a bilateral truce that expires after ten days', async () => {
   const { world, invader, defender } = twoNations();
   updateWar(world);

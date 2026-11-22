@@ -1,5 +1,6 @@
 import { ADULT_AGE, TIME_TICKS_PER_DAY } from '../data/balance.js';
 import { emitOnce } from '../systems/History.js';
+import { alliedNations, friendlyNations } from './Diplomacy.js';
 import { available, freeCapacity, storeTile } from './Economy.js';
 import { ageYears, nextId } from './Identity.js';
 import { unlocked } from './Research.js';
@@ -28,7 +29,7 @@ export function invasionOrder(world, citizen) {
   return campaign?.status === 'marching' && !campaign.arrivedIds.includes(citizen.id) ? campaign : null;
 }
 
-function startCampaign(world, attacker, defender) {
+function startCampaign(world, attacker, defender, supportedFront) {
   const target = world.settlements.find(s => s.id === defender.capitalId);
   const destination = world.stockpiles.find(p => p.settlementId === target.id);
   const home = world.stockpiles.find(p => p.settlementId === attacker.capitalId);
@@ -51,11 +52,14 @@ function startCampaign(world, attacker, defender) {
 
   const campaign = { id: nextId(world, 'campaign'), attackerId: attacker.id, defenderId: defender.id,
     settlementId: target.id, supplySettlementId: home.settlementId, ...goal, memberIds: team.map(c => c.id), arrivedIds: [],
-    rations: provisions, status: 'marching', beganAt: world.worldTimeTick, siegeDays: 0, occupationDays: 0 };
+    rations: provisions, status: 'marching', beganAt: world.worldTimeTick, siegeDays: 0, occupationDays: 0,
+    ...(supportedFront && { supportsCampaignId: supportedFront.id }) };
   world.campaigns ??= [];
   world.campaigns.push(campaign);
   home.total.food -= provisions;
-  emitOnce(world, campaign.id, 'warDeclared', { x: goal.x, y: goal.y, nationIds: [attacker.id, defender.id], actorIds: campaign.memberIds });
+  const nationIds = supportedFront ? [attacker.id, defender.id, supportedFront.defenderId] : [attacker.id, defender.id];
+  emitOnce(world, campaign.id, supportedFront ? 'alliedDefenseMobilized' : 'warDeclared',
+    { x: goal.x, y: goal.y, nationIds, actorIds: campaign.memberIds });
   return campaign;
 }
 
@@ -189,11 +193,26 @@ export function updateWar(world) {
   const outgoing = new Map();
   for (const { attackerId } of fronts) outgoing.set(attackerId, (outgoing.get(attackerId) ?? 0) + 1);
   const incoming = new Set(fronts.map(c => c.defenderId));
+  const defenseEnded = campaign => {
+    if (!campaign.supportsCampaignId) return false;
+    const supported = fronts.find(front => front.id === campaign.supportsCampaignId);
+    if (supported?.status !== 'siege') return true;
+    const beneficiary = nationsById.get(supported.defenderId);
+    return beneficiary.fallenAt !== undefined ||
+      world.settlements.find(s => s.id === supported.settlementId)?.nationId !== beneficiary.id ||
+      !alliedNations(world, nationsById.get(campaign.attackerId), beneficiary);
+  };
   const invalid = campaign => nationsById.get(campaign.attackerId).fallenAt !== undefined ||
     nationsById.get(campaign.defenderId).fallenAt !== undefined ||
-    world.settlements.find(s => s.id === campaign.settlementId)?.nationId !== campaign.defenderId;
-  for (const campaign of fronts) {
-    if (!invalid(campaign)) updateCampaign(world, campaign, nationsById.get(campaign.attackerId), nationsById.get(campaign.defenderId));
+    world.settlements.find(s => s.id === campaign.settlementId)?.nationId !== campaign.defenderId ||
+    defenseEnded(campaign);
+  // Resolve the siege first so an ally cannot capture a capital after its reason to intervene ends.
+  for (const supported of [false, true]) {
+    for (const campaign of fronts) {
+      if (Boolean(campaign.supportsCampaignId) === supported && !invalid(campaign)) {
+        updateCampaign(world, campaign, nationsById.get(campaign.attackerId), nationsById.get(campaign.defenderId));
+      }
+    }
   }
   for (const campaign of fronts) {
     if ((campaign.status !== 'marching' && campaign.status !== 'siege') || !invalid(campaign)) continue;
@@ -207,6 +226,19 @@ export function updateWar(world) {
     });
   }
   const nations = activeNations(world);
+  const canOpenFront = (attacker, defender) => {
+    if ((outgoing.get(attacker.id) ?? 0) >= WAR.offensiveLimit || incoming.has(defender.id) ||
+        fronts.some(c => samePair(c, attacker, defender)) || truceBetween(world, attacker, defender) ||
+        world.campaigns?.some(c => (c.status === 'marching' || c.status === 'siege') && samePair(c, attacker, defender))) return false;
+    const last = world.campaigns?.findLast(c => samePair(c, attacker, defender));
+    return last?.status !== 'occupied' || world.worldTimeTick - last.endedAt >= WAR.truceDays * TIME_TICKS_PER_DAY;
+  };
+  const openFront = (attacker, defender, supportedFront) => {
+    if (!canOpenFront(attacker, defender) || !startCampaign(world, attacker, defender, supportedFront)) return false;
+    outgoing.set(attacker.id, (outgoing.get(attacker.id) ?? 0) + 1);
+    incoming.add(defender.id);
+    return true;
+  };
   const opponents = [];
   for (const [index, first] of nations.entries()) {
     for (const second of nations.slice(index + 1)) {
@@ -216,19 +248,23 @@ export function updateWar(world) {
   }
   opponents.sort((a, b) => a.relation - b.relation);
   for (const { first, second } of opponents) {
-    if (fronts.some(c => samePair(c, first, second)) || truceBetween(world, first, second)) continue;
-    const last = world.campaigns?.findLast(c => samePair(c, first, second));
-    if (last?.status === 'occupied' && world.worldTimeTick - last.endedAt < WAR.truceDays * TIME_TICKS_PER_DAY) continue;
     const attackers = [first, second].sort((a, b) => b.weights.defense - a.weights.defense);
     for (const candidate of attackers) {
       const defender = candidate === first ? second : first;
-      const attacks = outgoing.get(candidate.id) ?? 0;
-      if (attacks >= WAR.offensiveLimit || incoming.has(defender.id)) continue;
-      if (startCampaign(world, candidate, defender)) {
-        outgoing.set(candidate.id, attacks + 1);
-        incoming.add(defender.id);
-        break;
-      }
+      if (openFront(candidate, defender)) break;
+    }
+  }
+
+  if (!world.settings.alliedIntervention) return;
+  for (const front of fronts) {
+    if (front.status !== 'siege' || front.supportsCampaignId || invalid(front) ||
+        world.campaigns.some(c => c.supportsCampaignId === front.id)) continue;
+    const aggressor = nationsById.get(front.attackerId);
+    const beneficiary = nationsById.get(front.defenderId);
+    for (const ally of nations) {
+      if (ally.id === aggressor.id || !alliedNations(world, ally, beneficiary) ||
+          friendlyNations(world, ally, aggressor)) continue;
+      if (openFront(ally, aggressor, front)) break;
     }
   }
 }

@@ -6,7 +6,7 @@ const importance = {
   constructionCompleted: 2, foodShortage: 2, foodRecovered: 2, frostRecovered: 2, droughtHarvestRecovered: 2, foodAidDelivered: 2, foreignFoodAidDelivered: 2, materialAidDelivered: 2, monsterDefeated: 2, monsterBound: 2, monsterPredation: 2, monsterThreat: 2, monsterNestFounded: 2, monsterNestCleared: 3, cooperativeExpedition: 2, supplyRecoveryDeparted: 1, supplyRecoveryReturned: 2, tradeEscortClash: 2, tradeEscortDeparted: 1, tradeEscortReturned: 2, resourceSurveyDeparted: 1, resourceSurveyReturned: 2, borderFriction: 2, friendshipReached: 3, allianceFormed: 3, allianceEnded: 3, internationalTradeCompleted: 2, internationalTradeReturning: 2,
   marriage: 3, birth: 3, migrantArrived: 3, independentExpedition: 3, settlementFounded: 3, god_intervention: 3,
   manaVeinDiscovered: 3, arcaneIrrigationInstalled: 2, miningToolsForged: 2, adventurerRankUp: 3, combatLevelUp: 2, guildApprenticeAdvanced: 2, adventurerEquipped: 2,
-  warDeclared: 4, fieldBattle: 4, siegeStarted: 3, territoryOccupied: 4, siegeRepelled: 3, campaignCancelled: 4, truceAgreed: 4, peaceAgreed: 4, nationFallen: 5, frontierDiscovered: 3, founding: 4, leaderSucceeded: 4, research_unlocked: 4, death: 5, civilizationAdvanced: 5
+  alliedDefenseMobilized: 4, warDeclared: 4, fieldBattle: 4, siegeStarted: 3, territoryOccupied: 4, siegeRepelled: 3, campaignCancelled: 4, truceAgreed: 4, peaceAgreed: 4, nationFallen: 5, frontierDiscovered: 3, founding: 4, leaderSucceeded: 4, research_unlocked: 4, death: 5, civilizationAdvanced: 5
 };
 
 export const eventImportance = event => event.importance ?? importance[event.type] ?? 0;

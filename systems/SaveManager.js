@@ -131,13 +131,21 @@ function validate(world) {
   if (world.settings.mixedFamilies !== undefined && typeof world.settings.mixedFamilies !== 'boolean') {
     throw new Error('異種族家族の設定が無効です。');
   }
+  if (world.settings.alliedIntervention !== undefined && typeof world.settings.alliedIntervention !== 'boolean') {
+    throw new Error('防衛協定による参戦の設定が無効です。');
+  }
   const favorites = world.settings.favoriteCitizenIds;
   if (favorites !== undefined && (!Array.isArray(favorites) || new Set(favorites).size !== favorites.length ||
       !favorites.every(id => people.has(id)))) throw new Error('保存データの注目人物が無効です。');
+  const campaigns = new Map((world.campaigns ?? []).map(c => [c.id, c]));
   if (world.campaigns?.some(c => !['marching', 'siege', 'occupied', 'repelled'].includes(c.status) ||
       !nations.has(c.attackerId) || !nations.has(c.defenderId) || !settlements.has(c.settlementId) ||
       (['marching', 'siege'].includes(c.status) &&
         [c.attackerId, c.defenderId].some(id => nations.get(id).fallenAt !== undefined)) ||
+      (c.supportsCampaignId !== undefined && (!campaigns.has(c.supportsCampaignId) ||
+        campaigns.get(c.supportsCampaignId).supportsCampaignId !== undefined ||
+        campaigns.get(c.supportsCampaignId).attackerId !== c.defenderId ||
+        campaigns.get(c.supportsCampaignId).defenderId === c.attackerId)) ||
       !validTile(c) || !integer(c.rations, 0) || !Array.isArray(c.memberIds) || !c.memberIds.every(id => people.has(id)) ||
       !Array.isArray(c.arrivedIds) || !c.arrivedIds.every(id => c.memberIds.includes(id)))) {
     throw new Error('保存データの遠征が無効です。');

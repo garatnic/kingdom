@@ -31,12 +31,12 @@ const events = {
   marriage: '婚姻', birth: '誕生', migrantArrived: '集落に移住', independentExpedition: '独立開拓に出発',
   settlementFounded: '集落が成立', god_intervention: '神の介入', frostRecovered: '霜害から野生食料が再生', droughtHarvestRecovered: '干ばつ後に収穫を再開', founding: '建国', leaderSucceeded: '指導者が交代',
   miningToolsForged: '鍛冶場で鋼鉄の採掘道具を製作', adventurerRankUp: '冒険者の称号を獲得', combatLevelUp: '戦闘技能が上昇', adventurerEquipped: '冒険者の装備を新調',
-  warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
+  alliedDefenseMobilized: '防衛協定により同盟国が参戦', warDeclared: '開戦', fieldBattle: '野戦で両軍が交戦', siegeStarted: '包囲開始', territoryOccupied: '集落を占領', siegeRepelled: '侵攻を撃退', campaignCancelled: '戦線が解消', truceAgreed: '休戦を締結', peaceAgreed: '講和が成立', nationFallen: '国家が滅亡',
   campaignRationsRecovered: '遠征の残り兵糧を回収',
   frontierDiscovered: '新しい土地を発見', research_unlocked: '研究を解禁', death: '死亡', civilizationAdvanced: '文明時代が進展'
 };
 const eventGroups = {
-  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'fieldBattle', 'siegeStarted',
+  nations: ['founding', 'leaderSucceeded', 'friendshipReached', 'allianceFormed', 'allianceEnded', 'internationalTradeCompleted', 'internationalTradeReturning', 'internationalTradeReturned', 'borderFriction', 'warDeclared', 'alliedDefenseMobilized', 'fieldBattle', 'siegeStarted',
     'territoryOccupied', 'siegeRepelled', 'campaignCancelled', 'campaignRationsRecovered', 'truceAgreed', 'peaceAgreed', 'nationFallen'],
   people: ['marriage', 'birth', 'death', 'migrantArrived', 'independentExpedition', 'settlementFounded', 'constructionCompleted', 'miningToolsForged', 'foodShortage', 'foodRecovered', 'foodAidDelivered', 'foreignFoodAidDelivered', 'materialAidDelivered', 'aidReturning', 'aidReturned'],
   adventure: ['monsterBound', 'guildApprenticeAdvanced', 'adventureReturned', 'monsterDefeated', 'monsterPredation', 'monsterThreat', 'monsterNestFounded', 'monsterNestCleared',
@@ -463,7 +463,7 @@ export function observation(getWorld, getCamera, focus) {
       const arrived = team.filter(c => campaign.arrivedIds.includes(c.id)).length;
       const status = campaign.status === 'siege' ? `包囲中（${campaign.siegeDays}日）` : '進軍中';
       addEventLocation(body, world, campaign,
-        `${offensive ? '攻勢' : '防衛'} · ${rival.name} · ${settlementName(target)} · ${status} · 部隊 ${team.length}人（到着 ${arrived}人） · 兵糧 ${campaign.rations}`);
+        `${offensive ? '攻勢' : '防衛'}${campaign.supportsCampaignId ? '（協定参戦）' : ''} · ${rival.name} · ${settlementName(target)} · ${status} · 部隊 ${team.length}人（到着 ${arrived}人） · 兵糧 ${campaign.rations}`);
     }
   }
 
