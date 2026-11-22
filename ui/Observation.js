@@ -94,6 +94,7 @@ export function observation(getWorld, getCamera, focus) {
   const eventsById = new Map();
   const resultsByCause = new Map();
   const relatedByType = new Map();
+  const cameraEvents = [];
 
   function indexHistory(events) {
     if (indexedEvents !== events) {
@@ -102,10 +103,15 @@ export function observation(getWorld, getCamera, focus) {
       eventsById.clear();
       resultsByCause.clear();
       relatedByType.clear();
+      cameraEvents.length = 0;
     }
     for (; indexedCount < events.length; indexedCount++) {
       const event = events[indexedCount];
       eventsById.set(event.id, event);
+      if (eventImportance(event) >= 4) {
+        cameraEvents.push(event);
+        if (cameraEvents.length > 40) seen.delete(cameraEvents.shift().id);
+      }
       if (event.causeEventId) resultsByCause.set(event.causeEventId, event);
       const key = relatedEventKey(event);
       if (!key) continue;
@@ -563,8 +569,8 @@ export function observation(getWorld, getCamera, focus) {
         const favorites = world.settings.favoriteCitizenIds ?? [];
         const score = event => eventImportance(event) * 10 + 5 +
           (favorites.some(id => involvesCitizen(event, id)) ? 8 : 0) - (event.type === currentEvent?.type ? 10 : 0);
-        const candidates = world.events.slice(-40).reverse().filter(e =>
-          eventImportance(e) >= 4 && !seen.has(e.id) && eventLocation(world, e));
+        indexHistory(world.events);
+        const candidates = cameraEvents.slice().reverse().filter(e => !seen.has(e.id) && eventLocation(world, e));
         const candidate = candidates.sort((a, b) => score(b) - score(a))[0];
         if (candidate && candidate.id !== observedEvent &&
             (now - eventAt >= 30000 || eventImportance(candidate) >= 5)) {
@@ -583,6 +589,7 @@ export function observation(getWorld, getCamera, focus) {
     reset() {
       favoriteOnly.checked = false;
       recordsOpenFor = null;
+      openRelatedEventId = undefined;
       previousPages.length = 0;
       previousRender = '';
       subjectListKey = '';

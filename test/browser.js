@@ -299,6 +299,7 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
       emitOnce(world, 'settlement:1/food/3', 'foodRecovered', {
         x: 30, y: 30, food: 36, foodAtShortage: 0, causeEventId: shortage.id
       });
+      for (let i = 0; i < 45; i++) emitOnce(world, 'background:' + i, 'adventureDeparted', { x: 31, y: 31 });
       trimHistory(world);
       world.map.terrain.fill('grass');
       const settlement = world.settlements[0];
@@ -355,7 +356,14 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     const beforeTradeLink = await evaluate(canvasImage);
     assert.equal(await evaluate(relatedLocation('友好国間で物資を交換', '交易品の護衛に出発')), true);
     await poll(async () => (await evaluate(canvasImage)) !== beforeTradeLink);
+    const beforeExchangeLink = await evaluate(canvasImage);
     assert.equal(await evaluate(relatedLocation('護衛隊が街道で交戦', '友好国間で物資を交換')), true);
+    await poll(async () => (await evaluate(canvasImage)) !== beforeExchangeLink);
+    const beforeAutoCamera = await evaluate(canvasImage);
+    await evaluate("document.querySelector('#auto-camera').click()");
+    await poll(async () => (await evaluate(canvasImage)) !== beforeAutoCamera);
+    assert.equal(await evaluate(relatedLocation('護衛隊が街道で交戦', '友好国間で物資を交換')), true);
+    await poll(() => evaluate("!document.querySelector('#auto-camera').checked"));
     assert.deepEqual(errors, []);
   } finally {
     socket?.close();

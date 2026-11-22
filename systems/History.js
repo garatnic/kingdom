@@ -42,5 +42,5 @@ export function trimHistory(world) {
     counts[level] = (counts[level] ?? 0) + 1;
     if (level > 0 && counts[level] <= (limits[level] ?? Infinity)) next.push(event);
   }
-  world.events = next.reverse();
+  if (next.length !== world.events.length) world.events = next.reverse();
 }
