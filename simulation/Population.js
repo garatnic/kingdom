@@ -55,7 +55,7 @@ function dailyRelationships(world, citizens) {
   const adults = [];
   for (const citizen of citizens) {
     if (!citizen.alive || !citizen.settlementId || ageYears(world, citizen) < ADULT_AGE) continue;
-    const key = citizen.settlementId + '/' + citizen.race;
+    const key = world.settings.mixedFamilies ? citizen.settlementId : citizen.settlementId + '/' + citizen.race;
     if (!groups.has(key)) groups.set(key, []);
     const group = groups.get(key);
     const entry = { citizen, ancestors: ancestors(citizen), group, index: group.length };
@@ -85,7 +85,8 @@ function checkBirth(world, parent, people) {
   parent.nextBirthCheckTick += BIRTH_CHECK_INTERVAL_TICKS;
   const partner = people.get(parent.partnerId);
   if (!parent.settlementId || !partner?.alive || partner.partnerId !== parent.id ||
-      parent.settlementId !== partner.settlementId || parent.race !== partner.race) return;
+      parent.settlementId !== partner.settlementId ||
+      (parent.race !== partner.race && !world.settings.mixedFamilies)) return;
   const residents = world.citizens.filter(c => c.alive && c.settlementId === parent.settlementId);
   const home = world.buildings.find(b => b.kind === 'house' && b.settlementId === parent.settlementId &&
     residents.filter(c => c.homeBuildingId === b.id).length < b.capacity);
@@ -98,11 +99,12 @@ function checkBirth(world, parent, people) {
     world.worldTimeTick - people.get(id)?.birthWorldTimeTick < FAMILY.birthSpacingYears * TIME_TICKS_PER_YEAR);
   if (recentChild || random(world.rngState) >= BIRTH_PROBABILITY_PER_YEAR) return;
 
+  const race = parent.race !== partner.race && random(world.rngState) >= 0.5 ? partner.race : parent.race;
   const id = nextId(world, 'citizen');
   const tile = { ...parent.lastKnownSafeTile };
   const child = {
-    id, name: `こども ${id.split(':')[1]}`, race: parent.race,
-    birthWorldTimeTick: world.worldTimeTick, lifespanYears: lifespan(world, parent.race),
+    id, name: `こども ${id.split(':')[1]}`, race,
+    birthWorldTimeTick: world.worldTimeTick, lifespanYears: lifespan(world, race),
     alive: true, sex: 'unspecified', settlementId: parent.settlementId, nationId: parent.nationId,
     homeBuildingId: home.id, familyId: parent.familyId, parentIds: [parent.id, partner.id],
     childIds: [], partnerId: null, relationships: {}, x: tile.x + 0.5, y: tile.y + 0.5,

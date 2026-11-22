@@ -128,6 +128,9 @@ function validate(world) {
     throw new Error('保存データの集落・資源が無効です。');
   }
   const people = new Map(world.citizens.map(c => [c.id, c]));
+  if (world.settings.mixedFamilies !== undefined && typeof world.settings.mixedFamilies !== 'boolean') {
+    throw new Error('異種族家族の設定が無効です。');
+  }
   const favorites = world.settings.favoriteCitizenIds;
   if (favorites !== undefined && (!Array.isArray(favorites) || new Set(favorites).size !== favorites.length ||
       !favorites.every(id => people.has(id)))) throw new Error('保存データの注目人物が無効です。');

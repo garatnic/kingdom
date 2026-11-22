@@ -32,7 +32,7 @@ function starterTerrain(state) {
   });
 }
 
-export function createWorld(seed) {
+export function createWorld(seed, { mixedFamilies = false } = {}) {
   const rngState = seedState(String(seed));
   const center = START_REGION_SIZE / 2;
   const map = { width: SIZE, height: SIZE, terrain: fixedMapTerrain(seed, starterTerrain(rngState), START_REGION_SIZE, START_REGION_SIZE),
@@ -41,7 +41,7 @@ export function createWorld(seed) {
     seed: String(seed), rngState, worldTimeTick: 0, gameSpeed: 1, tickRemainder: 0,
     idCounters: {}, map, citizens: [], settlements: [], nations: [], buildings: [],
     resourceNodes: [], stockpiles: [], constructionSites: [], reservations: [],
-    inTransit: [], monsters: [], quests: [], researchStates: [], events: [], settings: {}
+    inTransit: [], monsters: [], quests: [], researchStates: [], events: [], settings: mixedFamilies ? { mixedFamilies: true } : {}
   };
   const set = (x, y, terrain) => { map.terrain[y * SIZE + x] = terrain; };
   const settlementId = nextId(world, 'settlement');

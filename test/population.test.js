@@ -209,3 +209,39 @@ test('a resident born in the simulation can become a parent and preserve three g
   const savedChild = saved.citizens.find(c => c.id === child.id);
   assert.ok(savedChild.parentIds.includes(firstParent.id) && savedChild.childIds.includes(grandchild.id));
 });
+
+test('mixed families are opt-in and children inherit either parent race deterministically across reloads', async () => {
+  const prepare = mixedFamilies => {
+    const world = createWorld('mixed-family', { mixedFamilies });
+    const [first, second] = world.citizens;
+    world.citizens = [first, second];
+    first.race = 'human';
+    second.race = 'fairy';
+    first.birthWorldTimeTick = second.birthWorldTimeTick = -20 * TIME_TICKS_PER_YEAR;
+    first.relationships[second.id] = second.relationships[first.id] = 100;
+    world.worldTimeTick = TIME_TICKS_PER_DAY;
+    updatePopulation(world, 12);
+    return world;
+  };
+  const standard = prepare(false);
+  assert.ok(standard.citizens.every(person => person.partnerId === null));
+  assert.ok(!(await readSnapshot(JSON.stringify(await createSnapshot(standard)))).settings.mixedFamilies);
+
+  const mixed = prepare(true);
+  const [parent, partner] = mixed.citizens;
+  assert.equal(parent.partnerId, partner.id);
+  assert.equal(partner.partnerId, parent.id);
+  mixed.stockpiles[0].total.food = 12;
+  mixed.buildings[0].capacity = 4;
+  mixed.worldTimeTick = parent.nextBirthCheckTick;
+  // First draw succeeds; the next draw selects the second parent's race.
+  mixed.rngState = [0, 1, 500000, 0];
+  const restored = await readSnapshot(JSON.stringify(await createSnapshot(mixed)));
+  updatePopulation(mixed, 12);
+  updatePopulation(restored, 12);
+  assert.deepEqual(restored, mixed);
+  const child = mixed.citizens.at(-1);
+  assert.deepEqual(child.parentIds, [parent.id, partner.id]);
+  assert.equal(child.race, 'fairy');
+  assert.ok(child.traits.magicAffinity >= 0.75);
+});
