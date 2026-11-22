@@ -1,4 +1,4 @@
-import { alliedNations } from '../simulation/Diplomacy.js';
+import { alliedNations, allianceProgress, friendlyNations } from '../simulation/Diplomacy.js';
 import { buildings, footprint, workTicks } from '../data/buildings.js';
 import { available, freeCapacity } from '../simulation/Economy.js';
 import { citizenRaces, MAGIC_AFFINITY_THRESHOLD, FOOD_EMERGENCY_PER_PERSON, FOOD_TARGET_PER_PERSON, NEEDS, TIME_TICKS_PER_DAY } from '../data/balance.js';
@@ -361,6 +361,7 @@ export function observation(getWorld, getCamera, focus) {
       if (rivals.length) {
         add(body, 'h4', '外交');
         const labels = { friendly: '友好', neutral: '中立', hostile: '敵対' };
+        const progressFor = allianceProgress(world);
         for (const rival of rivals) {
           const value = nation.relations[rival.id] ?? 0;
           const truce = truceBetween(world, nation, rival);
@@ -368,9 +369,18 @@ export function observation(getWorld, getCamera, focus) {
             ((c.attackerId === nation.id && c.defenderId === rival.id) ||
               (c.defenderId === nation.id && c.attackerId === rival.id)) &&
             (c.status === 'marching' || c.status === 'siege'));
+          const pact = alliedNations(world, nation, rival);
           const status = campaign ? (campaign.status === 'marching' ? ' · 進軍中' : ' · 包囲中') :
-            truce ? ' · 休戦中' : alliedNations(world, nation, rival) ? ' · 防衛協定' : '';
-          add(body, 'p', `${rival.name} ${labels[relationLabel(value)]}（${value}）${status}`);
+            truce ? ' · 休戦中' : pact ? ' · 防衛協定' : '';
+          const relation = `${rival.name} ${labels[relationLabel(value)]}（${value}）${status}`;
+          const capital = world.settlements.find(settlement => settlement.id === rival.capitalId);
+          if (!capital || !addEventLocation(body, world, capital, relation)) add(body, 'p', relation);
+          if (!pact && friendlyNations(world, nation, rival)) {
+            const progress = progressFor(nation, rival);
+            const visits = progress.requiredEnvoys === null ? '' : ` · 使節 ${progress.envoyVisits}/${progress.requiredEnvoys}`;
+            const cooldown = progress.cooldownDays ? ` · 再締結まで ${progress.cooldownDays}ゲーム日` : '';
+            add(body, 'p', `協定条件（90ゲーム日以内） · 交易・援助 ${progress.exchanges}/${progress.requiredExchanges}${visits}${cooldown}`);
+          }
         }
       }
       for (const event of historyFor(world, 'nation', nation.id).slice(-10).reverse()) showEvent(world, event);

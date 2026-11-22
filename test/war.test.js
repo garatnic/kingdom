@@ -538,7 +538,7 @@ test('a capital can exchange surplus reserves for a scarce good even if its part
 });
 
 test('friendly envoy visits can form a defense pact without cargo when intervention is enabled', async () => {
-  const { updateAlliances, alliedNations } = await import('../simulation/Diplomacy.js');
+  const { updateAlliances, alliedNations, allianceProgress } = await import('../simulation/Diplomacy.js');
   const { world, invader, defender, away } = twoNations();
   for (const c of world.citizens.filter(c => c.nationId === defender.id)) {
     c.lastKnownSafeTile = { x: away.x, y: away.y };
@@ -556,6 +556,9 @@ test('friendly envoy visits can form a defense pact without cargo when intervent
   tick(world, 20);
   tick(world, 30);
   assert.equal(alliedNations(world, invader, defender), false);
+  assert.deepEqual(allianceProgress(world)(invader, defender), {
+    exchanges: 0, requiredExchanges: 2, envoyVisits: 2, requiredEnvoys: 3, cooldownDays: 0
+  });
   const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   tick(saved, 40);
   const [ally, partner] = saved.nations;
@@ -570,12 +573,13 @@ test('friendly envoy visits can form a defense pact without cargo when intervent
   tick(interrupted, 40);
   tick(interrupted, 50);
   assert.equal(alliedNations(interrupted, ...interrupted.nations), false);
+  assert.equal(allianceProgress(interrupted)(...interrupted.nations).envoyVisits, 2);
   tick(interrupted, 60);
   assert.equal(alliedNations(interrupted, ...interrupted.nations), true);
 });
 
 test('an alliance survives reload, supplies a besieged partner and dissolves if friendship breaks', async () => {
-  const { updateAlliances, alliedNations } = await import('../simulation/Diplomacy.js');
+  const { updateAlliances, alliedNations, allianceProgress } = await import('../simulation/Diplomacy.js');
   const { updateFoodAid } = await import('../simulation/FoodAid.js');
   const { emitOnce } = await import('../systems/History.js');
   const { world, invader, defender, away } = twoNations();
@@ -608,6 +612,8 @@ test('an alliance survives reload, supplies a besieged partner and dissolves if 
   updateAlliances(saved);
   assert.equal(alliedNations(saved, ally, partner), false);
   assert.equal(saved.events.filter(e => e.type === 'allianceEnded').length, 1);
+  assert.equal(allianceProgress(saved)(ally, partner).cooldownDays, 90);
+  assert.equal(allianceProgress(saved)(ally, partner).requiredEnvoys, null);
   partner.relations[ally.id] = 60;
   updateAlliances(saved);
   assert.equal(alliedNations(saved, ally, partner), false);
