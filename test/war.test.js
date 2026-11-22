@@ -606,6 +606,55 @@ test('a destination guild can escort a longer trade when the originating guild i
   assert.deepEqual(quest.escortGoal, { x: homeStore.x, y: homeStore.y });
 });
 
+test('a destination guild escorts only the threatened segment on a trade longer than 96 steps', async () => {
+  const { updateTrade } = await import('../simulation/Trade.js');
+  const { claimAdventure, continueAdventure, spawnMonster } = await import('../simulation/Adventure.js');
+  const { findPath } = await import('../simulation/path.js');
+  const { world, invader, defender, homeStore, away } = twoNations();
+  const other = world.stockpiles[1];
+  away.x = other.x = 155;
+  Object.assign(homeStore.total, { wood: 20, stone: 0 });
+  Object.assign(other.total, { wood: 0, stone: 10 });
+  world.buildings.push({ id: nextId(world, 'building'), kind: 'guild', settlementId: away.id,
+    x: away.x + 3, y: away.y });
+  for (const citizen of world.citizens.filter(c => c.settlementId === away.id)) citizen.profession = 'adventurer';
+  const path = findPath(world, homeStore, other);
+  assert.ok(path.length > 96);
+  assert.ok(spawnMonster(world, 'goblin', path[path.length - 20]));
+  invader.relations[defender.id] = defender.relations[invader.id] = 60;
+  world.worldTimeTick = 5 * TIME_TICKS_PER_DAY;
+  updateTrade(world);
+  const saved = await readSnapshot(JSON.stringify(await createSnapshot(world)));
+  const quest = saved.quests.find(q => q.id === saved.settlements[0].trade.escortQuestId);
+  assert.equal(quest.settlementId, away.id);
+  assert.equal(quest.partnerId, saved.settlements[0].id);
+  const reversePath = findPath(saved, other, homeStore);
+  const goalIndex = reversePath.findIndex(tile => tile.x === quest.escortGoal.x && tile.y === quest.escortGoal.y);
+  assert.ok(goalIndex >= 0 && goalIndex < 96);
+  assert.notDeepEqual(quest.escortGoal, { x: homeStore.x, y: homeStore.y });
+  const destination = saved.stockpiles[1];
+  const arrivalDay = saved.settlements[0].trade.arrivalDay;
+  const lead = saved.citizens.find(c => c.id === defender.leaderId);
+  assert.ok(claimAdventure(saved, lead, destination, () => true));
+  for (let step = 0; step < 4; step++) {
+    for (const id of [quest.escortId, quest.claimedBy]) {
+      const member = saved.citizens.find(c => c.id === id);
+      continueAdventure(saved, member, quest, destination, destination, tile => {
+        member.lastKnownSafeTile = { x: tile.x, y: tile.y };
+        return true;
+      });
+    }
+  }
+  assert.equal(quest.status, 'completed');
+  updateTrade(saved);
+  assert.equal(destination.total.wood, 0);
+  saved.worldTimeTick = arrivalDay * TIME_TICKS_PER_DAY;
+  updateTrade(saved);
+  updateTrade(saved);
+  assert.equal(destination.total.wood, 2);
+  assert.equal(saved.events.filter(event => event.type === 'internationalTradeCompleted').length, 1);
+});
+
 test('a veteran receives domestic mana stone and equips arcane gear after cargo reload', async () => {
   const { updateFoodAid } = await import('../simulation/FoodAid.js');
   const { prepareArcaneGear } = await import('../simulation/Industry.js');

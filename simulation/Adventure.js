@@ -149,16 +149,19 @@ const activeQuest = quest => quest.status === 'open' || quest.status === 'claime
 const sameNest = (a, b) => a.species === b.species && distance(a.homeTile, b.homeTile) === 0;
 
 export function offerTradeEscort(world, settlement, partner, destination, path) {
-  if (path.length > COMBAT.tradeEscortRadius ||
-      !world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
+  if (!world.buildings.some(b => b.kind === 'guild' && b.settlementId === settlement.id) ||
       world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q)).length >= COMBAT.questLimit ||
       world.citizens.filter(c => c.alive && c.profession === 'adventurer' &&
-        c.settlementId === settlement.id && ageYears(world, c) >= ADULT_AGE).length < 2 ||
-      !world.monsters.some(monster => monster.alive && monsters[monster.species].attack >= monsters.goblin.attack &&
-        path.some(tile => distance(tile, monster) <= 5))) return;
+        c.settlementId === settlement.id && ageYears(world, c) >= ADULT_AGE).length < 2) return;
+  const threats = world.monsters.filter(monster => monster.alive && monsters[monster.species].attack >= monsters.goblin.attack);
+  const lastDanger = path.findLastIndex(tile => threats.some(monster => distance(tile, monster) <= 5));
+  if (lastDanger < 0 || lastDanger >= COMBAT.tradeEscortRadius) return;
+  const steps = Math.min(path.length, COMBAT.tradeEscortRadius, lastDanger + 2);
+  const goal = path.length <= COMBAT.tradeEscortRadius ? destination : path[steps - 1];
+  const escortDistance = path.length <= COMBAT.tradeEscortRadius ? path.length : steps;
   const quest = { id: nextId(world, 'quest'), kind: 'escort_trade', settlementId: settlement.id,
-    partnerId: partner.id, escortGoal: { x: destination.x, y: destination.y }, status: 'open',
-    claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + Math.max(4, Math.ceil(path.length / 12)) * COMBAT.questDuration, lootIds: [] };
+    partnerId: partner.id, escortGoal: { x: goal.x, y: goal.y }, status: 'open',
+    claimedBy: null, createdAt: world.worldTimeTick, expiresAt: world.worldTimeTick + Math.max(4, Math.ceil(escortDistance / 12)) * COMBAT.questDuration, lootIds: [] };
   world.quests.push(quest);
   return quest.id;
 }
