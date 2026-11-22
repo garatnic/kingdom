@@ -409,12 +409,29 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'frostRecovered') title += `（${event.quantity}か所）`;
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     const target = eventLocation(world, event);
-    if (!target) { add(body, 'p', label); return; }
-    const button = add(body, 'button', label);
-    button.onclick = () => {
-      markManual();
-      focus(target, 'manualOverride');
-    };
+    if (target) {
+      add(body, 'button', label).onclick = () => {
+        markManual();
+        focus(target, 'manualOverride');
+      };
+    } else {
+      add(body, 'p', label);
+    }
+    if (event.causeEventId) {
+      const cause = world.events.find(entry => entry.id === event.causeEventId);
+      const location = cause && eventLocation(world, cause);
+      if (location) add(body, 'button', `災害の発生地点 · ${calendar(cause.worldTimeTick)}`).onclick = () => {
+        markManual();
+        focus(location, 'manualOverride');
+      };
+    } else if (event.type === 'god_intervention' && event.kind === 'disaster') {
+      const recovery = world.events.findLast(entry => entry.causeEventId === event.id);
+      const location = recovery && eventLocation(world, recovery);
+      if (location) add(body, 'button', `直近の復旧地点 · ${calendar(recovery.worldTimeTick)}`).onclick = () => {
+        markManual();
+        focus(location, 'manualOverride');
+      };
+    }
   }
 
   tab.onchange = () => { search.value = ''; previousPages.length = 0; render(true); };
