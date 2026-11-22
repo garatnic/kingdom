@@ -4,13 +4,17 @@ import { available } from './Economy.js';
 
 export const RECORD_DAYS = 30;
 
+export function observancesFor(settlement) {
+  return settlement?.observances ?? (settlement?.observance ? [settlement.observance] : []);
+}
+
 export function rememberRecovery(world, settlement, event, kind) {
   if (!settlement) return;
-  const earlier = settlement.observance;
-  if (earlier?.originEventId === event.id ||
-      (earlier?.kind === 'thanksgiving' && kind === 'scarcity')) return;
-  settlement.observance = { kind, originEventId: event.id,
-    nextDay: Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) + 5 };
+  const existing = observancesFor(settlement);
+  if (existing.some(memory => memory.kind === kind)) return;
+  settlement.observances = [...existing, { kind, originEventId: event.id,
+    nextDay: Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) + 5 }];
+  delete settlement.observance;
 }
 
 export function recordSettlements(world) {

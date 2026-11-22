@@ -159,10 +159,18 @@ test('drought delays local harvests and remains idempotent after restoration', a
   assert.deepEqual(harvests[0].actorIds, [farmer.id]);
   assert.equal(revived.buildings[1].fertilityCommandId, undefined);
 
-  const memory = revived.settlements[0].observance;
+  const memory = revived.settlements[0].observances[0];
   assert.equal(memory.kind, 'thanksgiving');
   assert.equal(memory.originEventId, harvests[0].id);
-  const ready = await readSnapshot(JSON.stringify(await createSnapshot(revived)));
+  // The older singleton remains readable and gains a second tradition on recovery.
+  revived.settlements[0].observance = memory;
+  delete revived.settlements[0].observances;
+  const { rememberRecovery } = await import('../simulation/SettlementRecords.js');
+  const restoredLegacy = await readSnapshot(JSON.stringify(await createSnapshot(revived)));
+  const local = restoredLegacy.settlements[0];
+  rememberRecovery(restoredLegacy, local, recovery[0], 'scarcity');
+  assert.deepEqual(local.observances.map(item => item.kind), ['thanksgiving', 'scarcity']);
+  const ready = await readSnapshot(JSON.stringify(await createSnapshot(restoredLegacy)));
   ready.worldTimeTick = memory.nextDay * TIME_TICKS_PER_DAY + 24;
   const attendee = ready.citizens.find(person => person.id === farmer.id);
   const depot = ready.stockpiles[0];
@@ -176,9 +184,13 @@ test('drought delays local harvests and remains idempotent after restoration', a
   updateCitizens(ready, 12);
   const observances = ready.events.filter(event => event.type === 'communityObservance');
   assert.equal(observances.length, 1);
+  assert.equal(ready.settlements[0].observances[1].nextDay, memory.nextDay);
+  attendee.decisionAt = ready.worldTimeTick;
+  updateCitizens(ready, 12);
+  assert.equal(ready.events.filter(event => event.type === 'communityObservance').length, 2);
   assert.equal(observances[0].causeEventId, harvests[0].id);
   assert.deepEqual(observances[0].actorIds, [attendee.id]);
-  assert.ok(ready.settlements[0].observance.nextDay > memory.nextDay);
+  assert.ok(ready.settlements[0].observances[0].nextDay > memory.nextDay);
 });
 
 test('favorite citizens persist in a snapshot and reference existing residents', async () => {

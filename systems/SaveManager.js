@@ -91,13 +91,16 @@ function validate(world) {
     (trade.escortQuestId === undefined || world.quests.some(q => q.id === trade.escortQuestId &&
       q.kind === 'escort_trade' && ((q.settlementId === id && q.partnerId === trade.partnerId) ||
         (q.settlementId === trade.partnerId && q.partnerId === id))));
+  const validObservance = memory => memory && ['thanksgiving', 'scarcity'].includes(memory.kind) &&
+    integer(memory.nextDay, 1) && typeof memory.originEventId === 'string' && /^event:[1-9][0-9]*$/.test(memory.originEventId);
   if (!world.settlements.every(s => validTile(s) && (s.nationId === null || nations.has(s.nationId)) &&
         (s.trade === undefined || validTrade(s.trade, s.id)) &&
         (s.lastGuildLessonDay === undefined || integer(s.lastGuildLessonDay, 0, Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY))) &&
         (s.foodWarning === undefined || typeof s.foodWarning === 'boolean') &&
-        (s.observance === undefined || (s.observance &&
-          ['thanksgiving', 'scarcity'].includes(s.observance.kind) && integer(s.observance.nextDay, 1) &&
-          typeof s.observance.originEventId === 'string' && /^event:[1-9][0-9]*$/.test(s.observance.originEventId))) &&
+        (s.observance === undefined || (s.observances === undefined && validObservance(s.observance))) &&
+        (s.observances === undefined || (Array.isArray(s.observances) && s.observances.length <= 2 &&
+          s.observances.every(validObservance) && new Set(s.observances.map(memory => memory.kind)).size === s.observances.length &&
+          new Set(s.observances.map(memory => memory.originEventId)).size === s.observances.length)) &&
         (s.foodAid === undefined || (validAid(s.foodAid, s.id) && integer(s.foodAid.food, 1) &&
           (s.foodAid.allianceRelief === undefined || (s.foodAid.allianceRelief === true && s.foodAid.recipientNationId)) &&
           (s.foodAid.recipientNationId === undefined || (s.foodAid.recipientNationId !== s.foodAid.nationId &&

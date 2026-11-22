@@ -9,6 +9,7 @@ import { calendar } from '../engine/GameLoop.js';
 import { relationLabel } from '../simulation/Nations.js';
 import { activeNations, truceBetween } from '../simulation/War.js';
 import { civilizationProgress, getResearch, researchOwner } from '../simulation/Research.js';
+import { observancesFor } from '../simulation/SettlementRecords.js';
 import { birthResources } from '../simulation/Population.js';
 import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
@@ -241,11 +242,11 @@ export function observation(getWorld, getCamera, focus) {
       }
       if (store?.steelTools) add(body, 'p', `鋼鉄の採掘道具（未装備） ${store.steelTools}`);
       showShipments(world, settlement);
-      if (settlement.observance) {
-        const memory = settlement.observance;
+      for (const memory of observancesFor(settlement)) {
         const label = memory.kind === 'thanksgiving' ? '豊穣への感謝' : '食料難からの復旧記念';
         add(body, 'p', `${label} · 次の行事 ${calendar(memory.nextDay * TIME_TICKS_PER_DAY)}以降`);
-        const remembrance = world.events.findLast(event => event.type === 'communityObservance' && event.settlementId === settlement.id);
+        const remembrance = world.events.findLast(event => event.type === 'communityObservance' &&
+          event.settlementId === settlement.id && event.kind === memory.kind);
         if (remembrance) showEvent(world, remembrance);
       }
       const recent = settlement.dailyRecords?.slice(-7);

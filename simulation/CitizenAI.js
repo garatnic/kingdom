@@ -1,4 +1,4 @@
-import { rememberRecovery } from './SettlementRecords.js';
+import { observancesFor, rememberRecovery } from './SettlementRecords.js';
 import { emitOnce } from '../systems/History.js';
 import { ADULT_AGE, TIME_TICKS_PER_DAY, TIME_TICKS_PER_YEAR, citizenRaces, DECISION_TICKS, WALK_TICKS, WANDER_RADIUS, TERRAIN_COST, FOOD_TARGET_PER_PERSON, FOOD_HUNGER_RESTORED, FOOD_HUNGER_PER_HOUR, LARGE_SETTLEMENT_POPULATION, NEEDS, NEED_HOUR_TICKS, GATHER_TICKS } from '../data/balance.js';
 import { discoverFrontier, surveyBounds, surveyRoute } from '../engine/Expansion.js';
@@ -199,13 +199,13 @@ function chooseRoute(world, citizen, store, population) {
   if (store && claimAdventure(world, citizen, store, (goal, kind, targetId) =>
     travel(world, citizen, goal, kind, targetId))) return;
   const settlement = world.settlements.find(s => s.id === citizen.settlementId);
-  const observance = settlement?.observance;
-  if (store && observance && !settlement.foodWarning && !campaign && !active &&
-      ageYears(world, citizen) >= ADULT_AGE &&
-      Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY) >= observance.nextDay &&
+  if (store && settlement && !settlement.foodWarning && !campaign && !active && ageYears(world, citizen) >= ADULT_AGE) {
+    const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
+    const observance = observancesFor(settlement).find(memory => memory.nextDay <= day &&
       !world.citizens.some(other => other.alive && other.settlementId === settlement.id &&
-        other.action.kind === 'observance' && other.action.targetId === observance.originEventId) &&
-      travel(world, citizen, storeTile(world, store), 'observance', observance.originEventId)) return;
+        other.action.kind === 'observance' && other.action.targetId === memory.originEventId));
+    if (observance && travel(world, citizen, storeTile(world, store), 'observance', observance.originEventId)) return;
+  }
   const { x, y } = settlement ?? citizen.lastKnownSafeTile;
   const offset = () => Math.floor(random(world.rngState) * (2 * WANDER_RADIUS + 1)) - WANDER_RADIUS;
   travel(world, citizen, { x: x + offset(), y: y + offset() }, 'explore');
@@ -493,11 +493,11 @@ function perform(world, citizen, store, ticks, population) {
   }
   if (action.kind === 'observance' && store) {
     const settlement = world.settlements.find(s => s.id === citizen.settlementId);
-    const memory = settlement?.observance;
+    const memory = observancesFor(settlement).find(item => item.originEventId === action.targetId);
     const day = Math.floor(world.worldTimeTick / TIME_TICKS_PER_DAY);
     if (memory?.originEventId === action.targetId && day >= memory.nextDay && !settlement.foodWarning &&
         citizen.hunger < NEEDS.eat) {
-      emitOnce(world, JSON.stringify([settlement.id, day]), 'communityObservance', {
+      emitOnce(world, JSON.stringify([settlement.id, memory.kind, day]), 'communityObservance', {
         causeEventId: memory.originEventId, settlementId: settlement.id, nationId: settlement.nationId,
         actorIds: [citizen.id], kind: memory.kind, x: storeTile(world, store).x, y: storeTile(world, store).y
       });
