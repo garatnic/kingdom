@@ -295,6 +295,18 @@ test('Chromium renders the map and runs pause, speed, camera and JSON controls',
     await send('Page.reload');
     await poll(() => evaluate("document.querySelector('#status')?.textContent === 'ブラウザのセーブを復元しました'"));
     assert.ok(Math.abs(gameMinutes(await clock()) - savedTick / 10) <= 12);
+    await evaluate(`(async () => {
+      const { openSaveStorage, writeGeneration } = await import('/systems/SaveStorage.js');
+      const database = await openSaveStorage();
+      try {
+        await writeGeneration(database, { corrupt: true });
+      } finally {
+        database.close();
+      }
+    })()`);
+    await send('Page.reload');
+    await poll(() => evaluate("document.querySelector('#status')?.textContent.includes('以前の自動保存から復元しました')"));
+    assert.ok(Math.abs(gameMinutes(await clock()) - savedTick / 10) <= 12);
     await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
     await poll(() => evaluate("innerWidth === 390 && document.documentElement.scrollWidth === 390"));
     const pauseButton = await evaluate(`(() => {

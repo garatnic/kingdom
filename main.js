@@ -268,12 +268,17 @@ get('god-form').onsubmit = event => {
 const startupLoad = loadRequest;
 storage.then(async ({ database }) => {
   if (!database) return;
-  const saved = await readLatestGeneration(database);
+  let recovered = false;
+  const saved = await readLatestGeneration(database, { onRecovery: () => { recovered = true; } });
   if (saved && startupLoad === loadRequest) {
     replaceWorld(saved);
-    get('status').textContent = 'ブラウザのセーブを復元しました';
+    get('status').textContent = recovered
+      ? '最新のセーブが破損していたため、以前の自動保存から復元しました'
+      : 'ブラウザのセーブを復元しました';
   }
-}).catch(error => { get('status').textContent = `ブラウザ内の読込失敗：${error.message}`; });
+}).catch(error => {
+  if (startupLoad === loadRequest) get('status').textContent = `ブラウザ内の読込失敗：${error.message}`;
+});
 
 showGodOptions();
 showState();

@@ -27,7 +27,7 @@ export function writeGeneration(database, snapshot) {
   });
 }
 
-export async function readLatestGeneration(database) {
+export async function readLatestGeneration(database, { onRecovery } = {}) {
   const latest = await readStore(database, store => store.openCursor(null, 'prev'), cursor => cursor?.value);
   if (latest === undefined) return null;
   try {
@@ -35,12 +35,15 @@ export async function readLatestGeneration(database) {
   } catch {
     // Read the remaining generations together when the newest one is damaged.
     const saves = await readStore(database, store => store.getAll());
-    for (const snapshot of saves.reverse()) {
+    for (const [index, snapshot] of saves.reverse().entries()) {
+      let world;
       try {
-        return await readSnapshot(JSON.stringify(snapshot));
+        world = await readSnapshot(JSON.stringify(snapshot));
       } catch {
-        // Continue to the preceding generation.
+        continue;
       }
+      if (index > 0) onRecovery?.();
+      return world;
     }
     throw new Error('読み込める保存世代がありません。');
   }
