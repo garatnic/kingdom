@@ -59,7 +59,10 @@ function startCampaign(world, attacker, defender, supportedFront) {
   home.total.food -= provisions;
   const nationIds = supportedFront ? [attacker.id, defender.id, supportedFront.defenderId] : [attacker.id, defender.id];
   emitOnce(world, campaign.id, supportedFront ? 'alliedDefenseMobilized' : 'warDeclared',
-    { x: goal.x, y: goal.y, nationIds, actorIds: campaign.memberIds });
+    {
+      x: goal.x, y: goal.y, nationIds, actorIds: campaign.memberIds, provisions,
+      settlementId: target.id, supplySettlementId: home.settlementId
+    });
   return campaign;
 }
 
@@ -75,7 +78,8 @@ function occupy(world, campaign, attacker, defender) {
   }
   campaign.status = 'occupied';
   emitOnce(world, campaign.id, 'territoryOccupied', { x: target.x, y: target.y, settlementId: target.id,
-    nationIds: [attacker.id, defender.id] });
+    nationIds: [attacker.id, defender.id], newCapitalId: defender.capitalId,
+    population: world.citizens.filter(c => c.alive && c.settlementId === target.id).length });
   if (!defender.capitalId) {
     defender.fallenAt = world.worldTimeTick;
     emitOnce(world, campaign.id, 'nationFallen', { x: target.x, y: target.y, nationId: defender.id });
@@ -103,7 +107,7 @@ function fightFieldBattle(world, campaign, attackers, defender) {
   wound(militia, attack, attackerWon);
   emitOnce(world, campaign.id, 'fieldBattle', {
     x: campaign.x, y: campaign.y, nationIds: [campaign.attackerId, defender.id],
-    actorIds: [...attackers, ...militia].map(c => c.id), winnerId: attackerWon ? campaign.attackerId : defender.id
+    actorIds: [...attackers, ...militia].map(c => c.id), attackers: attackers.length, defenders: militia.length, winnerId: attackerWon ? campaign.attackerId : defender.id
   });
   return attackerWon;
 }
@@ -116,12 +120,13 @@ function resolveCampaign(world, campaign, attacker, defender) {
     if (team.length >= 2 && present.length === team.length) {
       if (!fightFieldBattle(world, campaign, present, defender)) {
         campaign.status = 'repelled';
-        return;
+        return 'battle';
       }
       campaign.status = 'siege';
       emitOnce(world, campaign.id, 'siegeStarted', { x: campaign.x, y: campaign.y, nationIds: [attacker.id, defender.id] });
     } else if (team.length < 2 || world.worldTimeTick - campaign.beganAt >= WAR.marchDays * TIME_TICKS_PER_DAY) {
       campaign.status = 'repelled';
+      return team.length < 2 ? 'personnel' : 'march';
     }
     return;
   }
@@ -139,7 +144,10 @@ function resolveCampaign(world, campaign, attacker, defender) {
   }
   campaign.arrivedIds = present.filter(c => c.hp >= 35).map(c => c.id);
   if (campaign.occupationDays >= WAR.occupationDays) occupy(world, campaign, attacker, defender);
-  else if (campaign.siegeDays >= WAR.siegeDays || campaign.arrivedIds.length < 2) campaign.status = 'repelled';
+  else if (campaign.siegeDays >= WAR.siegeDays || campaign.arrivedIds.length < 2) {
+    campaign.status = 'repelled';
+    return campaign.arrivedIds.length < 2 ? 'personnel' : 'siege';
+  }
 }
 
 function recoverRations(world, campaign, attacker) {
@@ -155,7 +163,7 @@ function recoverRations(world, campaign, attacker) {
     world.resourceNodes.push({ id: nextId(world, 'node'), resource: 'food', x, y, quantity, dropped: true });
   }
   emitOnce(world, campaign.id, 'campaignRationsRecovered', {
-    x, y, nationId: campaign.attackerId, food: returned, dropped: quantity
+    x, y, nationId: campaign.attackerId, settlementId: store?.settlementId, food: returned, dropped: quantity
   });
   campaign.rations = 0;
 }
@@ -166,20 +174,21 @@ function samePair(campaign, first, second) {
 }
 
 function updateCampaign(world, campaign, attacker, defender) {
-  resolveCampaign(world, campaign, attacker, defender);
+  const reason = resolveCampaign(world, campaign, attacker, defender);
   if (campaign.status !== 'occupied' && campaign.status !== 'repelled') return;
   campaign.endedAt = world.worldTimeTick;
   recoverRations(world, campaign, attacker);
   if (campaign.status !== 'repelled') return;
 
   const location = { x: campaign.x, y: campaign.y, nationIds: [attacker.id, defender.id] };
-  emitOnce(world, campaign.id, 'siegeRepelled', location);
-  const recentDefeat = world.campaigns.some(c => c !== campaign && c.status === 'repelled' && !c.cancelled &&
+  emitOnce(world, campaign.id, 'siegeRepelled', { ...location, reason });
+  const recentDefeat = world.campaigns.findLast(c => c !== campaign && c.status === 'repelled' && !c.cancelled &&
     samePair(c, attacker, defender) && c.endedAt >= world.worldTimeTick - 45 * TIME_TICKS_PER_DAY);
   if (recentDefeat) {
     campaign.peaceAgreed = true;
     attacker.relations[defender.id] = defender.relations[attacker.id] = 0;
-    emitOnce(world, campaign.id, 'peaceAgreed', location);
+    const previous = world.events.find(event => event.sourceTransactionId === recentDefeat.id && event.type === 'siegeRepelled');
+    emitOnce(world, campaign.id, 'peaceAgreed', { ...location, ...(previous && { causeEventId: previous.id }) });
   } else {
     emitOnce(world, campaign.id, 'truceAgreed', {
       ...location, expiresAt: world.worldTimeTick + WAR.truceDays * TIME_TICKS_PER_DAY

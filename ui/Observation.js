@@ -564,7 +564,14 @@ export function observation(getWorld, getCamera, focus) {
     if (event.type === 'fieldBattle') {
       const winner = world.nations.find(n => n.id === event.winnerId);
       if (winner) title += '（勝利 ' + winner.name + '）';
+      if (event.attackers !== undefined) title += ` 攻撃 ${event.attackers}人 / 防衛 ${event.defenders}人`;
     }
+    if (event.type === 'siegeRepelled' && event.reason) {
+      const reasons = { battle: '会戦での敗北', personnel: '部隊の人員不足', march: '進軍の期限切れ', siege: '包囲の期限切れ' };
+      title = `侵攻を終了（${reasons[event.reason]}）`;
+    }
+    if (event.provisions !== undefined) title += `（出発時の兵糧 ${event.provisions}）`;
+    if (event.type === 'territoryOccupied' && event.population !== undefined) title += `（住民 ${event.population}人）`;
     if (event.type === 'civilizationAdvanced') title = civilizationNames[event.civilization] + 'へ進展';
     if (event.type === 'god_intervention' && event.kind === 'blessing') {
       title = event.value === 'fertility' ? `豊穣の祝福（畑${event.quantity}棟）` : `回復の祝福（${event.quantity}人）`;
@@ -613,22 +620,29 @@ export function observation(getWorld, getCamera, focus) {
     if (cause) {
       const origin = cause.type === 'foodShortage' ? '食料難が発生した集落' :
         cause.kind === 'blessing' ? '祝福を行った地点' :
-        event.type === 'communityObservance' ? '行事のきっかけ' : '災害の発生地点';
+        event.type === 'communityObservance' ? '行事のきっかけ' :
+        event.type === 'peaceAgreed' ? '講和に先立つ侵攻の終結地点' : '災害の発生地点';
       addEventLocation(body, world, cause, `${origin} · ${calendar(cause.worldTimeTick)}`);
     }
     for (const recovery of resultsByCause.get(event.id)?.values() ?? []) {
       const result = recovery.type === 'foodRecovered' ? `備蓄が回復した集落（備蓄 ${recovery.food}）` :
         recovery.type === 'blessedFarmHarvested' ? '祝福後に収穫した畑' :
         recovery.type === 'droughtFoodForaged' ? '代わりの食料を採集した地点' :
-        recovery.type === 'communityObservance' ? '記念行事を行った地点' : '直近の復旧地点';
+        recovery.type === 'communityObservance' ? '記念行事を行った地点' :
+        recovery.type === 'peaceAgreed' ? '後の講和地点' : '直近の復旧地点';
       addEventLocation(body, world, recovery, `${result} · ${calendar(recovery.worldTimeTick)}`);
     }
 
-    const group = relatedByType.get(relatedEventKey(event));
+    const eventKey = relatedEventKey(event);
+    const campaign = eventKey?.startsWith('campaign:') ? world.campaigns?.find(c => c.id === eventKey) : undefined;
+    const group = relatedByType.get(eventKey);
     const linked = group ? [...group.values()].filter(entry => entry.type !== event.type && eventLocation(world, entry)) : [];
     const personIds = new Set([event.citizenId, event.leaderId, ...(event.citizenIds ?? []),
       ...(event.parentIds ?? []), ...(event.actorIds ?? []), ...(event.affectedCitizenIds ?? [])]);
-    const nationIds = new Set([event.nationId, event.ownerId, ...(event.nationIds ?? [])]);
+    const nationIds = new Set([event.nationId, event.ownerId, campaign?.attackerId, campaign?.defenderId,
+      ...(event.nationIds ?? [])]);
+    const sites = campaign ? [[campaign.supplySettlementId, '兵糧の拠点'], [campaign.settlementId, '戦場の集落'],
+      [event.newCapitalId, '防衛側が移した首都']] : [];
     personIds.delete(undefined);
     nationIds.delete(undefined);
     const people = personIds.size ? world.citizens.filter(person => personIds.has(person.id)) : [];
@@ -641,6 +655,17 @@ export function observation(getWorld, getCamera, focus) {
     linked.sort((a, b) => eventNumber(a) - eventNumber(b));
     for (const entry of linked) {
       addEventLocation(details, world, entry, `${events[entry.type] ?? entry.type} · ${calendar(entry.worldTimeTick)}`);
+    }
+    for (const [id, role] of sites) {
+      const settlement = world.settlements.find(item => item.id === id);
+      if (!settlement) continue;
+      add(details, 'button', `${role} · ${settlementName(settlement)}`).onclick = () => {
+        tab.value = 'settlement';
+        search.value = '';
+        render(true);
+        subjects.value = id;
+        render(true);
+      };
     }
     addEventSubjects(details, '関係者の人物伝', people, id => {
       tab.value = 'citizen';

@@ -143,7 +143,8 @@ test('two defeats between the same nations lead to peace and neutral relations',
   assert.equal(invader.relations[defender.id], 0);
   assert.equal(defender.relations[invader.id], 0);
   assert.equal(truceBetween(world, invader, defender), undefined);
-  assert.ok(world.events.some(event => event.type === 'peaceAgreed'));
+  const peace = world.events.find(event => event.type === 'peaceAgreed');
+  assert.equal(world.events.find(event => event.id === peace?.causeEventId)?.type, 'siegeRepelled');
   const restored = await readSnapshot(JSON.stringify(await createSnapshot(world)));
   restored.worldTimeTick = 40 * TIME_TICKS_PER_DAY;
   updateWar(restored);
