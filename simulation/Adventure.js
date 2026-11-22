@@ -160,12 +160,15 @@ export function offerTradeEscort(world, settlement, partner, destination, path) 
   const goal = path.length <= COMBAT.tradeEscortRadius ? destination : path[steps - 1];
   const escortDistance = path.length <= COMBAT.tradeEscortRadius ? path.length : steps;
   const approach = path[lastDanger];
-  // Prefer the migration as the cause when it extends danger beyond the monsters' present positions.
-  const incoming = threats.filter(monster => monster.relocating && distance(approach, monster.homeTile) <= 5);
-  const migration = !threats.some(monster => distance(approach, monster) <= 5) && incoming.length
-    ? world.events.findLast(event => event.type === 'monsterNestRelocated' && incoming.some(monster =>
-      event.monsterIds?.includes(monster.id) && distance(event, monster.homeTile) === 0))
-    : undefined;
+  // Trade is evaluated daily, after some colonies have already settled.
+  const incoming = threats.filter(monster => distance(approach, monster.homeTile) <= 5 &&
+    (monster.relocating || distance(approach, monster) <= 5));
+  const migration = incoming.length ? world.events.findLast(event =>
+    event.type === 'monsterNestRelocated' &&
+    world.worldTimeTick - event.worldTimeTick <= 2 * TIME_TICKS_PER_DAY &&
+    Math.abs(approach.x - event.fromX) + Math.abs(approach.y - event.fromY) > 5 &&
+    incoming.some(monster => event.monsterIds?.includes(monster.id) &&
+      distance(event, monster.homeTile) === 0)) : undefined;
   const local = world.quests.filter(q => q.settlementId === settlement.id && activeQuest(q));
   if (local.length >= COMBAT.questLimit) {
     const survey = migration && local.find(q => q.status === 'open' && q.kind === 'survey_resources' && !q.prospectTile);

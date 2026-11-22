@@ -221,7 +221,7 @@ test('an occupied trade road can call for escorts before a dangerous colony reac
   const raid = { id: 'quest:81', kind: 'clear_nest', status: 'claimed', settlementId: home.id };
   world.quests.push(survey, raid);
   assert.equal(offerTradeEscort(world, home, partner, partner, road), undefined);
-  world.events.push({ id: 'event:99', type: 'monsterNestRelocated', monsterIds: [goblin.id], ...goblin.homeTile });
+  world.events.push({ id: 'event:99', type: 'monsterNestRelocated', monsterIds: [goblin.id], fromX: 12, fromY: 2, worldTimeTick: 0, ...goblin.homeTile });
   const id = offerTradeEscort(world, home, partner, partner, road);
   assert.equal(world.quests.find(quest => quest.id === id)?.kind, 'escort_trade');
   const request = world.events.find(event => event.type === 'tradeEscortRequested');
@@ -230,4 +230,17 @@ test('an occupied trade road can call for escorts before a dangerous colony reac
   assert.equal(request.causeEventId, 'event:99');
   assert.equal(survey.status, 'expired');
   assert.equal(raid.status, 'claimed');
+
+  world.quests.find(quest => quest.id === id).status = 'completed';
+  goblin.relocating = false;
+  Object.assign(goblin, goblin.homeTile);
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  const afterArrival = offerTradeEscort(world, home, partner, partner, road);
+  assert.equal(world.events.find(event => event.questId === afterArrival)?.causeEventId, 'event:99');
+
+  world.worldTimeTick = 3 * TIME_TICKS_PER_DAY;
+  world.quests.find(quest => quest.id === afterArrival).status = 'completed';
+  const later = offerTradeEscort(world, home, partner, partner, road);
+  assert.ok(later);
+  assert.equal(world.events.find(event => event.questId === later)?.causeEventId, undefined);
 });
