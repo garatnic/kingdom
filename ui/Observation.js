@@ -10,6 +10,7 @@ import { relationLabel } from '../simulation/Nations.js';
 import { activeNations, truceBetween } from '../simulation/War.js';
 import { civilizationProgress, getResearch, researchOwner } from '../simulation/Research.js';
 import { observancesFor } from '../simulation/SettlementRecords.js';
+import { arcaneIrrigationDemand } from '../simulation/Industry.js';
 import { birthResources } from '../simulation/Population.js';
 import { ageYears } from '../simulation/Identity.js';
 import { eventImportance, historyFor, involvesCitizen } from '../systems/History.js';
@@ -225,8 +226,21 @@ export function observation(getWorld, getCamera, focus) {
       showResearch(world, researchOwner(world, settlement));
       add(body, 'p', Object.entries(jobs).map(([role, label]) =>
         `${label} ${residents.filter(c => c.profession === role).length}`).join(' / '));
-      const irrigated = facilities.filter(b => b.kind === 'farm' && b.arcaneIrrigation).length;
-      if (irrigated) add(body, 'p', `魔導灌漑 ${irrigated}か所（収穫量が増加）`);
+      const farms = facilities.filter(building => building.kind === 'farm');
+      const irrigated = farms.filter(farm => farm.arcaneIrrigation);
+      const demand = store ? Object.entries(arcaneIrrigationDemand(world, store)) : [];
+      if (irrigated.length || demand.length) {
+        const label = `魔導灌漑 ${irrigated.length}/${farms.length}か所`;
+        if (irrigated.length) addEventLocation(body, world, irrigated[0], label + ' · 改修済みの畑を見る');
+        else add(body, 'p', label);
+        if (demand.length) {
+          const missing = demand.flatMap(([key, amount]) => {
+            const shortfall = amount - available(store, key);
+            return shortfall > 0 ? [`${resources[key]} ${shortfall}`] : [];
+          });
+          add(body, 'p', missing.length ? `次の改修に不足（予備分込み） ${missing.join(' / ')}` : '次の改修に必要な資材が揃っています');
+        }
+      }
       const equippedMiners = residents.filter(c => c.profession === 'miner' && c.steelMiningTools).length;
       if (equippedMiners) add(body, 'p', `鋼鉄の採掘道具 ${equippedMiners}人（鉄・魔石の採掘量が増加）`);
       if (store) {
