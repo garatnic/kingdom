@@ -154,7 +154,8 @@ export function offerTradeEscort(world, settlement, partner, destination, path) 
       world.citizens.filter(c => c.alive && c.profession === 'adventurer' &&
         c.settlementId === settlement.id && ageYears(world, c) >= ADULT_AGE).length < 2) return;
   const threats = world.monsters.filter(monster => monster.alive && monsters[monster.species].attack >= monsters.goblin.attack);
-  const lastDanger = path.findLastIndex(tile => threats.some(monster => distance(tile, monster) <= 5));
+  const lastDanger = path.findLastIndex(tile => threats.some(monster => distance(tile, monster) <= 5 ||
+    (monster.relocating && distance(tile, monster.homeTile) <= 5)));
   if (lastDanger < 0 || lastDanger >= COMBAT.tradeEscortRadius) return;
   const steps = Math.min(path.length, COMBAT.tradeEscortRadius, lastDanger + 2);
   const goal = path.length <= COMBAT.tradeEscortRadius ? destination : path[steps - 1];
@@ -456,8 +457,14 @@ function relocateDisplacedNests(world) {
   for (const colony of colonies.values()) {
     const leader = colony[0];
     const from = leader.homeTile;
-    const habitat = monsters[leader.species].habitat;
-    if (habitat.includes(terrain[from.y * width + from.x]) && findPath(world, from, from) !== null) continue;
+    const { habitat, prey, sight } = monsters[leader.species];
+    const suitable = habitat.includes(terrain[from.y * width + from.x]) && findPath(world, from, from) !== null;
+    const encroached = world.settlements.some(settlement => distance(settlement, from) < COMBAT.residentSafety);
+    const preyInRange = tile => world.monsters.some(m => m.alive && m.species === prey &&
+      distance(tile, m) <= sight && findPath(world, tile, m, bounds) !== null);
+    const followingPrey = prey && !colony.some(m => m.relocating) && !preyInRange(from);
+    const reason = !suitable ? 'terrain' : encroached ? 'settlement' : followingPrey ? 'prey' : null;
+    if (!reason) continue;
     if (nestQuestFor(world, leader)?.status === 'claimed' || colony.some(m => activeTargets.has(m.id))) continue;
 
     const forbidden = spawnZones(world);
@@ -472,7 +479,8 @@ function relocateDisplacedNests(world) {
       }
     }
     candidates.sort((a, b) => distance(from, a) - distance(from, b));
-    const destination = candidates.find(tile => colony.every(m => findPath(world, m, tile, bounds) !== null));
+    const destination = candidates.find(tile => (reason !== 'prey' || preyInRange(tile)) &&
+      colony.every(m => findPath(world, m, tile, bounds) !== null));
     if (!destination) continue;
 
     const quest = nestQuestFor(world, leader);
@@ -482,7 +490,7 @@ function relocateDisplacedNests(world) {
       monster.relocating = true;
     }
     emitOnce(world, leader.id + '/relocate/' + world.worldTimeTick, 'monsterNestRelocated', {
-      ...destination, fromX: from.x, fromY: from.y, species: leader.species, quantity: colony.length
+      ...destination, fromX: from.x, fromY: from.y, species: leader.species, quantity: colony.length, reason
     });
   }
 }
@@ -513,7 +521,8 @@ function moveMonsters(world) {
       }
     }
     if (!tile || reserved.has(tileKey(tile)) ||
-        world.settlements.some(s => distance(s, tile) < COMBAT.residentSafety)) continue;
+        world.settlements.some(s => distance(s, tile) < COMBAT.residentSafety &&
+          (!monster.relocating || distance(s, tile) <= distance(s, monster)))) continue;
     reserved.delete(tileKey(monster));
     Object.assign(monster, tile);
     reserved.add(tileKey(monster));

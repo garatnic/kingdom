@@ -190,7 +190,8 @@ export function observation(getWorld, getCamera, focus) {
       add(body, 'h3', '探索済み領域の魔物');
       for (const [species, config] of Object.entries(monsters)) {
         const population = living.filter(monster => monster.species === species);
-        add(body, 'p', `${config.label} ${population.length}体 · 生息地 ${config.habitat.map(tile => habitats[tile]).join('・')}`);
+        const relocating = population.filter(monster => monster.relocating).length;
+        add(body, 'p', `${config.label} ${population.length}体 · 生息地 ${config.habitat.map(tile => habitats[tile]).join('・')}${relocating ? ` · 移動中 ${relocating}体` : ''}`);
         const nests = new Map();
         for (const monster of population) {
           if (!monster.hasNest || !surveyed(monster.homeTile)) continue;
@@ -543,6 +544,10 @@ export function observation(getWorld, getCamera, focus) {
       const leader = world.citizens.find(c => c.id === event.leaderId);
       if (leader) title += '（' + leader.name + '）';
     }
+    if (event.type === 'monsterNestRelocated') {
+      const reasons = { terrain: '地形の変化', settlement: '集落の接近', prey: '獲物の分布' };
+      title += `（${monsters[event.species]?.label ?? '魔物'}${event.quantity}体${reasons[event.reason] ? '・' + reasons[event.reason] : ''}）`;
+    }
     if (event.type === 'farmerReassigned') {
       title += `（${jobs[event.previousProfession] ?? '前職なし'}・備蓄 ${event.food}）`;
     }
@@ -590,6 +595,9 @@ export function observation(getWorld, getCamera, focus) {
     const label = `${title} · ${calendar(event.worldTimeTick)}`;
     if (!addEventLocation(body, world, event, label)) add(body, 'p', label);
 
+    if (event.type === 'monsterNestRelocated') {
+      addEventLocation(body, world, { x: event.fromX, y: event.fromY }, '移転前の巣');
+    }
     indexHistory(world.events);
     const cause = eventsById.get(event.causeEventId);
     if (cause) {

@@ -170,3 +170,37 @@ test('a terrain edit displaces a nest after a claimed raid ends and the colony m
   assert.equal(restoredLeader.relocating, undefined);
   assert.equal(restored.events.filter(event => event.type === 'monsterNestRelocated').length, 1);
 });
+
+test('a predator colony relocates toward reachable prey and records why it moved', () => {
+  const world = createWorld('prey-distribution');
+  world.map.terrain.fill('forest');
+  const wisp = spawnMonster(world, 'wisp', { x: 8, y: 8 });
+  const prey = spawnMonster(world, 'slime', { x: 19, y: 8 });
+  wisp.hasNest = true;
+  world.nextMonsterSpawnTick = TIME_TICKS_PER_DAY * 2;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 12);
+  assert.equal(world.events.find(event => event.type === 'monsterNestRelocated')?.reason, 'prey');
+  assert.ok(Math.abs(wisp.homeTile.x - prey.x) + Math.abs(wisp.homeTile.y - prey.y) <= 7);
+  assert.equal(wisp.relocating, true);
+});
+
+test('a new settlement can displace a nest and the colony can leave the inner safety zone', () => {
+  const world = createWorld('frontier-encroachment');
+  world.map.terrain.fill('forest');
+  const settlement = world.settlements[0];
+  const origin = { x: settlement.x - 3, y: settlement.y };
+  const goblin = spawnMonster(world, 'goblin', origin);
+  if (!goblin) throw new Error('expected an open nest tile');
+  goblin.hasNest = true;
+  world.nextMonsterSpawnTick = TIME_TICKS_PER_DAY * 2;
+  world.worldTimeTick = TIME_TICKS_PER_DAY;
+  updateAdventureWorld(world, 12);
+  assert.equal(world.events.find(event => event.type === 'monsterNestRelocated')?.reason, 'settlement');
+  for (let step = 0; step < 20 && goblin.relocating; step++) {
+    world.worldTimeTick += 125;
+    updateAdventureWorld(world, 125);
+  }
+  assert.equal(goblin.relocating, undefined);
+  assert.ok(Math.abs(goblin.x - settlement.x) + Math.abs(goblin.y - settlement.y) >= 9);
+});
